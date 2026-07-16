@@ -1,0 +1,14 @@
+# Configuración de despliegue del Worker (Cloudflare)
+name = "sellerbrain-api"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Cron de ingesta diaria 03:00 UTC
+[triggers]
+crons = ["0 3 * * *"]
+
+# Los SECRETOS no van aquí — se ponen con:  wrangler secret put NOMBRE
+# o en el panel de Cloudflare. Secretos necesarios:
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY, SB_API_KEY,
+#   ADS_CLIENT_ID, ADS_CLIENT_SECRET, ADS_REFRESH_TOKEN
+#   (SP-API, pendiente: LWA_CLIENT_ID, LWA_CLIENT_SECRET, SPAPI_REFRESH_TOKEN)
