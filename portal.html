@@ -168,6 +168,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 .tab:hover:not(.active){background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.95)!important}
 .tabs::-webkit-scrollbar{display:none}
 </style>
+  <script src="config.js"></script>
 </head>
 <body>
 
@@ -1981,9 +1982,11 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 
 
 // ===== CONFIG =====
-var SHEET_ID = '1_4pADINGCLtx1yS9UmyxnjSa2Z8UiaARGqM-LUuJgpw';
-var API_KEY = 'AIzaSyCirlFmO83M8Px2cB9AYISdCVuYV1x7jd0';
-var SHEET_NAME = 'hoja 1';
+// Las credenciales viven en config.js (fuera del repositorio, ver config.example.js).
+// Fallback seguro si config.js no está cargado: el login mostrará aviso.
+var SHEET_ID = (window.SB_CFG && window.SB_CFG.SHEET_ID) || '';
+var API_KEY = (window.SB_CFG && window.SB_CFG.API_KEY) || '';
+var SHEET_NAME = (window.SB_CFG && window.SB_CFG.SHEET_NAME) || 'hoja 1';
 
 // ===== VALIDACIÓN DE ACCESO =====
 async function validarAcceso() {
