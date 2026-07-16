@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — EPR Envases · Calculadora de cumplimiento</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#FF5C2B;--or2:#FF7A50;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(255,92,43,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.logo b{color:#FF7A00}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(255,92,43,.12);border:1px solid rgba(255,92,43,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:34px 0 20px;text-align:center}
+.hero h1{font-family:'Syne',sans-serif;font-size:25px;font-weight:800;line-height:1.25}
+.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:640px;margin:10px auto 0}
+.urgente{margin:14px auto 0;max-width:640px;padding:10px 14px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.3);border-radius:10px;font-size:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(255,92,43,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}
+.inf b{color:rgba(255,255,255,.75)}
+.drop{border:2px dashed rgba(255,92,43,.4);border-radius:12px;padding:20px;text-align:center;cursor:pointer;background:rgba(255,92,43,.03)}
+.drop:hover{background:rgba(255,92,43,.08)}
+.btn{display:inline-block;padding:11px 18px;background:var(--or);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;cursor:pointer}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:9px 14px;border-radius:10px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:right;padding:7px 8px;color:var(--mu);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bd);white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05);text-align:right;white-space:nowrap}
+td:first-child{text-align:left;font-weight:600}
+input.gr{width:64px;padding:6px 8px;background:#111;border:1.5px solid var(--bd);border-radius:8px;color:var(--tx);font-size:12px;text-align:right}
+input.gr:focus{border-color:var(--or);outline:none}
+.paises{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:14px}
+.pais{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.pais h3{font-family:'Syne',sans-serif;font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.pais .kg{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--or2)}
+.pais .sub{font-size:10.5px;color:var(--mu);margin-bottom:10px}
+.mat{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mu2);padding:3px 0}
+.mat b{color:var(--tx)}
+.reg{margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.reg .item{display:flex;gap:8px;align-items:flex-start;font-size:11.5px;padding:5px 0;line-height:1.45;cursor:pointer}
+.reg .item input{margin-top:2px;accent-color:var(--or)}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;margin-left:6px}
+.pill.gn{background:rgba(46,204,113,.12);color:var(--gn)}
+.pill.am{background:rgba(245,166,35,.12);color:var(--am)}
+.tasa{margin-top:8px;font-size:11px;color:var(--mu);background:rgba(255,255,255,.03);border-radius:8px;padding:8px 10px;line-height:1.5}
+.tasa b{color:var(--or2)}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:720px;margin-left:auto;margin-right:auto}
+.err{display:none;margin-top:10px;padding:12px;border-radius:10px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.25);font-size:12px;color:var(--rd)}
+.oksub{color:var(--gn);font-size:11px;font-weight:700;margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Seller<b>Brain</b></div>
+  <div class="badge">EPR · Envases Europa</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>¿Estás en regla con el <span>EPR de envases</span> en cada país donde vendes?</h1>
+  <p>Sube tu informe de pedidos, pon lo que pesa el envase de cada producto una sola vez, y SellerBrain calcula los kg por país y material que piden los eco-organismos — con tu checklist de registros pendientes.</p>
+  <div class="urgente">⏰ <b>12 de agosto de 2026</b>: Amazon verifica el cumplimiento EPR de envases en toda la UE (Reglamento PPWR). Sin número de registro válido en cada país, Amazon puede <b>bloquear tus ventas</b> en ese marketplace.</div>
+</div>
+
+<!-- PASO 1 -->
+<div class="card">
+  <div class="ct"><span class="ci">1️⃣</span> Sube tu informe de pedidos (All Orders)</div>
+  <div class="inf">Seller Central → Informes → Logística de Amazon → <b>Todos los pedidos</b> (.txt) — pide los <b>últimos 12 meses</b> (o el máximo disponible) para que los kg anuales sean reales. SellerBrain reparte las unidades por país usando el marketplace de cada pedido.</div>
+  <div class="drop" onclick="document.getElementById('f-orders').click()">
+    <div style="font-size:26px;margin-bottom:4px">🛒</div>
+    <div style="font-weight:700;font-size:13px">Arrastra o haz clic para subir el All Orders (.txt)</div>
+    <div style="font-size:11px;color:var(--mu);margin-top:3px">También puedes <a href="#" style="color:var(--or2)" onclick="event.stopPropagation();demoManual();return false">introducir unidades a mano</a> si no tienes el archivo</div>
+    <input type="file" id="f-orders" accept=".txt,.csv,.tsv" style="display:none" onchange="leerOrders(this.files[0])">
+  </div>
+  <div class="oksub" id="ok-orders"></div>
+  <div class="err" id="err"></div>
+</div>
+
+<!-- PASO 2 -->
+<div class="card" id="paso2" style="display:none">
+  <div class="ct"><span class="ci">2️⃣</span> Peso del envase por producto</div>
+  <div class="inf">Pesa una vez cada envase con una báscula de cocina: <b>envase de venta + caja de envío + relleno</b> (producto envasado − producto). Repártelo por material — es como lo piden los eco-organismos. Se guarda en tu navegador.</div>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr><th>SKU</th><th>Uds/año</th><th>Cartón/papel (g)</th><th>Plástico (g)</th><th>Otros (g)</th><th>Total envase</th></tr></thead>
+    <tbody id="tabla-skus"></tbody>
+  </table>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap">
+    <button class="btn" onclick="calcular()">🧠 Calcular mi informe EPR</button>
+    <span style="font-size:11px;color:var(--mu)">Consejo: si muchos SKUs comparten envase, pon el peso en uno y usa "copiar al resto" ↓</span>
+    <button class="btn-sec" onclick="copiarPesos()">Copiar pesos del primero al resto</button>
+  </div>
+</div>
+
+<!-- PASO 3: RESULTADOS -->
+<div id="resultados" style="display:none">
+  <div class="card">
+    <div class="ct"><span class="ci">3️⃣</span> Tu informe EPR — kg de envases por país (últimos 12 meses)</div>
+    <div class="inf">Estos son los números que declaran los eco-organismos, repartidos por material. La casilla de cada trámite se guarda para que lleves tu propio control.</div>
+  </div>
+  <div class="paises" id="paises"></div>
+  <div class="card">
+    <div class="ct"><span class="ci">📋</span> Resumen para tus declaraciones</div>
+    <div id="resumen-txt" style="font-size:12px;line-height:1.7;color:var(--mu2)"></div>
+    <button class="btn-sec" style="margin-top:10px" onclick="copiarResumen()">📋 Copiar resumen (para tu gestor o eco-organismo)</button>
+  </div>
+</div>
+
+<div class="disclaimer">
+⚠️ Herramienta orientativa de cálculo y organización — no constituye asesoría legal ni fiscal. Los umbrales, tarifas y obligaciones de cada eco-organismo cambian con frecuencia (especialmente con la entrada del PPWR en agosto de 2026): confirma siempre los importes y regímenes con el organismo o representante de cada país antes de declarar. SellerBrain procesa todo en tu navegador; tus datos no salen de tu equipo.
+</div>
+
+</div>
+
+<script>
+function f(n,d){return (+n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
+
+/* ===== Datos de países: requisitos EPR de envases (orientativo, jul 2026) ===== */
+var PAISES = {
+  ES: {flag:'🇪🇸', nombre:'España', canal:'amazon.es',
+    tramites:[
+      'Alta en un SCRAP de envases (p. ej. Ecoembes) y pago de la tarifa anual',
+      'Inscripción en el Registro de Productores de Producto (MITECO) — nº de registro',
+      'Cargar el nº de registro en Amazon Seller Central (Cumplimiento EPR)'
+    ],
+    tasa:'Pequeños volúmenes: la contribución suele ser baja (decenas de €/año); la cuota del SCRAP va aparte.'},
+  FR: {flag:'🇫🇷', nombre:'Francia', canal:'amazon.fr',
+    tramites:[
+      'Adhesión a un eco-organismo de envases (p. ej. Citeo) — como empresa extranjera necesitas mandataire',
+      'Obtener el IdU (identificador único) de ADEME — es lo que verifica Amazon',
+      'Comprobar si aplica también la filière de papel gráfico (si incluyes impresos)',
+      'Cargar el IdU en Seller Central'
+    ],
+    tasa:'Volúmenes pequeños: <b>declaración simplificada (forfait)</b> de Citeo, del orden de ~80–100 €/año de ecotasa. Confírmalo al adherirte.'},
+  IT: {flag:'🇮🇹', nombre:'Italia', canal:'amazon.it',
+    tramites:[
+      'Registro en CONAI (vía representante autorizado si no tienes sede en Italia)',
+      'Declaraciones del CAC (contribución ambiental) según material',
+      'Cargar el nº de registro en Seller Central'
+    ],
+    tasa:'Con pocos kg, el CAC puede quedar <b>por debajo del umbral de exención</b> de declaración — la ecotasa sería simbólica. Verifícalo con tu representante.'},
+  DE: {flag:'🇩🇪', nombre:'Alemania', canal:'amazon.de',
+    tramites:[
+      'Registro en LUCID (Zentrale Stelle) — gratuito, lo haces tú online',
+      'Licencia con un sistema dual (p. ej. contrato online de licencia de envases)',
+      'Vincular nº LUCID en Seller Central (Amazon lo verifica desde 2022)'
+    ],
+    tasa:'Volumen mínimo: licencia dual básica desde ~40–60 €/año. LUCID es gratis.'},
+  BE: {flag:'🇧🇪', nombre:'Bélgica', canal:'amazon.com.be',
+    tramites:[
+      'Verificar obligación con Fost Plus (envases domésticos) según tu volumen y canal',
+      'Si vendes a BE desde amazon.fr, esas unidades pueden computar en Francia — revisa el reparto',
+      'Cargar el registro en Seller Central si aplica'
+    ],
+    tasa:'Umbral y régimen dependen del volumen — con pocos kg consulta si estás por debajo del mínimo de adhesión.'},
+  NL: {flag:'🇳🇱', nombre:'Países Bajos', canal:'amazon.nl',
+    tramites:[
+      'Verificar obligación con Verpact (Afvalfonds Verpakkingen)',
+      'Ojo: existe umbral de exención por tonelaje — con volumen pequeño puedes estar exento de contribución, pero no siempre de registro',
+      'Cargar el registro en Seller Central si aplica'
+    ],
+    tasa:'Por debajo del umbral de tonelaje la contribución puede ser 0 € — confirma si el registro sigue siendo necesario.'}
+};
+
+var unidadesPorSku = {};   // {sku: {ES: n, FR: n, ...}}
+var PESOS = JSON.parse(localStorage.getItem('sb_epr_pesos')||'{}'); // {sku:{carton,plastico,otros}}
+var CHECKS = JSON.parse(localStorage.getItem('sb_epr_checks')||'{}');
+
+/* ===== Parsers (mismo patrón que el dashboard) ===== */
+function parsearPlano(texto){
+  var lineas=texto.split('\n').filter(function(l){return l.trim();});
+  if(!lineas.length) return [];
+  var sep=lineas[0].indexOf('\t')>-1?'\t':(lineas[0].split(';').length>lineas[0].split(',').length?';':',');
+  function partir(linea){
+    var out=[],cur='',q=false;
+    for(var i=0;i<linea.length;i++){var c=linea[i];
+      if(c==='"'){q=!q;continue;}
+      if(c===sep&&!q){out.push(cur.trim());cur='';}else cur+=c;}
+    out.push(cur.trim());return out;
+  }
+  var heads=partir(lineas[0]).map(function(h){return h.toLowerCase();});
+  return lineas.slice(1).map(function(l){var v=partir(l),o={};heads.forEach(function(h,i){o[h]=v[i]!==undefined?v[i]:'';});return o;});
+}
+
+function canalAPais(canal){
+  var c=(canal||'').toLowerCase();
+  if(c.indexOf('amazon.es')>-1)return 'ES';
+  if(c.indexOf('amazon.fr')>-1)return 'FR';
+  if(c.indexOf('amazon.it')>-1)return 'IT';
+  if(c.indexOf('amazon.de')>-1)return 'DE';
+  if(c.indexOf('amazon.com.be')>-1)return 'BE';
+  if(c.indexOf('amazon.nl')>-1)return 'NL';
+  return null;
+}
+
+function leerOrders(file){
+  if(!file)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    try{
+      var rows=parsearPlano(e.target.result);
+      unidadesPorSku={};
+      var total=0, sinCanal=0;
+      rows.forEach(function(x){
+        var estado=(x['item-status']||x['order-status']||'').toLowerCase();
+        if(estado.indexOf('cancel')>-1)return;
+        var sku=x['sku']||'—';
+        var pais=canalAPais(x['sales-channel']);
+        if(!pais){sinCanal++;return;}
+        var uds=+x['quantity']||0;
+        if(!unidadesPorSku[sku])unidadesPorSku[sku]={};
+        unidadesPorSku[sku][pais]=(unidadesPorSku[sku][pais]||0)+uds;
+        total+=uds;
+      });
+      if(!total){mostrarError('No encontré unidades con marketplace reconocible. ¿Es el informe All Orders con la columna sales-channel?');return;}
+      document.getElementById('ok-orders').textContent='✓ '+file.name+' · '+total+' unidades en '+Object.keys(unidadesPorSku).length+' SKUs'+(sinCanal?' ('+sinCanal+' filas de otros marketplaces ignoradas)':'');
+      document.getElementById('err').style.display='none';
+      pintarTablaSkus();
+    }catch(err){mostrarError('Error al leer: '+err.message);}
+  };
+  r.readAsText(file,'ISO-8859-1');
+}
+
+function demoManual(){
+  // Entrada manual rápida: pide unidades por país para un SKU genérico
+  var paises=['ES','FR','IT','DE','BE','NL'];
+  unidadesPorSku={'MI-PRODUCTO':{}};
+  var alguna=false;
+  for(var i=0;i<paises.length;i++){
+    var v=prompt('Unidades vendidas al año en '+PAISES[paises[i]].nombre+' (deja vacío si no vendes):','');
+    if(v===null)break;
+    var n=parseInt(v)||0;
+    if(n>0){unidadesPorSku['MI-PRODUCTO'][paises[i]]=n;alguna=true;}
+  }
+  if(alguna){document.getElementById('ok-orders').textContent='✓ Unidades introducidas a mano';pintarTablaSkus();}
+}
+
+function mostrarError(m){var e=document.getElementById('err');e.style.display='block';e.innerHTML='❌ '+m;}
+
+function pintarTablaSkus(){
+  var h='';
+  Object.keys(unidadesPorSku).sort(function(a,b){
+    return totalUds(unidadesPorSku[b])-totalUds(unidadesPorSku[a]);
+  }).forEach(function(sku){
+    var p=PESOS[sku]||{carton:'',plastico:'',otros:''};
+    var tot=(+p.carton||0)+(+p.plastico||0)+(+p.otros||0);
+    h+='<tr>'+
+      '<td>'+sku+'</td>'+
+      '<td>'+totalUds(unidadesPorSku[sku])+'</td>'+
+      '<td><input class="gr" data-sku="'+sku+'" data-mat="carton" value="'+p.carton+'" placeholder="0" onchange="guardarPeso(this)"></td>'+
+      '<td><input class="gr" data-sku="'+sku+'" data-mat="plastico" value="'+p.plastico+'" placeholder="0" onchange="guardarPeso(this)"></td>'+
+      '<td><input class="gr" data-sku="'+sku+'" data-mat="otros" value="'+p.otros+'" placeholder="0" onchange="guardarPeso(this)"></td>'+
+      '<td id="tot-'+cssId(sku)+'">'+(tot?tot+' g':'—')+'</td>'+
+    '</tr>';
+  });
+  document.getElementById('tabla-skus').innerHTML=h;
+  document.getElementById('paso2').style.display='block';
+  document.getElementById('paso2').scrollIntoView({behavior:'smooth'});
+}
+function cssId(s){return s.replace(/[^a-zA-Z0-9]/g,'_');}
+function totalUds(m){var t=0;Object.keys(m).forEach(function(k){t+=m[k];});return t;}
+
+function guardarPeso(inp){
+  var sku=inp.dataset.sku, mat=inp.dataset.mat;
+  if(!PESOS[sku])PESOS[sku]={carton:'',plastico:'',otros:''};
+  PESOS[sku][mat]=inp.value;
+  localStorage.setItem('sb_epr_pesos',JSON.stringify(PESOS));
+  var p=PESOS[sku], tot=(+p.carton||0)+(+p.plastico||0)+(+p.otros||0);
+  var el=document.getElementById('tot-'+cssId(sku));
+  if(el)el.textContent=tot?tot+' g':'—';
+}
+
+function copiarPesos(){
+  var skus=Object.keys(unidadesPorSku);
+  if(skus.length<2)return;
+  var primero=PESOS[skus[0]];
+  if(!primero){alert('Rellena primero los pesos del primer SKU de la tabla.');return;}
+  skus.slice(1).forEach(function(s){PESOS[s]=JSON.parse(JSON.stringify(primero));});
+  localStorage.setItem('sb_epr_pesos',JSON.stringify(PESOS));
+  pintarTablaSkus();
+}
+
+/* ===== Cálculo ===== */
+function calcular(){
+  var porPais={}; // {ES:{carton:kg,plastico:kg,otros:kg,total:kg,uds:n}}
+  var sinPeso=[];
+  Object.keys(unidadesPorSku).forEach(function(sku){
+    var p=PESOS[sku];
+    var tot=p?(+p.carton||0)+(+p.plastico||0)+(+p.otros||0):0;
+    if(!tot){sinPeso.push(sku);return;}
+    Object.keys(unidadesPorSku[sku]).forEach(function(pais){
+      var uds=unidadesPorSku[sku][pais];
+      if(!porPais[pais])porPais[pais]={carton:0,plastico:0,otros:0,total:0,uds:0};
+      porPais[pais].carton+=uds*(+p.carton||0)/1000;
+      porPais[pais].plastico+=uds*(+p.plastico||0)/1000;
+      porPais[pais].otros+=uds*(+p.otros||0)/1000;
+      porPais[pais].total+=uds*tot/1000;
+      porPais[pais].uds+=uds;
+    });
+  });
+  if(!Object.keys(porPais).length){mostrarError('Rellena el peso del envase de al menos un SKU antes de calcular.');return;}
+  document.getElementById('err').style.display='none';
+
+  var h='';
+  Object.keys(porPais).sort(function(a,b){return porPais[b].total-porPais[a].total;}).forEach(function(pais){
+    var d=porPais[pais], info=PAISES[pais];
+    if(!info)return;
+    var checks='';
+    info.tramites.forEach(function(t,i){
+      var key=pais+'-'+i;
+      checks+='<label class="item"><input type="checkbox" '+(CHECKS[key]?'checked':'')+' onchange="marcar(\''+key+'\',this.checked)"><span>'+t+'</span></label>';
+    });
+    h+='<div class="pais">'+
+      '<h3>'+info.flag+' '+info.nombre+' <span class="pill '+(d.total<100?'gn':'am')+'">'+(d.total<100?'volumen pequeño':'volumen medio')+'</span></h3>'+
+      '<div class="kg">'+f(d.total,1)+' kg/año</div>'+
+      '<div class="sub">'+f(d.uds,0)+' unidades vía '+info.canal+'</div>'+
+      '<div class="mat"><span>📦 Cartón/papel</span><b>'+f(d.carton,1)+' kg</b></div>'+
+      '<div class="mat"><span>🧴 Plástico</span><b>'+f(d.plastico,1)+' kg</b></div>'+
+      (d.otros>0.01?'<div class="mat"><span>♻️ Otros</span><b>'+f(d.otros,1)+' kg</b></div>':'')+
+      '<div class="reg"><div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Tu checklist</div>'+checks+'</div>'+
+      '<div class="tasa">'+info.tasa+'</div>'+
+    '</div>';
+  });
+  document.getElementById('paises').innerHTML=h;
+
+  // Resumen copiable
+  var txt='INFORME EPR ENVASES — '+new Date().toLocaleDateString('es-ES')+' (últimos 12 meses aprox.)\n';
+  Object.keys(porPais).forEach(function(pais){
+    var d=porPais[pais];
+    txt+='\n'+PAISES[pais].nombre.toUpperCase()+' ('+PAISES[pais].canal+'): '+f(d.uds,0)+' uds · TOTAL '+f(d.total,1)+' kg'+
+      ' — cartón/papel '+f(d.carton,1)+' kg · plástico '+f(d.plastico,1)+' kg'+(d.otros>0.01?' · otros '+f(d.otros,1)+' kg':'');
+  });
+  if(sinPeso.length)txt+='\n\n(Pendiente de pesar envase: '+sinPeso.length+' SKUs — no incluidos)';
+  window._resumenEPR=txt;
+  document.getElementById('resumen-txt').textContent=txt;
+  document.getElementById('resultados').style.display='block';
+  document.getElementById('resultados').scrollIntoView({behavior:'smooth'});
+}
+
+function marcar(key,val){CHECKS[key]=val;localStorage.setItem('sb_epr_checks',JSON.stringify(CHECKS));}
+
+function copiarResumen(){
+  var ta=document.createElement('textarea');
+  ta.value=window._resumenEPR||'';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');alert('✓ Resumen copiado — pégalo en un email a tu gestor o eco-organismo.');}catch(e){}
+  document.body.removeChild(ta);
+}
+</script>
+</body>
+</html>

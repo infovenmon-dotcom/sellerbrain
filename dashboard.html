@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D0D0D; --panel:#141414; --card:#1A1A1A; --card2:#1F1F1F; --bd:#262626; --bd2:#333;
+  --tx:#FFFFFF; --mu:rgba(255,255,255,.45); --mu2:rgba(255,255,255,.65);
+  --or:#FF5C2B; --or2:#FF7A50; --gn:#2ECC71; --am:#F5A623; --rd:#E84040; --bl:#4A9EDE;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.45}
+.app{display:grid;grid-template-columns:216px 1fr;min-height:100vh}
+
+/* ===== SIDEBAR ===== */
+.side{background:var(--panel);border-right:1px solid var(--bd);padding:16px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;padding:4px 10px 16px;display:flex;align-items:center;gap:8px}
+.logo b{color:#FF7A00}
+.logo .brain{width:26px;height:26px;background:linear-gradient(135deg,var(--or),#FF7A00);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--mu2);text-decoration:none;font-weight:500;font-size:12.5px;cursor:pointer;border:1px solid transparent}
+.nav a:hover{background:rgba(255,255,255,.04);color:var(--tx)}
+.nav a.on{background:rgba(255,92,43,.12);color:var(--or2);border-color:rgba(255,92,43,.25);font-weight:700}
+.nav .ic{width:18px;text-align:center;font-size:14px}
+.nav .sep{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);padding:14px 10px 4px}
+.side-foot{padding:10px;border-top:1px solid var(--bd);font-size:11px;color:var(--mu)}
+.side-foot b{color:var(--mu2)}
+
+/* ===== MAIN ===== */
+.main{padding:0 22px 40px;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--bd);margin-bottom:18px;flex-wrap:wrap}
+.topbar h1{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
+.top-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{padding:7px 13px;background:var(--card);border:1px solid var(--bd2);border-radius:9px;font-size:12px;color:var(--mu2);cursor:pointer}
+.chip.on{background:rgba(255,92,43,.12);border-color:rgba(255,92,43,.4);color:var(--or2);font-weight:700}
+.sync{font-size:11px;color:var(--mu);display:flex;align-items:center;gap:6px}
+.sync .dot{width:7px;height:7px;border-radius:50%;background:var(--gn);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.4}}
+
+/* ===== PERIOD TILES (Sellerboard style) ===== */
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+@media(max-width:1100px){.tiles{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.tiles{grid-template-columns:1fr}}
+.tile{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;cursor:pointer;transition:border-color .15s}
+.tile:hover{border-color:var(--bd2)}
+.tile.on{border-color:rgba(255,92,43,.5);background:linear-gradient(180deg,rgba(255,92,43,.07),var(--card))}
+.tile .per{font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;justify-content:space-between}
+.tile .ben{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:2px}
+.tile .ben.pos{color:var(--gn)} .tile .ben.neg{color:var(--rd)}
+.tile .lbl{font-size:10.5px;color:var(--mu);margin-bottom:10px}
+.tile .rows{display:grid;gap:4px;font-size:11.5px}
+.tile .r{display:flex;justify-content:space-between;color:var(--mu2)}
+.tile .r b{color:var(--tx);font-weight:600}
+.tile .mgr{margin-top:8px;height:4px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden}
+.tile .mgr i{display:block;height:100%;border-radius:99px}
+
+/* ===== GRID PRINCIPAL ===== */
+.grid{display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.card+.card{margin-top:14px}
+.ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.ch h2{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.ch .ci{width:26px;height:26px;background:rgba(255,92,43,.12);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.ch .more{font-size:11px;color:var(--mu);cursor:pointer}
+.ch .more:hover{color:var(--or2)}
+
+/* Chart */
+.chart-wrap{position:relative}
+.chart-legend{display:flex;gap:14px;font-size:10.5px;color:var(--mu);margin-top:8px}
+.chart-legend span{display:flex;align-items:center;gap:5px}
+.chart-legend i{width:9px;height:9px;border-radius:2px}
+
+/* P&L */
+.pnl{display:grid;gap:0}
+.pnl .row{display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;align-items:center}
+.pnl .row:last-child{border:none}
+.pnl .n{display:flex;align-items:center;gap:8px;color:var(--mu2)}
+.pnl .dot{width:8px;height:8px;border-radius:2.5px;flex-shrink:0}
+.pnl .v{font-weight:600;text-align:right;min-width:76px}
+.pnl .p{color:var(--mu);font-size:10.5px;text-align:right;min-width:44px}
+.pnl .row.total{border-top:1.5px solid var(--bd2);margin-top:2px;padding-top:10px}
+.pnl .row.total .n{color:var(--tx);font-weight:700}
+.pnl .row.total .v{font-family:'Syne',sans-serif;font-size:15px;font-weight:800}
+
+/* Product table */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:right;padding:7px 8px;color:var(--mu);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bd);cursor:pointer;white-space:nowrap}
+.tbl th:first-child{text-align:left}
+.tbl td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.04);text-align:right;white-space:nowrap}
+.tbl td:first-child{text-align:left}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.prod{display:flex;align-items:center;gap:9px;min-width:0}
+.prod .img{width:30px;height:30px;border-radius:7px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.prod .nm{font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.prod .sku{font-size:10px;color:var(--mu)}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:700}
+.pill.gn{background:rgba(46,204,113,.12);color:var(--gn)}
+.pill.am{background:rgba(245,166,35,.12);color:var(--am)}
+.pill.rd{background:rgba(232,64,64,.12);color:var(--rd)}
+.spark{width:64px;height:20px}
+
+/* ===== COLUMNA DERECHA ===== */
+.brain-feed .accion{display:flex;gap:10px;padding:11px;border-radius:11px;margin-bottom:8px;background:var(--card2);border:1px solid var(--bd);cursor:pointer;transition:border-color .15s}
+.brain-feed .accion:hover{border-color:rgba(255,92,43,.4)}
+.brain-feed .aic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.brain-feed .at{font-size:12px;font-weight:600;line-height:1.35}
+.brain-feed .av{font-size:11px;margin-top:3px;font-weight:700}
+.brain-feed .ap{font-size:10.5px;color:var(--mu);margin-top:2px}
+.brain-total{padding:12px;border-radius:11px;background:linear-gradient(135deg,rgba(255,92,43,.15),rgba(255,122,0,.06));border:1px solid rgba(255,92,43,.3);margin-bottom:12px;text-align:center}
+.brain-total .v{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--or2)}
+.brain-total .l{font-size:10.5px;color:var(--mu2)}
+.alert{display:flex;gap:9px;padding:9px 10px;border-radius:10px;margin-bottom:7px;font-size:11.5px;line-height:1.4;align-items:flex-start}
+.alert .aic2{font-size:13px;flex-shrink:0}
+.alert.rd{background:rgba(232,64,64,.07);border:1px solid rgba(232,64,64,.2)}
+.alert.am{background:rgba(245,166,35,.07);border:1px solid rgba(245,166,35,.2)}
+.alert.bl{background:rgba(74,158,222,.07);border:1px solid rgba(74,158,222,.2)}
+.stock-item{display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}
+.stock-item:last-child{border:none}
+.stock-bar{width:80px;height:5px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden;margin-top:4px}
+.stock-bar i{display:block;height:100%;border-radius:99px}
+.dias{font-weight:700;font-size:12px}
+
+/* Mobile */
+.burger{display:none}
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;z-index:50;width:230px;transform:translateX(-100%);transition:transform .2s}
+  .side.open{transform:none}
+  .burger{display:block;background:none;border:1px solid var(--bd2);color:var(--tx);border-radius:8px;padding:6px 10px;font-size:15px;cursor:pointer}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ============ SIDEBAR ============ -->
+<aside class="side" id="side">
+  <div class="logo"><span class="brain">🧠</span>Seller<b>Brain</b></div>
+  <nav class="nav">
+    <a class="on" id="nav-dash" onclick="cambiarVista('dash')"><span class="ic">📊</span> Dashboard</a>
+    <a><span class="ic">💶</span> Beneficio por producto</a>
+    <a id="nav-ppc" onclick="cambiarVista('ppc')"><span class="ic">📣</span> PPC · En vivo</a>
+    <a><span class="ic">🕐</span> PPC · Horas</a>
+    <div class="sep">Auditoría</div>
+    <a><span class="ic">🔍</span> Detector sobrecobros FBA</a>
+    <a><span class="ic">📐</span> Dimensiones y categoría</a>
+    <a><span class="ic">↩️</span> Devoluciones</a>
+    <div class="sep">Planificación</div>
+    <a><span class="ic">📦</span> Stock y reposición</a>
+    <a><span class="ic">🔑</span> Keywords</a>
+    <a><span class="ic">🧮</span> Calculadora EU / USA</a>
+    <div class="sep"></div>
+    <a><span class="ic">⚙️</span> Ajustes</a>
+  </nav>
+  <div class="side-foot">Plan <b>Fundador</b> · 53 SKUs<br>hola@sellersbrain.io</div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main class="main">
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="burger" onclick="document.getElementById('side').classList.toggle('open')">☰</button>
+    <h1>Dashboard</h1>
+  </div>
+  <div class="top-controls">
+    <span class="chip" id="chip-conexion" style="cursor:pointer" onclick="toggleConexion()">🔌 Conexión</span>
+    <span class="chip" style="background:rgba(255,92,43,.15);border-color:rgba(255,92,43,.45);color:var(--or2);font-weight:700" onclick="togglePanel()">📥 Cargar mis datos</span>
+    <span class="chip on">🇪🇸 + 🇫🇷 + 🇮🇹</span>
+    <span class="chip">Todos los SKUs</span>
+    <span class="sync"><span class="dot"></span> Datos: hace 2 h</span>
+  </div>
+</div>
+
+<!-- ===== PANEL DE CONEXIÓN (estado visual del sistema) ===== -->
+<div class="card" id="panel-conexion" style="display:none;margin-bottom:18px;border:1.5px solid rgba(74,158,222,.35)">
+  <div class="ch"><h2><span class="ci">🔌</span> Conexión con Amazon — estado del sistema</h2>
+  <span class="more" onclick="toggleConexion()">Cerrar ✕</span></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div>
+      <label style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px">URL de tu backend (Worker)</label>
+      <input type="text" id="cx-url" style="width:100%;padding:9px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" placeholder="https://...workers.dev">
+    </div>
+    <div>
+      <label style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px">Clave privada (SB_API_KEY)</label>
+      <input type="password" id="cx-key" style="width:100%;padding:9px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" placeholder="Pega aquí tu clave — se guarda solo en este navegador">
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <button class="chip on" onclick="probarConexion()">🔍 Probar conexión</button>
+    <button class="chip" id="btn-usar-api" style="display:none" onclick="activarAPI()">⚡ Usar datos en vivo</button>
+    <button class="chip" onclick="SB_CONFIG.mode='demo';aplicarDatos(SB_DEMO)">Volver a demo</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px" id="cx-semaforos">
+    <div class="cx-luz" id="luz-backend"><span class="cx-dot" style="background:#555"></span><div><b>Backend</b><div class="cx-sub">sin probar</div></div></div>
+    <div class="cx-luz" id="luz-auth"><span class="cx-dot" style="background:#555"></span><div><b>Clave privada</b><div class="cx-sub">sin probar</div></div></div>
+    <div class="cx-luz" id="luz-ppc"><span class="cx-dot" style="background:#555"></span><div><b>Datos de Amazon Ads</b><div class="cx-sub">sin probar</div></div></div>
+  </div>
+
+  <div id="cx-ppc-datos" style="display:none;margin-top:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">📣 PPC recibido de Amazon (últimos días)</div>
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Fecha</th><th>País</th><th>Gasto</th><th>Clics</th><th>Ventas atrib.</th><th>ACoS</th></tr></thead><tbody id="cx-ppc-tabla"></tbody></table></div>
+  </div>
+</div>
+<style>
+.cx-luz{display:flex;gap:10px;align-items:center;background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:11px 13px;font-size:12px}
+.cx-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.cx-sub{font-size:10.5px;color:var(--mu)}
+</style>
+
+<!-- ===== PANEL DE CARGA (modo CSV: datos reales sin API) ===== -->
+<div class="card" id="panel-carga" style="display:none;margin-bottom:18px;border:1.5px solid rgba(255,92,43,.35)">
+  <div class="ch"><h2><span class="ci">📥</span> Conecta tus datos reales (sin API — 3 archivos de Seller Central)</h2>
+  <span class="more" onclick="togglePanel()">Cerrar ✕</span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
+    <div class="dz" id="dz-orders" onclick="document.getElementById('f-orders').click()">
+      <div style="font-size:20px">🛒</div><b>1 · Pedidos (All Orders)</b>
+      <div class="dz-sub">Informes → Logística de Amazon → Todos los pedidos (.txt, últimos 30-60 días)</div>
+      <div class="dz-ok" id="ok-orders"></div>
+      <input type="file" id="f-orders" accept=".txt,.csv,.tsv" style="display:none" onchange="csvLeer(this.files[0],'orders')">
+    </div>
+    <div class="dz" id="dz-settle" onclick="document.getElementById('f-settle').click()">
+      <div style="font-size:20px">💶</div><b>2 · Extracto (Settlement V2)</b>
+      <div class="dz-sub">Informes → Pagos → Todos los extractos → Archivo plano V2 (.txt)</div>
+      <div class="dz-ok" id="ok-settle"></div>
+      <input type="file" id="f-settle" accept=".txt,.csv,.tsv" style="display:none" onchange="csvLeer(this.files[0],'settle')">
+    </div>
+    <div class="dz" id="dz-ppc" onclick="document.getElementById('f-ppc').click()">
+      <div style="font-size:20px">📣</div><b>3 · PPC (opcional)</b>
+      <div class="dz-sub">Amazon Ads → Informes → Campañas por día (.csv/.xlsx)</div>
+      <div class="dz-ok" id="ok-ppc"></div>
+      <input type="file" id="f-ppc" accept=".csv,.xlsx,.xls,.txt" style="display:none" onchange="csvLeer(this.files[0],'ppc')">
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+    <button class="chip on" style="font-size:13px;padding:10px 18px" onclick="csvAnalizar()">🧠 Analizar mis datos</button>
+    <button class="chip" onclick="csvVolverDemo()">Volver a demo</button>
+    <span id="csv-msg" style="font-size:11.5px;color:var(--mu)"></span>
+  </div>
+  <div style="font-size:10.5px;color:var(--mu);margin-top:8px">🔒 Todo se procesa en tu navegador — ningún dato sale de tu equipo. Los costes por SKU se editan haciendo clic en un producto de la tabla y se guardan localmente.</div>
+</div>
+
+<style>
+.dz{background:var(--card2);border:1.5px dashed var(--bd2);border-radius:12px;padding:14px;cursor:pointer;font-size:12px;line-height:1.5;transition:border-color .15s}
+.dz:hover{border-color:rgba(255,92,43,.5)}
+.dz.ok{border-style:solid;border-color:rgba(46,204,113,.5)}
+.dz-sub{color:var(--mu);font-size:10.5px;margin-top:3px}
+.dz-ok{color:var(--gn);font-size:11px;font-weight:700;margin-top:5px}
+</style>
+
+<!-- ===== VISTA PPC (se alimenta de la Ads API) ===== -->
+<div id="vista-ppc" style="display:none">
+
+  <div class="tiles" style="grid-template-columns:repeat(4,1fr)" id="ppc-kpis"></div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <div class="ch">
+          <h2><span class="ci">📣</span> Gasto vs ventas atribuidas · por día</h2>
+          <span class="more" id="ppc-fuente"></span>
+        </div>
+        <div id="ppc-chart"></div>
+        <div class="chart-legend">
+          <span><i style="background:#B983D6"></i> Gasto PPC</span>
+          <span><i style="background:var(--gn)"></i> Ventas atribuidas</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><h2><span class="ci">🎯</span> Campañas · últimos 30 días</h2></div>
+        <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
+          <tbody id="ppc-campanas"></tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="ch">
+          <h2><span class="ci">🔤</span> Términos de búsqueda · 30 días</h2>
+          <span style="font-size:11px;color:var(--mu)">ACoS objetivo: <input type="number" id="ppc-be" value="25" style="width:44px;padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px" onchange="renderPPCTerminos()">%</span>
+        </div>
+        <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Término del cliente</th><th>Keyword</th><th>Clics</th><th>Gasto</th><th>Pedidos</th><th>ACoS</th><th>Veredicto</th></tr></thead>
+          <tbody id="ppc-terminos"></tbody>
+        </table>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card brain-feed">
+        <div class="ch"><h2><span class="ci">🧠</span> Acciones PPC</h2></div>
+        <div class="brain-total">
+          <div class="v" id="ppc-brain-total">+0€</div>
+          <div class="l">recuperables al mes en publicidad</div>
+        </div>
+        <div id="ppc-acciones"></div>
+      </div>
+      <div class="card">
+        <div class="ch"><h2><span class="ci">🌍</span> Por país · 30 días</h2></div>
+        <div id="ppc-paises"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== VISTA DASHBOARD ===== -->
+<div id="vista-dash">
+<div class="tiles" id="tiles"></div>
+
+<div class="grid">
+<!-- ===== COLUMNA IZQUIERDA ===== -->
+<div>
+
+  <!-- GRÁFICO -->
+  <div class="card">
+    <div class="ch">
+      <h2><span class="ci">📈</span> Beneficio vs Ventas · últimos 30 días</h2>
+      <span class="more" onclick="alert('Vista detallada próximamente')">Ampliar →</span>
+    </div>
+    <div class="chart-wrap" id="chart"></div>
+    <div class="chart-legend">
+      <span><i style="background:var(--or)"></i> Ventas</span>
+      <span><i style="background:var(--gn)"></i> Beneficio neto</span>
+      <span><i style="background:#9B59B6"></i> Gasto PPC</span>
+    </div>
+  </div>
+
+  <!-- P&L -->
+  <div class="card">
+    <div class="ch">
+      <h2><span class="ci">🧾</span> P&L del periodo <span id="pnl-per" style="font-weight:400;color:var(--mu);font-size:11px"></span></h2>
+    </div>
+    <div class="pnl" id="pnl"></div>
+  </div>
+
+  <!-- TABLA PRODUCTOS -->
+  <div class="card">
+    <div class="ch">
+      <h2><span class="ci">📦</span> Beneficio por producto</h2>
+      <span class="more">Ver los 53 →</span>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead><tr>
+        <th>Producto</th><th>Uds</th><th>Ventas</th><th>PPC</th><th>Benef.</th><th>Margen</th><th>Tendencia</th><th>Estado</th>
+      </tr></thead>
+      <tbody id="prods"></tbody>
+    </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== COLUMNA DERECHA: EL CEREBRO ===== -->
+<div>
+
+  <div class="card brain-feed">
+    <div class="ch"><h2><span class="ci">🧠</span> Acciones de hoy</h2></div>
+    <div class="brain-total">
+      <div class="v" id="brain-total">+0€</div>
+      <div class="l">impacto mensual si ejecutas las 4 acciones</div>
+    </div>
+    <div id="acciones"></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><h2><span class="ci">🚨</span> Alertas</h2></div>
+    <div id="alertas"></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><h2><span class="ci">📦</span> Riesgo de stock</h2></div>
+    <div id="stock"></div>
+  </div>
+
+</div>
+</div>
+</div><!-- /vista-dash -->
+
+</main>
+</div>
+
+<script>
+function f(n,d){return (+n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
+
+/* ================= CAPA DE DATOS =================
+   Contrato JSON estable: el dashboard SIEMPRE consume este formato,
+   venga de datos demo, de CSVs subidos o de la API (Worker + SP-API/Ads API).
+   Cambiar SB_CONFIG.mode a 'api' cuando el backend esté desplegado.
+================================================== */
+var SB_CONFIG = {
+  mode: 'demo',                                // 'demo' | 'csv' | 'api'
+  apiBase: localStorage.getItem('sb_api_base') || 'https://sellerbrain-api.info-venmon.workers.dev',
+  apiKey: localStorage.getItem('sb_api_key') || ''
+};
+
+var SB_PROVIDERS = {
+  demo: function(){ return Promise.resolve(SB_DEMO); },
+  api: function(){
+    return fetch(SB_CONFIG.apiBase + '/v1/dashboard', {
+      headers: SB_CONFIG.apiKey ? {'Authorization':'Bearer '+SB_CONFIG.apiKey} : {}
+    }).then(function(r){
+      if(!r.ok) throw new Error('API '+r.status);
+      return r.json(); // debe cumplir el mismo contrato que SB_DEMO
+    }).catch(function(e){
+      console.warn('API no disponible, usando demo:', e.message);
+      return SB_DEMO;
+    });
+  }
+};
+
+function cargarDatos(){ return SB_PROVIDERS[SB_CONFIG.mode](); }
+
+/* ================= DATOS DEMO (contrato de referencia) ================= */
+var SB_DEMO = {
+  meta: { actualizado: '2026-07-11T10:12:00Z', monedas:'EUR', marketplaces:['ES','FR','IT'], skus:53 },
+  periodos: [
+  {id:'hoy',   nom:'Hoy',      fecha:'11 jul', ventas:412.60, uds:31, pedidos:28, ppc:38.20,  ben:96.40,  mg:23.4},
+  {id:'ayer',  nom:'Ayer',     fecha:'10 jul', ventas:534.90, uds:41, pedidos:37, ppc:51.10,  ben:118.75, mg:22.2},
+  {id:'mes',   nom:'Este mes', fecha:'1–11 jul', ventas:5214.30, uds:398, pedidos:361, ppc:489.60, ben:1146.20, mg:22.0},
+  {id:'mespas',nom:'Mes pasado',fecha:'junio',  ventas:14382.50, uds:1102, pedidos:1004, ppc:1402.90, ben:3021.10, mg:21.0}
+  ],
+  pnl: { ventas:5214.30, prod:1512.10, fba:1189.40, com:782.10, ppc:489.60, dev:118.30, alm:76.60, iva:0, otros:-99.90 },
+  productos: [
+  {nom:'Panel LED TM31 Auto', sku:'TM31-PRO', emoji:'🚗', uds:112, ventas:1892.40, ppc:198.20, ben:449.10, mg:23.7, trend:[4,5,6,5,7,8,7,9,8,10], estado:'gn', txt:'OK'},
+  {nom:'Tarjeta Cuántica',    sku:'TQ-01',    emoji:'💳', uds:96,  ventas:1148.80, ppc:96.40,  ben:312.60, mg:27.2, trend:[3,4,4,5,6,7,8,8,9,11], estado:'gn', txt:'Escalar'},
+  {nom:'Sérum Facial 30ml',   sku:'COSM-S30', emoji:'🧴', uds:74,  ventas:962.60,  ppc:88.90,  ben:181.30, mg:18.8, trend:[6,6,5,5,5,4,4,5,4,4],  estado:'am', txt:'PPC alto'},
+  {nom:'Crema Manos Karité',  sku:'COSM-CM',  emoji:'🤲', uds:58,  ventas:521.40,  ppc:62.10,  ben:64.80,  mg:12.4, trend:[5,5,4,4,3,3,3,2,2,2],  estado:'am', txt:'Margen bajo'},
+  {nom:'Organizador Maletero',sku:'ORG-XL',   emoji:'🧳', uds:31,  ventas:495.70,  ppc:31.80,  ben:-12.40, mg:-2.5, trend:[4,4,3,3,3,2,2,2,1,1],  estado:'rd', txt:'Pierde'},
+  {nom:'Kit Limpieza Coche',  sku:'KIT-LC',   emoji:'🧽', uds:27,  ventas:193.40,  ppc:12.20,  ben:41.90,  mg:21.7, trend:[2,2,3,2,3,3,4,3,4,4],  estado:'gn', txt:'OK'}
+  ],
+  acciones: [
+  {ic:'❌', bg:'rgba(232,64,64,.15)', t:'Negativiza 4 términos en «TM31 Auto»', v:'+18,40€/mes', p:'«funda movil», «cargador usb»... 61 clics, 0 ventas', c:'var(--rd)'},
+  {ic:'💶', bg:'rgba(46,204,113,.15)', t:'Sube el Sérum 30ml de 12,99€ → 13,49€', v:'+37,00€/mes', p:'Buybox estable, competidor más barato a 14,20€', c:'var(--gn)'},
+  {ic:'📋', bg:'rgba(74,158,222,.15)', t:'Reclama tarifa FBA del Organizador XL', v:'+31,20€/mes', p:'Cobrada Paquete est. 2,9kg — dimensiones dicen 1,9kg', c:'var(--bl)'},
+  {ic:'⏸️', bg:'rgba(245,166,35,.15)', t:'Pausa PPC del Organizador Maletero', v:'+31,80€/mes', p:'Margen -2,5%: cada venta con clic pierde dinero', c:'var(--am)'}
+  ],
+  alertas: [
+  {tipo:'rd', ic:'🔴', t:'<b>Campaña «TM31 Exact» sin presupuesto</b> desde las 14:20 — perdiendo el pico de la tarde'},
+  {tipo:'am', ic:'⭐', t:'<b>Reseña 2★ nueva</b> en Sérum Facial: “llegó abierto”. Responde y revisa el precinto'},
+  {tipo:'bl', ic:'🏷️', t:'<b>Listing reacondicionado</b> (amzn.gr.) detectado en Panel TM31 — Amazon vende tu devolución'}
+  ],
+  stock: [
+  {nom:'Panel LED TM31', dias:12, pct:18, c:'var(--rd)', nota:'Pide YA — lead time 35d'},
+  {nom:'Tarjeta Cuántica', dias:26, pct:38, c:'var(--am)', nota:'Pedir esta semana'},
+  {nom:'Sérum Facial 30ml', dias:64, pct:78, c:'var(--gn)', nota:'OK'}
+  ],
+  serie30: []
+};
+(function(){for(var i=0;i<30;i++){var base=380+Math.sin(i/4.5)*90+((i*7)%37)-18+(i>26?60:0);var v=Math.max(base,120);SB_DEMO.serie30.push({v:v, b:v*(0.19+((i*13)%9)/100), p:v*(0.085+((i*11)%5)/100)});}})();
+
+/* Referencias activas (se rellenan al cargar) */
+var PERIODOS=[], PNL={}, PRODUCTOS=[], ACCIONES=[], ALERTAS=[], STOCK=[], SERIE30=[];
+
+/* ================= RENDER ================= */
+var perActivo='mes';
+function renderTiles(){
+  var h='';
+  PERIODOS.forEach(function(p){
+    var mgCol=p.mg>=20?'var(--gn)':p.mg>=10?'var(--am)':'var(--rd)';
+    h+='<div class="tile'+(p.id===perActivo?' on':'')+'" onclick="setPer(\''+p.id+'\')">'+
+      '<div class="per"><span>'+p.nom+'</span><span>'+p.fecha+'</span></div>'+
+      '<div class="ben '+(p.ben>=0?'pos':'neg')+'">'+(p.ben>=0?'+':'')+f(p.ben,2)+'€</div>'+
+      '<div class="lbl">beneficio neto estimado</div>'+
+      '<div class="rows">'+
+        '<div class="r"><span>Ventas</span><b>'+f(p.ventas,2)+'€</b></div>'+
+        '<div class="r"><span>Pedidos / Uds</span><b>'+p.pedidos+' / '+p.uds+'</b></div>'+
+        '<div class="r"><span>PPC</span><b style="color:#B983D6">-'+f(p.ppc,2)+'€</b></div>'+
+        '<div class="r"><span>Margen</span><b style="color:'+mgCol+'">'+f(p.mg,1)+'%</b></div>'+
+      '</div>'+
+      '<div class="mgr"><i style="width:'+Math.min(p.mg*3,100)+'%;background:'+mgCol+'"></i></div>'+
+    '</div>';
+  });
+  document.getElementById('tiles').innerHTML=h;
+}
+function setPer(id){perActivo=id;renderTiles();renderPnl();}
+
+function renderPnl(){
+  var p=PERIODOS.find(function(x){return x.id===perActivo;});
+  document.getElementById('pnl-per').textContent='· '+p.nom.toLowerCase()+' ('+p.fecha+')';
+  var esc=p.ventas/PNL.ventas; // escala demo
+  var rows=[
+    {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true},
+    {n:'Coste de producto',v:-PNL.prod*esc,c:'#FF5C2B'},
+    {n:'Tarifas FBA',v:-PNL.fba*esc,c:'#E84040'},
+    {n:'Comisión Amazon',v:-PNL.com*esc,c:'#F5A623'},
+    {n:'PPC',v:-PNL.ppc*esc,c:'#9B59B6'},
+    {n:'Devoluciones',v:-PNL.dev*esc,c:'#C0392B'},
+    {n:'Almacenaje',v:-PNL.alm*esc,c:'#888'},
+    {n:'Otros ajustes',v:PNL.otros*esc,c:'#666'}
+  ];
+  var ben=rows.reduce(function(a,r){return a+r.v;},0);
+  var h='';
+  rows.forEach(function(r){
+    h+='<div class="row"><div class="n"><span class="dot" style="background:'+r.c+'"></span>'+r.n+'</div>'+
+       '<div class="v" style="color:'+(r.v>=0?'var(--tx)':'var(--mu2)')+'">'+(r.v>=0?'+':'')+f(r.v,2)+'€</div>'+
+       '<div class="p">'+f(Math.abs(r.v)/(PNL.ventas*esc)*100,1)+'%</div></div>';
+  });
+  h+='<div class="row total"><div class="n">Beneficio neto</div><div class="v" style="color:'+(ben>=0?'var(--gn)':'var(--rd)')+'">'+(ben>=0?'+':'')+f(ben,2)+'€</div><div class="p">'+f(ben/(PNL.ventas*esc)*100,1)+'%</div></div>';
+  document.getElementById('pnl').innerHTML=h;
+}
+
+function renderChart(){
+  var W=640,H=170,pad=6;
+  var maxV=Math.max.apply(null,SERIE30.map(function(d){return d.v;}));
+  function pts(key){return SERIE30.map(function(d,i){
+    var x=pad+i*(W-2*pad)/29, y=H-pad-(d[key]/maxV)*(H-2*pad);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');}
+  var areaV='M'+pts('v').split(' ').join(' L')+' L'+(W-pad)+','+(H-pad)+' L'+pad+','+(H-pad)+' Z';
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto" preserveAspectRatio="none">'+
+    '<defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,92,43,.25)"/><stop offset="1" stop-color="rgba(255,92,43,0)"/></linearGradient></defs>'+
+    '<path d="'+areaV+'" fill="url(#gv)"/>'+
+    '<polyline points="'+pts('v')+'" fill="none" stroke="var(--or)" stroke-width="2"/>'+
+    '<polyline points="'+pts('b')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
+    '<polyline points="'+pts('p')+'" fill="none" stroke="#9B59B6" stroke-width="1.5" stroke-dasharray="4 3"/>'+
+    '</svg>';
+  document.getElementById('chart').innerHTML=svg;
+}
+
+function renderProds(){
+  var h='';
+  PRODUCTOS.forEach(function(p){
+    var max=Math.max.apply(null,p.trend);
+    var spark='<svg class="spark" viewBox="0 0 64 20"><polyline fill="none" stroke="'+(p.trend[9]>=p.trend[0]?'var(--gn)':'var(--rd)')+'" stroke-width="1.6" points="'+
+      p.trend.map(function(v,i){return (i*7)+','+(19-v/max*17);}).join(' ')+'"/></svg>';
+    h+='<tr>'+
+      '<td><div class="prod"><div class="img">'+p.emoji+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+'</div></div></div></td>'+
+      '<td>'+p.uds+'</td>'+
+      '<td>'+f(p.ventas,2)+'€</td>'+
+      '<td style="color:#B983D6">-'+f(p.ppc,2)+'€</td>'+
+      '<td style="font-weight:700;color:'+(p.ben>=0?'var(--gn)':'var(--rd)')+'">'+(p.ben>=0?'+':'')+f(p.ben,2)+'€</td>'+
+      '<td>'+f(p.mg,1)+'%</td>'+
+      '<td>'+spark+'</td>'+
+      '<td><span class="pill '+p.estado+'">'+p.txt+'</span></td>'+
+    '</tr>';
+  });
+  document.getElementById('prods').innerHTML=h;
+}
+
+function renderCerebro(){
+  var total=0, h='';
+  ACCIONES.forEach(function(a){
+    total+=parseFloat(a.v.replace('+','').replace(',','.'));
+    h+='<div class="accion"><div class="aic" style="background:'+a.bg+'">'+a.ic+'</div>'+
+       '<div><div class="at">'+a.t+'</div><div class="av" style="color:'+a.c+'">'+a.v+'</div><div class="ap">'+a.p+'</div></div></div>';
+  });
+  document.getElementById('acciones').innerHTML=h;
+  document.getElementById('brain-total').textContent='+'+f(total,2)+'€';
+}
+
+function renderAlertas(){
+  var h='';
+  ALERTAS.forEach(function(a){h+='<div class="alert '+a.tipo+'"><span class="aic2">'+a.ic+'</span><div>'+a.t+'</div></div>';});
+  document.getElementById('alertas').innerHTML=h;
+}
+
+function renderStock(){
+  var h='';
+  STOCK.forEach(function(s){
+    h+='<div class="stock-item"><div><div style="font-weight:600">'+s.nom+'</div>'+
+       '<div class="stock-bar"><i style="width:'+s.pct+'%;background:'+s.c+'"></i></div>'+
+       '<div style="font-size:10.5px;color:var(--mu);margin-top:3px">'+s.nota+'</div></div>'+
+       '<div class="dias" style="color:'+s.c+'">'+s.dias+' días</div></div>';
+  });
+  document.getElementById('stock').innerHTML=h;
+}
+
+/* Arranque: carga del proveedor activo (demo/api) y render */
+function aplicarDatos(d){
+  PERIODOS=d.periodos; PNL=d.pnl; PRODUCTOS=d.productos;
+  ACCIONES=d.acciones; ALERTAS=d.alertas; STOCK=d.stock; SERIE30=d.serie30;
+  if(d.meta && d.meta.actualizado){
+    var el=document.querySelector('.sync');
+    if(el){var mins=Math.round((Date.now()-new Date(d.meta.actualizado))/60000);
+      el.innerHTML='<span class="dot"></span> Datos: '+(SB_CONFIG.mode==='demo'?'demo':SB_CONFIG.mode==='csv'?'tus archivos':(mins<60?'hace '+mins+' min':'hace '+Math.round(mins/60)+' h'));}
+  }
+  renderTiles();renderPnl();renderChart();renderProds();renderCerebro();renderAlertas();renderStock();
+}
+cargarDatos().then(aplicarDatos);
+
+/* =====================================================================
+ * MODO CSV — datos reales sin API
+ * Parsea All Orders (.txt), Settlement V2 (.txt) y PPC (.csv/.xlsx)
+ * y construye el MISMO contrato JSON que la API devolverá mañana.
+ * =================================================================== */
+var CSV_RAW = { orders:null, settle:null, ppc:null };
+var COSTES = JSON.parse(localStorage.getItem('sb_costes')||'{}'); // {sku: coste_unitario}
+
+function togglePanel(){
+  var p=document.getElementById('panel-carga');
+  p.style.display = p.style.display==='none' ? 'block' : 'none';
+}
+
+function csvLeer(file, tipo){
+  if(!file) return;
+  var reader=new FileReader();
+  if(/\.(xlsx|xls)$/i.test(file.name)){
+    reader.onload=function(e){
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      CSV_RAW[tipo]=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      csvMarcarOk(tipo, file.name, CSV_RAW[tipo].length);
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    reader.onload=function(e){
+      CSV_RAW[tipo]=csvParsearPlano(e.target.result);
+      csvMarcarOk(tipo, file.name, CSV_RAW[tipo].length);
+    };
+    reader.readAsText(file,'ISO-8859-1'); // flat files de Amazon EU
+  }
+}
+
+function csvMarcarOk(tipo, nombre, filas){
+  document.getElementById('dz-'+tipo).classList.add('ok');
+  document.getElementById('ok-'+tipo).textContent='✓ '+nombre+' · '+filas+' filas';
+}
+
+function csvParsearPlano(texto){
+  var lineas=texto.split('\n').filter(function(l){return l.trim();});
+  if(!lineas.length) return [];
+  var sep=lineas[0].indexOf('\t')>-1?'\t':(lineas[0].split(';').length>lineas[0].split(',').length?';':',');
+  function partir(linea){
+    var out=[],cur='',q=false;
+    for(var i=0;i<linea.length;i++){
+      var c=linea[i];
+      if(c==='"'){q=!q;continue;}
+      if(c===sep&&!q){out.push(cur.trim());cur='';}
+      else cur+=c;
+    }
+    out.push(cur.trim());
+    return out;
+  }
+  var heads=partir(lineas[0]).map(function(h){return h.toLowerCase();});
+  return lineas.slice(1).map(function(l){
+    var vals=partir(l); var o={};
+    heads.forEach(function(h,i){o[h]=vals[i]!==undefined?vals[i]:'';});
+    return o;
+  });
+}
+
+function csvNum(v){
+  var s=(v||'').toString().replace(/[€$£\s]/g,'');
+  if(!s)return 0;
+  var lc=s.lastIndexOf(','),lp=s.lastIndexOf('.');
+  if(lc>-1&&lp>-1){s=lc>lp?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');}
+  else if(lc>-1){s=s.replace(',','.');}
+  var n=parseFloat(s);return isNaN(n)?0:n;
+}
+
+function csvAnalizar(){
+  var msg=document.getElementById('csv-msg');
+  if(!CSV_RAW.orders){msg.textContent='⚠️ Falta el archivo de pedidos (All Orders) — es el mínimo imprescindible.';return;}
+  try{
+    var payload=csvConstruirPayload();
+    SB_CONFIG.mode='csv';
+    localStorage.setItem('sb_csv_payload', JSON.stringify(payload));
+    aplicarDatos(payload);
+    msg.textContent='✓ Análisis completado con tus datos.';
+    togglePanel();
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){ msg.textContent='❌ '+e.message; }
+}
+
+function csvVolverDemo(){
+  SB_CONFIG.mode='demo';
+  localStorage.removeItem('sb_csv_payload');
+  aplicarDatos(SB_DEMO);
+}
+
+function csvConstruirPayload(){
+  var hoy=new Date(); hoy.setHours(0,0,0,0);
+  var iniMes=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  var iniMesPas=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);
+
+  // ---------- 1. PEDIDOS ----------
+  var porSku={}, porDia={};
+  CSV_RAW.orders.forEach(function(r){
+    var estado=(r['item-status']||r['order-status']||'').toLowerCase();
+    if(estado.indexOf('cancel')>-1) return;
+    var sku=r['sku']||'—';
+    var fecha=(r['purchase-date']||'').slice(0,10);
+    if(!fecha) return;
+    var uds=+r['quantity']||0;
+    var precio=csvNum(r['item-price']);
+    if(!porSku[sku])porSku[sku]={sku:sku,uds:0,ventas:0,pedidos:0,porFecha:{}};
+    porSku[sku].uds+=uds; porSku[sku].ventas+=precio; porSku[sku].pedidos++;
+    if(!porSku[sku].porFecha[fecha])porSku[sku].porFecha[fecha]={uds:0,ventas:0};
+    porSku[sku].porFecha[fecha].uds+=uds; porSku[sku].porFecha[fecha].ventas+=precio;
+    if(!porDia[fecha])porDia[fecha]={ventas:0,uds:0,pedidos:0};
+    porDia[fecha].ventas+=precio; porDia[fecha].uds+=uds; porDia[fecha].pedidos++;
+  });
+
+  // ---------- 2. SETTLEMENT: tarifas reales ----------
+  var fbaPorSku={}, comisionTotal=0, fbaTotal=0, devolucionesTotal=0, almacenajeTotal=0, otrosTotal=0, ventasSettle=0;
+  if(CSV_RAW.settle){
+    CSV_RAW.settle.forEach(function(r){
+      var desc=((r['amount-type']||'')+'/'+(r['amount-description']||'')).toLowerCase();
+      var imp=csvNum(r['amount']);
+      var sku=r['sku']||'';
+      var cant=+r['quantity-purchased']||0;
+      var tipo=(r['transaction-type']||'').toLowerCase();
+      if(desc.indexOf('fbaperunitfulfilmentfee')>-1||desc.indexOf('fbaperunitfulfillmentfee')>-1){
+        fbaTotal+=Math.abs(imp);
+        if(sku&&cant>0){
+          if(!fbaPorSku[sku])fbaPorSku[sku]={total:0,uds:0};
+          fbaPorSku[sku].total+=Math.abs(imp); fbaPorSku[sku].uds+=cant;
+        }
+      }
+      else if(desc.indexOf('commission')>-1) comisionTotal+=Math.abs(imp);
+      else if(tipo==='refund') devolucionesTotal+=Math.abs(Math.min(imp,0));
+      else if(desc.indexOf('storage')>-1) almacenajeTotal+=Math.abs(imp);
+      else if(desc.indexOf('principal')>-1&&tipo==='order') ventasSettle+=imp;
+      else if(tipo!=='order') otrosTotal+=imp;
+    });
+  }
+
+  // ---------- 3. PPC ----------
+  var ppcPorDia={}, ppcTotal=0;
+  if(CSV_RAW.ppc){
+    CSV_RAW.ppc.forEach(function(r){
+      var fecha='',gasto=0;
+      Object.keys(r).forEach(function(k){
+        var n=k.toString().toLowerCase();
+        if(!fecha&&(n.indexOf('fecha')>-1||n.indexOf('date')>-1)){
+          var v=(r[k]||'').toString();
+          var m=v.match(/(\d{4})-(\d{2})-(\d{2})/)||v.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          if(m)fecha=m[0].indexOf('/')>-1?m[3]+'-'+m[2]+'-'+m[1]:m[0];
+        }
+        if(!gasto&&(n==='gasto'||n==='spend'||n.indexOf('inversi')>-1||n==='coste'||n==='cost'))gasto=csvNum(r[k]);
+      });
+      if(gasto>0){ppcTotal+=gasto;if(fecha){ppcPorDia[fecha]=(ppcPorDia[fecha]||0)+gasto;}}
+    });
+  }
+
+  // ---------- 4. AGREGADOS DE PERIODO ----------
+  function rango(desde,hasta){
+    var v=0,u=0,p=0,g=0,udsSku={};
+    Object.keys(porDia).forEach(function(f){
+      var d=new Date(f+'T00:00:00');
+      if(d>=desde&&d<hasta){v+=porDia[f].ventas;u+=porDia[f].uds;p+=porDia[f].pedidos;g+=(ppcPorDia[f]||0);}
+    });
+    Object.keys(porSku).forEach(function(s){
+      Object.keys(porSku[s].porFecha).forEach(function(f){
+        var d=new Date(f+'T00:00:00');
+        if(d>=desde&&d<hasta) udsSku[s]=(udsSku[s]||0)+porSku[s].porFecha[f].uds;
+      });
+    });
+    return {v:v,u:u,p:p,g:g,udsSku:udsSku};
+  }
+  var fbaMedio=fbaTotal>0&&ventasSettle>0?fbaTotal/ventasSettle:0.18;      // ratio real o estimado
+  var comRatio=comisionTotal>0&&ventasSettle>0?comisionTotal/ventasSettle:0.153;
+  function beneficio(ventas,udsSku,gastosPpc){
+    var costes=0, fba=0;
+    Object.keys(udsSku||{}).forEach(function(s){
+      var propUds=udsSku[s];
+      costes+=propUds*(COSTES[s]||0);
+      var f=fbaPorSku[s];
+      fba+=propUds*(f&&f.uds>0?f.total/f.uds:0);
+    });
+    if(fba===0)fba=ventas*fbaMedio;
+    return ventas-costes-fba-ventas*comRatio-gastosPpc;
+  }
+  var manana=new Date(hoy.getTime()+86400000), ayer=new Date(hoy.getTime()-86400000);
+  function tile(id,nom,fecha,r){
+    var ben=beneficio(r.v,r.udsSku,r.g);
+    return {id:id,nom:nom,fecha:fecha,ventas:+r.v.toFixed(2),uds:r.u,pedidos:r.p,ppc:+r.g.toFixed(2),
+            ben:+ben.toFixed(2),mg:r.v>0?+(ben/r.v*100).toFixed(1):0};
+  }
+  var MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var periodos=[
+    tile('hoy','Hoy',hoy.getDate()+' '+MES[hoy.getMonth()],rango(hoy,manana)),
+    tile('ayer','Ayer',ayer.getDate()+' '+MES[ayer.getMonth()],rango(ayer,hoy)),
+    tile('mes','Este mes','1–'+hoy.getDate()+' '+MES[hoy.getMonth()],rango(iniMes,manana)),
+    tile('mespas','Mes pasado',MES[iniMesPas.getMonth()],rango(iniMesPas,iniMes))
+  ];
+
+  // ---------- 5. PRODUCTOS ----------
+  var productos=Object.values(porSku).map(function(p){
+    var f=fbaPorSku[p.sku];
+    var fbaUd=f&&f.uds>0?f.total/f.uds:null;
+    var coste=COSTES[p.sku]||0;
+    var ben=p.ventas-(p.uds*coste)-(fbaUd!==null?p.uds*fbaUd:p.ventas*fbaMedio)-p.ventas*comRatio;
+    var mg=p.ventas>0?ben/p.ventas*100:0;
+    // tendencia: últimas 10 fechas con datos
+    var fechas=Object.keys(p.porFecha).sort().slice(-10);
+    var trend=fechas.map(function(fx){return p.porFecha[fx].uds;});
+    while(trend.length<10)trend.unshift(0);
+    return {nom:p.sku, sku:p.sku, emoji:'📦', uds:p.uds, ventas:+p.ventas.toFixed(2),
+      ppc:0, ben:+ben.toFixed(2), mg:+mg.toFixed(1), trend:trend,
+      estado:mg<0?'rd':mg<15?'am':'gn',
+      txt:coste===0?'Sin coste ➜ clic':(mg<0?'Pierde':mg<15?'Margen bajo':'OK'),
+      fbaReal:fbaUd!==null?+fbaUd.toFixed(2):null};
+  }).sort(function(a,b){return b.ventas-a.ventas;}).slice(0,30);
+
+  // ---------- 6. SERIE 30 DÍAS ----------
+  var serie30=[];
+  for(var i=29;i>=0;i--){
+    var d=new Date(hoy.getTime()-i*86400000);
+    var f=d.toISOString().slice(0,10);
+    var dd=porDia[f]||{ventas:0,uds:0};
+    var udsDia={};
+    Object.keys(porSku).forEach(function(s){if(porSku[s].porFecha[f])udsDia[s]=porSku[s].porFecha[f].uds;});
+    serie30.push({v:dd.ventas, b:beneficio(dd.ventas,udsDia,ppcPorDia[f]||0), p:ppcPorDia[f]||0});
+  }
+
+  // ---------- 7. ACCIONES Y ALERTAS AUTOMÁTICAS ----------
+  var acciones=[], alertas=[];
+  productos.forEach(function(p){
+    if(p.mg<0&&p.ventas>50) acciones.push({ic:'⏸️',bg:'rgba(245,166,35,.15)',c:'var(--am)',
+      t:'Revisa «'+p.nom+'»: margen '+p.mg+'%',v:'-'+Math.abs(p.ben).toFixed(2).replace('.',',')+'€ este periodo',
+      p:'Pierde dinero en cada venta. Sube precio, baja coste o pausa PPC.'});
+  });
+  var sinCoste=productos.filter(function(p){return !COSTES[p.sku]&&p.ventas>0;}).length;
+  if(sinCoste>0) acciones.unshift({ic:'✏️',bg:'rgba(74,158,222,.15)',c:'var(--bl)',
+    t:'Añade el coste de '+sinCoste+' producto'+(sinCoste>1?'s':''),v:'Precisión del beneficio',
+    p:'Clic en cada fila de la tabla para introducir tu coste unitario (se guarda en tu navegador).'});
+  if(!CSV_RAW.settle) alertas.push({tipo:'am',ic:'💶',t:'<b>Sin Settlement:</b> las tarifas FBA son estimadas ('+Math.round(fbaMedio*100)+'% de ventas). Sube el extracto V2 para tarifas reales por unidad.'});
+  if(!CSV_RAW.ppc) alertas.push({tipo:'bl',ic:'📣',t:'<b>Sin datos PPC:</b> el beneficio no descuenta publicidad. Sube el informe de campañas.'});
+
+  return {
+    meta:{actualizado:new Date().toISOString(),monedas:'EUR',marketplaces:['CSV'],skus:productos.length},
+    periodos:periodos,
+    pnl:{ventas:periodos[2].ventas,
+      prod:productos.reduce(function(a,p){return a+p.uds*(COSTES[p.sku]||0);},0),
+      fba:fbaTotal||periodos[2].ventas*fbaMedio, com:comisionTotal||periodos[2].ventas*comRatio,
+      ppc:ppcTotal, dev:devolucionesTotal, alm:almacenajeTotal, iva:0, otros:+otrosTotal.toFixed(2)},
+    productos:productos, acciones:acciones.slice(0,6), alertas:alertas,
+    stock:[], serie30:serie30
+  };
+}
+
+/* Editor de coste al hacer clic en un producto (modo CSV) */
+document.addEventListener('click',function(ev){
+  if(SB_CONFIG.mode!=='csv')return;
+  var tr=ev.target.closest('#prods tr'); if(!tr)return;
+  var sku=tr.querySelector('.sku'); if(!sku)return;
+  sku=sku.textContent;
+  var actual=COSTES[sku]||'';
+  var v=prompt('Coste unitario (€, DDP) de '+sku+':',actual);
+  if(v===null)return;
+  COSTES[sku]=parseFloat(v.replace(',','.'))||0;
+  localStorage.setItem('sb_costes',JSON.stringify(COSTES));
+  aplicarDatos(csvConstruirPayload());
+});
+
+/* Restaurar sesión CSV previa */
+(function(){
+  var prev=localStorage.getItem('sb_csv_payload');
+  if(prev){try{SB_CONFIG.mode='csv';aplicarDatos(JSON.parse(prev));}catch(e){}}
+})();
+
+/* =====================================================================
+ * PANEL DE CONEXIÓN — estado visual del backend y Amazon Ads
+ * =================================================================== */
+function toggleConexion(){
+  var p=document.getElementById('panel-conexion');
+  var abrir = p.style.display==='none';
+  p.style.display = abrir ? 'block' : 'none';
+  if(abrir){
+    document.getElementById('cx-url').value = SB_CONFIG.apiBase;
+    document.getElementById('cx-key').value = SB_CONFIG.apiKey;
+  }
+}
+
+function luz(id, color, texto){
+  var el=document.getElementById('luz-'+id);
+  el.querySelector('.cx-dot').style.background=color;
+  el.querySelector('.cx-sub').textContent=texto;
+}
+
+function probarConexion(){
+  SB_CONFIG.apiBase=(document.getElementById('cx-url').value||'').trim().replace(/\/$/,'');
+  SB_CONFIG.apiKey=(document.getElementById('cx-key').value||'').trim();
+  localStorage.setItem('sb_api_base',SB_CONFIG.apiBase);
+  localStorage.setItem('sb_api_key',SB_CONFIG.apiKey);
+  var VERDE='var(--gn)', ROJO='var(--rd)', AMBAR='var(--am)';
+  luz('backend','#555','probando...');luz('auth','#555','probando...');luz('ppc','#555','probando...');
+  document.getElementById('cx-ppc-datos').style.display='none';
+  document.getElementById('btn-usar-api').style.display='none';
+
+  // 1. Backend vivo
+  fetch(SB_CONFIG.apiBase+'/health').then(function(r){return r.json();}).then(function(d){
+    if(!d.ok) throw new Error();
+    luz('backend',VERDE,'en línea ✓');
+    // 2. Clave privada
+    return fetch(SB_CONFIG.apiBase+'/v1/ppc',{headers:{'Authorization':'Bearer '+SB_CONFIG.apiKey}});
+  }).then(function(r){
+    if(r.status===401){luz('auth',ROJO,'clave incorrecta');throw new Error('auth');}
+    luz('auth',VERDE,'válida ✓');
+    return r.json();
+  }).then(function(d){
+    // 3. Datos PPC
+    var filas=d.datos||[];
+    if(!filas.length){
+      luz('ppc',AMBAR,'sin datos aún — el cron nocturno los traerá');
+    } else {
+      luz('ppc',VERDE,filas.length+' registros ✓ · último: '+filas[filas.length-1].fecha);
+      var h='';
+      filas.slice(-10).reverse().forEach(function(x){
+        var acos=x.ventas_ppc>0?(x.gasto/x.ventas_ppc*100).toFixed(1)+'%':'—';
+        h+='<tr><td>'+x.fecha+'</td><td>'+(x.pais||'ES')+'</td><td>'+f(x.gasto,2)+'€</td><td>'+x.clics+'</td><td>'+f(x.ventas_ppc,2)+'€</td><td>'+acos+'</td></tr>';
+      });
+      document.getElementById('cx-ppc-tabla').innerHTML=h;
+      document.getElementById('cx-ppc-datos').style.display='block';
+    }
+    document.getElementById('btn-usar-api').style.display='inline-block';
+    document.getElementById('chip-conexion').innerHTML='🟢 Conectado';
+  }).catch(function(e){
+    if(e.message!=='auth'){
+      if(document.getElementById('luz-backend').querySelector('.cx-sub').textContent==='probando...'){
+        luz('backend',ROJO,'no responde — revisa la URL');
+      }
+    }
+    luz('ppc','#555','—');
+    document.getElementById('chip-conexion').innerHTML='🔌 Conexión';
+  });
+}
+
+function activarAPI(){
+  SB_CONFIG.mode='api';
+  cargarDatos().then(aplicarDatos);
+  toggleConexion();
+}
+
+/* =====================================================================
+ * VISTA PPC — alimentada por la Ads API (o demo)
+ * =================================================================== */
+var PPC_DEMO = {
+  dias: [], campanas: [
+    {fecha:'',pais:'ES',nombre:'SP - TM31 - Exacta - Lanzamiento',gasto:118.40,clics:512,impresiones:38200,ventas_ppc:498.20,pedidos_ppc:31},
+    {fecha:'',pais:'ES',nombre:'SP - TM31 - Automática',gasto:96.10,clics:441,impresiones:51400,ventas_ppc:301.50,pedidos_ppc:19},
+    {fecha:'',pais:'ES',nombre:'SP - Sérum 30ml - Frase',gasto:74.30,clics:298,impresiones:24100,ventas_ppc:189.70,pedidos_ppc:14},
+    {fecha:'',pais:'FR',nombre:'SP - TM31 FR - Auto',gasto:61.80,clics:230,impresiones:19800,ventas_ppc:118.40,pedidos_ppc:8},
+    {fecha:'',pais:'ES',nombre:'SP - Organizador XL - Auto',gasto:31.80,clics:104,impresiones:9200,ventas_ppc:47.90,pedidos_ppc:3},
+    {fecha:'',pais:'IT',nombre:'SP - TM31 IT - Exacta',gasto:28.40,clics:96,impresiones:8100,ventas_ppc:96.30,pedidos_ppc:6}
+  ],
+  terminos: [
+    {termino:'luz led coche interior',keyword:'panel led coche',tipo:'BROAD',gasto:42.10,clics:168,pedidos_ppc:14,ventas_ppc:238.60},
+    {termino:'funda movil',keyword:'accesorios coche',tipo:'BROAD',gasto:18.40,clics:61,pedidos_ppc:0,ventas_ppc:0},
+    {termino:'panel led tm31',keyword:'panel led tm31',tipo:'EXACT',gasto:16.80,clics:74,pedidos_ppc:11,ventas_ppc:186.90},
+    {termino:'cargador usb coche',keyword:'accesorios coche',tipo:'BROAD',gasto:12.20,clics:44,pedidos_ppc:0,ventas_ppc:0},
+    {termino:'serum facial vitamina c',keyword:'serum facial',tipo:'PHRASE',gasto:11.90,clics:52,pedidos_ppc:4,ventas_ppc:67.80},
+    {termino:'luces interior coche rgb',keyword:'panel led coche',tipo:'BROAD',gasto:9.60,clics:38,pedidos_ppc:1,ventas_ppc:15.99},
+    {termino:'organizador maletero grande',keyword:'organizador maletero',tipo:'PHRASE',gasto:8.10,clics:29,pedidos_ppc:2,ventas_ppc:31.98},
+    {termino:'crema manos invierno',keyword:'crema manos',tipo:'BROAD',gasto:6.40,clics:31,pedidos_ppc:0,ventas_ppc:0}
+  ]
+};
+(function(){for(var i=29;i>=0;i--){var g=8+Math.sin(i/3.2)*3+((i*7)%5);PPC_DEMO.dias.push({fecha:'',gasto:g,ventas_ppc:g*(2.2+((i*11)%14)/10)});}})();
+
+var PPC_DATA=null;
+
+var SB_VENTAS_REALES=false; // true cuando vengan de SP-API/CSV (no estimadas)
+
+function pedirVentasTotales(){
+  var actual=+localStorage.getItem('sb_ventas_totales_30d')||'';
+  var v=prompt('TACoS = gasto en anuncios ÷ VENTAS TOTALES (orgánicas + publicidad).\n\n'+
+    'Aún no tienes la conexión de ventas (SP-API) activa, así que introduce tu facturación total '+
+    'aproximada de los últimos 30 días (en €) y calculamos el TACoS estimado.\n\n'+
+    'Cuando conectes la SP-API, este número entrará solo y será exacto.', actual);
+  if(v===null)return;
+  var n=parseFloat((v||'').replace(',','.'))||0;
+  if(n>0){localStorage.setItem('sb_ventas_totales_30d',n);SB_VENTAS_REALES=false;renderPPC(document.getElementById('ppc-fuente').textContent);}
+}
+
+function cambiarVista(v){
+  document.getElementById('vista-dash').style.display = v==='dash'?'block':'none';
+  document.getElementById('vista-ppc').style.display = v==='ppc'?'block':'none';
+  document.getElementById('nav-dash').classList.toggle('on', v==='dash');
+  document.getElementById('nav-ppc').classList.toggle('on', v==='ppc');
+  if(v==='ppc' && !PPC_DATA) cargarPPC();
+}
+
+function cargarPPC(){
+  if(SB_CONFIG.mode==='api' || SB_CONFIG.apiKey){
+    var H={'Authorization':'Bearer '+SB_CONFIG.apiKey};
+    Promise.all([
+      fetch(SB_CONFIG.apiBase+'/v1/ppc?days=30',{headers:H}).then(function(r){return r.json();}),
+      fetch(SB_CONFIG.apiBase+'/v1/ppc/campanas?days=30',{headers:H}).then(function(r){return r.json();}),
+      fetch(SB_CONFIG.apiBase+'/v1/ppc/terminos',{headers:H}).then(function(r){return r.json();})
+    ]).then(function(res){
+      var dias=res[0].datos||[], camp=res[1].datos||[], term=res[2].datos||[];
+      if(!dias.length && !camp.length && !term.length){ PPC_DATA=PPC_DEMO; renderPPC('demo — conecta y sincroniza para ver tus datos'); return; }
+      // Agregar campañas de 30 días por nombre
+      var porCamp={};
+      camp.forEach(function(c){
+        var k=c.pais+'·'+c.nombre;
+        if(!porCamp[k])porCamp[k]={pais:c.pais,nombre:c.nombre,gasto:0,clics:0,impresiones:0,ventas_ppc:0,pedidos_ppc:0};
+        porCamp[k].gasto+=+c.gasto;porCamp[k].clics+=c.clics;porCamp[k].impresiones+=c.impresiones;
+        porCamp[k].ventas_ppc+=+c.ventas_ppc;porCamp[k].pedidos_ppc+=c.pedidos_ppc;
+      });
+      PPC_DATA={dias:dias.map(function(d){return{fecha:d.fecha,gasto:+d.gasto,ventas_ppc:+d.ventas_ppc,pais:d.pais};}),
+                campanas:Object.values(porCamp).sort(function(a,b){return b.gasto-a.gasto;}),
+                terminos:term};
+      renderPPC('datos reales de tu Ads API');
+    }).catch(function(){ PPC_DATA=PPC_DEMO; renderPPC('demo (API no disponible)'); });
+  } else { PPC_DATA=PPC_DEMO; renderPPC('demo — usa 🔌 Conexión para ver tus datos reales'); }
+}
+
+function renderPPC(fuente){
+  document.getElementById('ppc-fuente').textContent=fuente;
+  var d=PPC_DATA;
+  // KPIs
+  var g=0,v=0,c=0,p=0;
+  d.campanas.forEach(function(x){g+=x.gasto;v+=x.ventas_ppc;c+=x.clics;p+=x.pedidos_ppc;});
+  if(!d.campanas.length){d.dias.forEach(function(x){g+=x.gasto;v+=x.ventas_ppc;});}
+  var acos=v>0?g/v*100:0;
+  var roas=g>0?v/g:0;
+  // TACoS: gasto ÷ ventas TOTALES. Si tenemos ventas totales reales (SP-API/CSV) las usa;
+  // si no, el usuario puede introducir su facturación del periodo (se marca como estimación).
+  var ventasTot=+localStorage.getItem('sb_ventas_totales_30d')||0;
+  var tacos = ventasTot>0 ? g/ventasTot*100 : null;
+  var kpis=[
+    {l:'Gasto 30 días',v:f(g,2)+'€',c:'#B983D6',sub:'inversión publicitaria'},
+    {l:'ACoS global',v:f(acos,1)+'%',c:acos<=25?'var(--gn)':acos<=35?'var(--am)':'var(--rd)',sub:'gasto ÷ ventas de anuncios'},
+    {l:'ROAS',v:f(roas,2)+'x',c:roas>=4?'var(--gn)':roas>=2.8?'var(--am)':'var(--rd)',sub:'retorno por € invertido'},
+    {l:'TACoS',v:tacos!==null?f(tacos,1)+'%':'—',c:tacos===null?'var(--mu)':tacos<=10?'var(--gn)':tacos<=15?'var(--am)':'var(--rd)',
+      sub:tacos!==null?(ventasTot>0&&!SB_VENTAS_REALES?'estimado · sobre tu facturación':'gasto ÷ ventas totales'):'necesita ventas totales',
+      click:'pedirVentasTotales()'}
+  ];
+  document.getElementById('ppc-kpis').innerHTML=kpis.map(function(k){
+    return '<div class="tile" '+(k.click?'style="cursor:pointer" onclick="'+k.click+'"':'')+'>'+
+      '<div class="per"><span>'+k.l+'</span></div>'+
+      '<div class="ben" style="color:'+k.c+'">'+k.v+'</div>'+
+      '<div style="font-size:10px;color:var(--mu);margin-top:2px">'+k.sub+'</div></div>';
+  }).join('');
+  // Gráfico
+  var W=640,H=150,pad=6,serie=d.dias.slice(-30);
+  var maxV=Math.max.apply(null,serie.map(function(x){return Math.max(x.gasto,x.ventas_ppc);}).concat([1]));
+  function pts(key){return serie.map(function(x,i){
+    return (pad+i*(W-2*pad)/Math.max(serie.length-1,1)).toFixed(1)+','+(H-pad-(x[key]/maxV)*(H-2*pad)).toFixed(1);
+  }).join(' ');}
+  document.getElementById('ppc-chart').innerHTML=serie.length?
+    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto" preserveAspectRatio="none">'+
+    '<polyline points="'+pts('ventas_ppc')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
+    '<polyline points="'+pts('gasto')+'" fill="none" stroke="#B983D6" stroke-width="2"/></svg>'
+    :'<div style="color:var(--mu);font-size:12px;padding:20px">Aún sin serie diaria — el cron nocturno la va construyendo día a día.</div>';
+  // Campañas
+  document.getElementById('ppc-campanas').innerHTML=d.campanas.map(function(x){
+    var a=x.ventas_ppc>0?x.gasto/x.ventas_ppc*100:999;
+    var roas=x.gasto>0?x.ventas_ppc/x.gasto:0;
+    var est=a<=25?['gn','Rentable']:a<=40?['am','Vigilar']:x.ventas_ppc>0?['rd','ACoS alto']:['rd','Sin ventas'];
+    return '<tr><td style="max-width:210px;overflow:hidden;text-overflow:ellipsis">'+x.nombre+'</td><td>'+x.pais+'</td>'+
+      '<td style="color:#B983D6">'+f(x.gasto,2)+'€</td><td>'+x.clics+'</td>'+
+      '<td style="color:var(--gn)">'+f(x.ventas_ppc,2)+'€</td>'+
+      '<td>'+(x.ventas_ppc>0?f(a,1)+'%':'—')+'</td>'+
+      '<td>'+(roas>0?f(roas,2)+'x':'—')+'</td>'+
+      '<td><span class="pill '+est[0]+'">'+est[1]+'</span></td></tr>';
+  }).join('')||'<tr><td colspan="8" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
+  renderPPCTerminos();
+}
+
+function renderPPCTerminos(){
+  if(!PPC_DATA)return;
+  var be=(+document.getElementById('ppc-be').value||25)/100;
+  var acciones=[],recuperable=0;
+  document.getElementById('ppc-terminos').innerHTML=PPC_DATA.terminos.slice(0,40).map(function(t){
+    var gasto=+t.gasto,clics=+t.clics,ped=+(t.pedidos_ppc||0),ven=+(t.ventas_ppc||0);
+    var a=ven>0?gasto/ven:999;
+    var ver,pill;
+    if(clics>=8&&ped===0){ver='Negativizar';pill='rd';acciones.push({t:'Negativiza «'+t.termino+'»',p:clics+' clics · 0 pedidos en 30 días',v:gasto});recuperable+=gasto;}
+    else if(ven>0&&a>be){ver='Bajar puja';pill='am';}
+    else if(ven>0&&a<=be*0.7&&ped>=2){ver='Escalar';pill='gn';}
+    else {ver='Vigilar';pill='am';}
+    return '<tr><td style="max-width:190px;overflow:hidden;text-overflow:ellipsis"><b>'+t.termino+'</b></td>'+
+      '<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(t.keyword||'')+'</td>'+
+      '<td>'+clics+'</td><td style="color:#B983D6">'+f(gasto,2)+'€</td><td>'+ped+'</td>'+
+      '<td>'+(ven>0?f(a*100,1)+'%':'—')+'</td>'+
+      '<td><span class="pill '+pill+'">'+ver+'</span></td></tr>';
+  }).join('')||'<tr><td colspan="7" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
+  // Acciones del cerebro PPC
+  document.getElementById('ppc-brain-total').textContent='+'+f(recuperable,2)+'€';
+  document.getElementById('ppc-acciones').innerHTML=acciones.slice(0,6).map(function(a){
+    return '<div class="accion"><div class="aic" style="background:rgba(232,64,64,.15)">❌</div>'+
+      '<div><div class="at">'+a.t+'</div><div class="av" style="color:var(--gn)">+'+f(a.v,2)+'€/mes</div><div class="ap">'+a.p+'</div></div></div>';
+  }).join('')||'<div style="font-size:12px;color:var(--mu)">Sin fugas detectadas en los términos actuales. 👌</div>';
+  // Por país
+  var porPais={};
+  (PPC_DATA.campanas.length?PPC_DATA.campanas:[]).forEach(function(x){
+    if(!porPais[x.pais])porPais[x.pais]={g:0,v:0};
+    porPais[x.pais].g+=x.gasto;porPais[x.pais].v+=x.ventas_ppc;
+  });
+  var BAND={ES:'🇪🇸',FR:'🇫🇷',IT:'🇮🇹',BE:'🇧🇪',DE:'🇩🇪',NL:'🇳🇱'};
+  document.getElementById('ppc-paises').innerHTML=Object.keys(porPais).map(function(p){
+    var x=porPais[p],a=x.v>0?x.g/x.v*100:0;
+    return '<div class="stock-item"><div style="font-weight:600">'+(BAND[p]||'')+' '+p+'</div>'+
+      '<div style="text-align:right;font-size:12px"><span style="color:#B983D6">'+f(x.g,2)+'€</span> · ACoS <b style="color:'+(a<=25?'var(--gn)':a<=40?'var(--am)':'var(--rd)')+'">'+f(a,1)+'%</b></div></div>';
+  }).join('')||'<div style="font-size:12px;color:var(--mu)">Pendiente de datos por país.</div>';
+}
+</script>
+</body>
+</html>

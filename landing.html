@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Tu cuenta de Amazon te está diciendo qué hacer. Escúchala.</title>
+<meta name="description" content="SellerBrain convierte tus informes de Amazon en acciones con euros: beneficio real por producto, sobrecobros FBA detectados, PPC que deja de quemar dinero. Beta fundadores: 15€ / 6 meses.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --tinta:#0B0A08;        /* negro cálido, no neutro */
+  --carbon:#15120E;       /* superficie tarjeta */
+  --carbon2:#1C1812;
+  --borde:rgba(255,160,80,.12);
+  --brasa:#FF5C2B;
+  --ambar:#FFA028;
+  --beneficio:#3DDC97;    /* verde SOLO para dinero */
+  --perdida:#FF4D5E;
+  --hueso:#F5EFE6;        /* texto principal, cálido */
+  --ceniza:rgba(245,239,230,.52);
+  --ceniza2:rgba(245,239,230,.34);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--tinta);color:var(--hueso);font-family:'DM Sans',sans-serif;font-size:16px;line-height:1.6;overflow-x:hidden}
+.mono{font-family:'DM Mono',monospace}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+
+/* ===== fondo brasa ===== */
+.fondo{position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(900px 500px at 85% -10%, rgba(255,92,43,.13), transparent 60%),
+  radial-gradient(700px 500px at -10% 40%, rgba(255,160,40,.06), transparent 60%),
+  var(--tinta)}
+
+/* ===== topbar ===== */
+.top{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);background:rgba(11,10,8,.72);border-bottom:1px solid var(--borde)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:19px;letter-spacing:-.01em}
+.logo b{background:linear-gradient(90deg,var(--brasa),var(--ambar));-webkit-background-clip:text;background-clip:text;color:transparent}
+.btn{display:inline-block;padding:12px 22px;border-radius:12px;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;text-decoration:none;background:linear-gradient(100deg,var(--brasa),var(--ambar));color:#160B05;box-shadow:0 6px 26px rgba(255,92,43,.35);transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 10px 34px rgba(255,92,43,.45)}
+.btn.min{padding:9px 16px;font-size:12.5px}
+.btn-ghost{display:inline-block;padding:12px 22px;border-radius:12px;font-weight:700;font-size:14px;text-decoration:none;color:var(--ceniza);border:1.5px solid var(--borde);transition:border-color .15s,color .15s}
+.btn-ghost:hover{border-color:rgba(255,160,80,.4);color:var(--hueso)}
+
+/* ===== hero ===== */
+.hero{padding:76px 0 40px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+@media(max-width:920px){.hero .wrap{grid-template-columns:1fr;gap:40px}}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ambar);background:rgba(255,160,40,.09);border:1px solid rgba(255,160,40,.25);padding:7px 14px;border-radius:100px;margin-bottom:22px}
+.chip .pdot{width:7px;height:7px;border-radius:50%;background:var(--ambar);animation:lat 2s infinite}
+@keyframes lat{50%{opacity:.35}}
+h1{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(34px,4.6vw,54px);line-height:1.08;letter-spacing:-.02em;margin-bottom:20px}
+h1 em{font-style:normal;background:linear-gradient(90deg,var(--brasa),var(--ambar));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{font-size:17.5px;color:var(--ceniza);max-width:480px;margin-bottom:30px}
+.sub b{color:var(--hueso);font-weight:700}
+.cta-fila{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+.plazas{font-size:12.5px;color:var(--ceniza2)}
+.plazas b{color:var(--ambar)}
+.aval{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ceniza2);border-top:1px solid var(--borde);padding-top:18px;margin-top:6px;max-width:480px}
+.aval .sello{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--brasa),var(--ambar));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+
+/* ===== FIRMA: el Cerebro en vivo ===== */
+.cerebro{background:var(--carbon);border:1px solid var(--borde);border-radius:22px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.5);position:relative}
+.cerebro::before{content:'';position:absolute;inset:-1px;border-radius:22px;padding:1px;background:linear-gradient(140deg,rgba(255,92,43,.5),transparent 40%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.cerebro-cab{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.cerebro-cab .t{font-family:'Syne',sans-serif;font-weight:800;font-size:14px;display:flex;align-items:center;gap:9px}
+.cerebro-cab .t .ic{width:30px;height:30px;border-radius:9px;background:rgba(255,92,43,.14);display:flex;align-items:center;justify-content:center}
+.total{text-align:right}
+.total .v{font-family:'DM Mono',monospace;font-weight:500;font-size:22px;color:var(--beneficio)}
+.total .l{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ceniza2)}
+.accion{display:flex;gap:12px;padding:13px;border-radius:14px;background:var(--carbon2);border:1px solid rgba(255,160,80,.08);margin-bottom:9px;opacity:0;transform:translateY(12px);animation:entra .5s forwards}
+.accion:nth-child(1){animation-delay:.4s}.accion:nth-child(2){animation-delay:1.3s}
+.accion:nth-child(3){animation-delay:2.2s}.accion:nth-child(4){animation-delay:3.1s}
+@keyframes entra{to{opacity:1;transform:none}}
+.accion .ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.accion .tt{font-size:13.5px;font-weight:700;line-height:1.35}
+.accion .dt{font-size:11.5px;color:var(--ceniza2);margin-top:2px}
+.accion .eu{font-family:'DM Mono',monospace;font-size:13px;margin-top:4px}
+.cerebro-pie{font-size:11px;color:var(--ceniza2);text-align:center;margin-top:10px}
+@media(prefers-reduced-motion:reduce){.accion{animation:none;opacity:1;transform:none}.chip .pdot{animation:none}}
+
+/* ===== ticker ===== */
+.ticker{border-top:1px solid var(--borde);border-bottom:1px solid var(--borde);background:rgba(255,92,43,.03);overflow:hidden;padding:13px 0;margin:44px 0 0}
+.ticker-pista{display:flex;gap:44px;width:max-content;animation:rueda 38s linear infinite}
+@keyframes rueda{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.ticker-pista{animation:none}}
+.tk{font-family:'DM Mono',monospace;font-size:12.5px;color:var(--ceniza);white-space:nowrap;display:flex;gap:8px;align-items:center}
+.tk b{color:var(--hueso);font-weight:500}
+.tk .rojo{color:var(--perdida)} .tk .verde{color:var(--beneficio)}
+.tk::before{content:'▸';color:var(--brasa)}
+
+/* ===== secciones ===== */
+section{padding:84px 0}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brasa);margin-bottom:14px}
+h2{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(26px,3.4vw,38px);line-height:1.15;letter-spacing:-.015em;margin-bottom:14px;max-width:640px}
+.lead{color:var(--ceniza);font-size:16.5px;max-width:560px}
+
+/* datos vs decisiones */
+.versus{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:44px}
+@media(max-width:820px){.versus{grid-template-columns:1fr}}
+.panel{border-radius:18px;padding:26px;border:1px solid var(--borde)}
+.panel.datos{background:rgba(245,239,230,.025)}
+.panel.decide{background:linear-gradient(170deg,rgba(255,92,43,.09),rgba(255,92,43,.02));border-color:rgba(255,92,43,.3)}
+.panel h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px}
+.panel .quien{font-size:12px;color:var(--ceniza2);margin-bottom:18px}
+.fila-dato{font-family:'DM Mono',monospace;font-size:13px;color:var(--ceniza);padding:9px 0;border-bottom:1px dashed rgba(245,239,230,.09)}
+.fila-dato:last-child{border:none}
+.fila-dec{display:flex;gap:10px;padding:10px 0;border-bottom:1px dashed rgba(255,92,43,.15);font-size:13.5px;align-items:baseline}
+.fila-dec:last-child{border:none}
+.fila-dec .eu{font-family:'DM Mono',monospace;color:var(--beneficio);white-space:nowrap;margin-left:auto;padding-left:12px}
+
+/* módulos */
+.grid-mod{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:44px}
+@media(max-width:920px){.grid-mod{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.grid-mod{grid-template-columns:1fr}}
+.mod{background:var(--carbon);border:1px solid var(--borde);border-radius:18px;padding:24px;transition:transform .18s,border-color .18s;position:relative}
+.mod:hover{transform:translateY(-4px);border-color:rgba(255,160,80,.32)}
+.mod .mic{width:42px;height:42px;border-radius:12px;background:rgba(255,92,43,.12);display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:16px}
+.mod h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:8px}
+.mod p{font-size:13.5px;color:var(--ceniza)}
+.mod .urgente{position:absolute;top:16px;right:16px;font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--perdida);background:rgba(255,77,94,.1);border:1px solid rgba(255,77,94,.3);padding:4px 9px;border-radius:99px}
+
+/* pasos */
+.pasos{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:44px}
+@media(max-width:820px){.pasos{grid-template-columns:1fr}}
+.paso{padding:26px;border-radius:18px;background:var(--carbon);border:1px solid var(--borde)}
+.paso .n{font-family:'DM Mono',monospace;font-size:13px;color:var(--brasa);margin-bottom:12px}
+.paso h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:8px}
+.paso p{font-size:13.5px;color:var(--ceniza)}
+
+/* pricing */
+.precio-caja{max-width:520px;margin:44px auto 0;background:linear-gradient(170deg,var(--carbon2),var(--carbon));border:1px solid rgba(255,92,43,.35);border-radius:24px;padding:34px;text-align:center;position:relative;box-shadow:0 30px 90px rgba(255,92,43,.12)}
+.precio-caja .badge-f{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(90deg,var(--brasa),var(--ambar));color:#160B05;font-family:'Syne',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:6px 16px;border-radius:99px;white-space:nowrap}
+.precio-caja .cifra{font-family:'Syne',sans-serif;font-weight:800;font-size:52px;margin:14px 0 2px}
+.precio-caja .cifra small{font-size:17px;color:var(--ceniza)}
+.precio-caja .desde{font-size:13px;color:var(--ceniza2);margin-bottom:22px}
+.lista-inc{text-align:left;max-width:360px;margin:0 auto 26px;display:grid;gap:9px}
+.inc{display:flex;gap:10px;font-size:13.5px;color:var(--ceniza)}
+.inc::before{content:'✓';color:var(--beneficio);font-weight:700}
+.nota-precio{font-size:12px;color:var(--ceniza2);margin-top:14px}
+
+/* faq */
+.faq{max-width:680px;margin:40px auto 0}
+details{border-bottom:1px solid var(--borde);padding:18px 4px}
+summary{font-weight:700;font-size:15px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:14px}
+summary::after{content:'+';color:var(--brasa);font-family:'DM Mono',monospace;font-size:18px}
+details[open] summary::after{content:'−'}
+details p{margin-top:12px;font-size:14px;color:var(--ceniza)}
+
+/* footer */
+footer{border-top:1px solid var(--borde);padding:36px 0 46px;font-size:12.5px;color:var(--ceniza2)}
+footer .wrap{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}
+
+:focus-visible{outline:2px solid var(--ambar);outline-offset:3px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="fondo"></div>
+
+<header class="top">
+  <div class="wrap">
+    <div class="logo">Seller<b>Brain</b></div>
+    <a class="btn min" href="https://buy.stripe.com/4gM14p3rTfwF5vQ4cE0sU07">Quiero ser fundador →</a>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="chip"><span class="pdot"></span>Beta fundadores · 100 plazas</span>
+      <h1>Tu cuenta de Amazon te está diciendo qué hacer. <em>Escúchala.</em></h1>
+      <p class="sub">Sellerboard te enseña gráficas. Helium te da estimaciones. <b>SellerBrain convierte tus propios informes de Amazon en acciones concretas con su valor en euros</b>: qué término negativizar, qué tarifa reclamar, qué precio subir.</p>
+      <div class="cta-fila">
+        <a class="btn" href="https://buy.stripe.com/4gM14p3rTfwF5vQ4cE0sU07">Quiero ser fundador — 15€ · 6 meses</a>
+        <a class="btn-ghost" href="#modulos">Ver qué hace</a>
+      </div>
+      <div class="plazas">Después de la beta: <b>10€/mes</b>. Los fundadores conservan condiciones especiales.</div>
+      <div class="aval">
+        <div class="sello">📦</div>
+        <div>Construido por un vendedor FBA en activo — 53 productos en Amazon España, Francia, Italia y Bélgica. Cada herramienta nació de un problema real de nuestra propia cuenta.</div>
+      </div>
+    </div>
+
+    <!-- FIRMA: feed del Cerebro animado -->
+    <div class="cerebro" aria-label="Ejemplo del feed de acciones de SellerBrain">
+      <div class="cerebro-cab">
+        <div class="t"><span class="ic">🧠</span>Acciones de hoy</div>
+        <div class="total"><div class="v mono" id="total-eu">+0,00€</div><div class="l">al mes si las ejecutas</div></div>
+      </div>
+      <div class="accion">
+        <div class="ic" style="background:rgba(255,77,94,.13)">❌</div>
+        <div><div class="tt">Negativiza «funda movil» en la campaña TM31</div>
+        <div class="dt">61 clics · 0 ventas en 30 días</div>
+        <div class="eu" style="color:var(--beneficio)">+18,40€/mes</div></div>
+      </div>
+      <div class="accion">
+        <div class="ic" style="background:rgba(74,158,222,.13)">📋</div>
+        <div><div class="tt">Reclama la tarifa FBA del Organizador XL</div>
+        <div class="dt">Amazon cobra tramo 2,9kg — tus medidas dicen 1,9kg</div>
+        <div class="eu" style="color:var(--beneficio)">+31,20€/mes</div></div>
+      </div>
+      <div class="accion">
+        <div class="ic" style="background:rgba(61,220,151,.13)">💶</div>
+        <div><div class="tt">Sube el Sérum 30ml de 12,99€ a 13,49€</div>
+        <div class="dt">Buybox estable · competidor más cercano a 14,20€</div>
+        <div class="eu" style="color:var(--beneficio)">+37,00€/mes</div></div>
+      </div>
+      <div class="accion">
+        <div class="ic" style="background:rgba(255,160,40,.13)">⏸️</div>
+        <div><div class="tt">Pausa el PPC del Organizador Maletero</div>
+        <div class="dt">Margen −2,5%: cada venta con clic pierde dinero</div>
+        <div class="eu" style="color:var(--beneficio)">+31,80€/mes</div></div>
+      </div>
+      <div class="cerebro-pie">Ejemplo real de nuestra propia cuenta · tus acciones saldrán de tus informes</div>
+    </div>
+  </div>
+
+  <!-- ticker de datos→dinero -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-pista" id="ticker"></div>
+  </div>
+</section>
+
+<!-- ============ DATOS VS DECISIONES ============ -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">La diferencia</div>
+    <h2>Los datos ya los tienes. Lo que no tienes es tiempo para traducirlos.</h2>
+    <p class="lead">Cada informe de Amazon esconde decisiones. La mayoría de vendedores no las ve porque están en la fila 1.847 de un CSV.</p>
+    <div class="versus">
+      <div class="panel datos">
+        <h3>Lo que te dan los datos</h3>
+        <div class="quien">Tu Seller Central, cada mañana</div>
+        <div class="fila-dato">ACoS campaña TM31: 34,2%</div>
+        <div class="fila-dato">Tarifa gestión logística: 4,98 €/ud</div>
+        <div class="fila-dato">Término «funda movil»: 61 clics · 0 pedidos</div>
+        <div class="fila-dato">Sesiones Sérum 30ml: +12% · CVR: −3%</div>
+        <div class="fila-dato">Devolución ORG-XL: «no es lo esperado»</div>
+      </div>
+      <div class="panel decide">
+        <h3>Lo que te dice SellerBrain</h3>
+        <div class="quien">Los mismos datos, traducidos</div>
+        <div class="fila-dec">❌ Negativiza ese término hoy<span class="eu">+18,40€/mes</span></div>
+        <div class="fila-dec">📋 Esa tarifa es del tramo equivocado: reclámala<span class="eu">+31,20€/mes</span></div>
+        <div class="fila-dec">💶 Puedes subir 0,50€ sin perder la Buybox<span class="eu">+37,00€/mes</span></div>
+        <div class="fila-dec">⏸️ Ese producto pierde con cada clic: pausa el PPC<span class="eu">+31,80€/mes</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MÓDULOS ============ -->
+<section id="modulos" style="padding-top:20px">
+  <div class="wrap">
+    <div class="eyebrow">Qué hace</div>
+    <h2>Siete herramientas. Una regla: ningún dato sin acción.</h2>
+    <div class="grid-mod">
+      <div class="mod"><div class="mic">💶</div><h3>Beneficio real por producto</h3><p>Con tu extracto de pagos (Settlement), no con estimaciones: tarifa FBA real cobrada, comisión real, devoluciones. Sabes qué producto gana y cuál te engaña.</p></div>
+      <div class="mod"><div class="mic">🔍</div><h3>Detector de sobrecobros FBA</h3><p>Compara la tarifa que Amazon te cobra con la que corresponde a tus medidas según las tablas 2026 — voluminoso, gran tamaño y peso dimensional incluidos. Con el texto de reclamación listo para pegar.</p></div>
+      <div class="mod"><div class="mic">📣</div><h3>PPC · Términos de búsqueda</h3><p>Sube tu informe y clasifica cada término: negativizar, bajar puja, escalar o vigilar — con el dinero quemado calculado y la lista de negativas lista para copiar.</p></div>
+      <div class="mod"><div class="mic">🕐</div><h3>PPC · Por horas</h3><p>Descubre a qué horas tu publicidad pierde dinero y a cuáles rinde, con plan de franjas para presupuesto y pujas.</p></div>
+      <div class="mod"><div class="mic">🧮</div><h3>Calculadoras EU y USA 2026</h3><p>Margen por país con las tarifas oficiales completas de 2026 y optimizador de embalaje: te avisa si recortar 1 cm te baja de categoría y cuánto ahorras por unidad.</p></div>
+      <div class="mod"><div class="urgente">⏰ 12 AGO 2026</div><div class="mic">♻️</div><h3>EPR envases Europa</h3><p>Amazon verificará tu registro de envases en toda la UE. SellerBrain calcula los kg por país y material que declaran los eco-organismos, con tu checklist por país.</p></div>
+      <div class="mod"><div class="mic">🔑</div><h3>Keywords con datos reales</h3><p>Con Brand Registry, tus términos salen de los informes oficiales de Amazon — datos reales de tu cuenta donde otras herramientas estiman.</p></div>
+      <div class="mod"><div class="mic">📦</div><h3>Stock y reposición</h3><p>Días de cobertura frente a tu lead time real: te dice cuándo pedir antes de que la rotura te cueste el ranking.</p></div>
+      <div class="mod"><div class="mic">⚡</div><h3>Conexión con Amazon</h3><p>Empieza subiendo tus informes en 2 minutos. Y cuando quieras, conecta tu cuenta para que los datos entren solos cada noche.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CÓMO FUNCIONA ============ -->
+<section style="padding-top:20px">
+  <div class="wrap">
+    <div class="eyebrow">Cómo funciona</div>
+    <h2>De tus informes a tu lista de acciones en tres pasos.</h2>
+    <div class="pasos">
+      <div class="paso"><div class="n">PASO 1</div><h3>Trae tus datos</h3><p>Sube los informes que ya descargas de Seller Central (pedidos, pagos, PPC) — o conecta tu cuenta y olvídate.</p></div>
+      <div class="paso"><div class="n">PASO 2</div><h3>El Cerebro analiza</h3><p>Cruza ventas, tarifas reales, publicidad y devoluciones. Detecta lo que pierde dinero y lo que puede ganar más.</p></div>
+      <div class="paso"><div class="n">PASO 3</div><h3>Ejecuta con euros delante</h3><p>Cada mañana, tus acciones priorizadas por impacto. Tú decides; SellerBrain te dice cuánto vale cada decisión.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRECIO ============ -->
+<section id="precio" style="padding-top:20px">
+  <div class="wrap">
+    <div style="text-align:center"><div class="eyebrow">Beta fundadores</div>
+    <h2 style="margin-left:auto;margin-right:auto">100 plazas. Precio de fundador. Para siempre agradecidos.</h2></div>
+    <div class="precio-caja">
+      <div class="badge-f">Fundadores · plazas limitadas</div>
+      <div class="cifra">15€ <small>/ 6 meses</small></div>
+      <div class="desde">Después de la beta, el plan será desde 10€/mes</div>
+      <div class="lista-inc">
+        <div class="inc">Todas las herramientas del portal, sin recortes</div>
+        <div class="inc">Análisis con tus informes reales desde el primer día</div>
+        <div class="inc">Acceso anticipado a la conexión automática con Amazon</div>
+        <div class="inc">Tu voz en el roadmap: construimos lo que los fundadores piden</div>
+      </div>
+      <a class="btn" href="https://buy.stripe.com/4gM14p3rTfwF5vQ4cE0sU07" style="width:100%;text-align:center">Reservar mi plaza de fundador →</a>
+      <div class="nota-precio">Pago único por Stripe · acceso inmediato · hola@sellersbrain.io</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section style="padding-top:20px">
+  <div class="wrap">
+    <div style="text-align:center"><div class="eyebrow">Preguntas</div>
+    <h2 style="margin-left:auto;margin-right:auto">Lo que preguntan los vendedores</h2></div>
+    <div class="faq">
+      <details>
+        <summary>¿Mis datos están seguros?</summary>
+        <p>Las herramientas de análisis procesan tus informes en tu propio navegador: los archivos no se suben a ningún servidor. Cuando conectes tu cuenta de Amazon (opcional), los datos viajan cifrados y se guardan en una base de datos europea con acceso restringido.</p>
+      </details>
+      <details>
+        <summary>¿Necesito conectar mi cuenta de Amazon?</summary>
+        <p>No. Puedes usar todo subiendo los informes que ya descargas de Seller Central. La conexión automática es opcional y sirve para que los datos entren solos cada noche.</p>
+      </details>
+      <details>
+        <summary>¿En qué se diferencia de Sellerboard?</summary>
+        <p>Sellerboard te enseña tus números. SellerBrain, además, te dice qué hacer con ellos y cuánto vale cada acción en euros: negativizar un término, reclamar una tarifa mal cobrada, ajustar un precio. El dato es el principio; la decisión es el producto.</p>
+      </details>
+      <details>
+        <summary>¿Vale para mi tamaño de cuenta?</summary>
+        <p>Está construido por un vendedor de 53 productos en 4 países, pensando en cuentas de 1 a 200 SKUs. Si vendes en Amazon Europa con FBA, es para ti.</p>
+      </details>
+      <details>
+        <summary>¿Qué pasa cuando acabe la beta?</summary>
+        <p>Los fundadores conservan condiciones especiales. El precio general previsto es desde 10€/mes — seguirá siendo la herramienta más accesible de su categoría.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div><span class="logo" style="font-size:15px">Seller<b>Brain</b></span> · Datos claros. Decisiones inteligentes. Más beneficio.</div>
+    <div>VENMON Naturalmente SL · hola@sellersbrain.io</div>
+  </div>
+</footer>
+
+<script>
+/* Contador del total del Cerebro: sube conforme entran las acciones */
+(function(){
+  var pasos=[{t:400,v:0},{t:900,v:18.40},{t:1800,v:49.60},{t:2700,v:86.60},{t:3600,v:118.40}];
+  var el=document.getElementById('total-eu');
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){el.textContent='+118,40€';return;}
+  var i=0;
+  function anima(desde,hasta,dur){
+    var t0=performance.now();
+    function frame(t){
+      var p=Math.min((t-t0)/dur,1);
+      var v=desde+(hasta-desde)*p;
+      el.textContent='+'+v.toFixed(2).replace('.',',')+'€';
+      if(p<1)requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  pasos.forEach(function(p,idx){
+    if(idx===0)return;
+    setTimeout(function(){anima(pasos[idx-1].v,p.v,420);},p.t);
+  });
+})();
+
+/* Ticker de datos→dinero (duplicado para bucle continuo) */
+(function(){
+  var items=[
+    '«funda movil» <b>61 clics · 0 ventas</b> <span class="rojo">−18,40€/mes</span>',
+    'Tarifa FBA cobrada 4,98€ · según medidas <b>4,21€</b> <span class="verde">reclamable</span>',
+    'PPC 02:00–05:00 <b>ACoS 96%</b> <span class="rojo">franja en pérdidas</span>',
+    'Sérum 30ml margen <b>18,8%</b> · precio subible <span class="verde">+37,00€/mes</span>',
+    'Voluminoso ligero: el peso dimensional manda · <b>L×An×Al÷5000</b>',
+    'EPR Francia: <b>107,4 kg</b> de envase/año · IdU ADEME pendiente',
+    'Stock TM31: <b>12 días</b> de cobertura · lead time 35 días <span class="rojo">pide ya</span>'
+  ];
+  var pista=document.getElementById('ticker');
+  var html=items.map(function(x){return '<span class="tk">'+x+'</span>';}).join('');
+  pista.innerHTML=html+html; /* duplicado = bucle perfecto al -50% */
+})();
+</script>
+</body>
+</html>
