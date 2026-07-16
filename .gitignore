@@ -1,0 +1,7 @@
+# Credenciales locales — NUNCA subir al repositorio
+config.js
+
+# Sistema
+.DS_Store
+node_modules/
+*.log
