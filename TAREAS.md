@@ -126,7 +126,39 @@ llevar a producción la dependencia de la clave de GHL.
 
 ---
 
+## TAREA 9 — Detector de diferencias de inventario + reclamación automática a Amazon
+**Por qué:** detecta inventario perdido/dañado por Amazon y abre casos automáticamente para
+reclamarlo. Alta prioridad de negocio: "se vende solo" (recupera dinero real del vendedor).
+
+**Depende de:** SP-API (TAREA 7). Sin SP-API no hay datos de inventario/ajustes, así que
+NO se empieza hasta que la TAREA 7 esté aprobada y entrando datos.
+
+**Qué hacer (cuando haya SP-API):**
+- Cruzar inventario esperado vs. reportado por Amazon (informes de ajustes/reembolsos FBA:
+  `GET_FBA_INVENTORY_ADJUSTMENTS_DATA`, `GET_FBA_REIMBURSEMENTS_DATA` y similares).
+- Detectar unidades perdidas/dañadas no reembolsadas dentro de la ventana de reclamación.
+- Generar el caso a Amazon (o el borrador del caso) con la evidencia y el importe a reclamar.
+- Mostrarlo en el dashboard como acción con € ("reclama N unidades perdidas: +X€").
+
+**Dónde:** worker.js (nueva ingesta + lógica de detección) + dashboard (feed de acciones).
+
+---
+
+## TAREA 10 — App móvil / de escritorio (más adelante)
+**Por qué:** llevar SellerBrain a una app propia. Fase posterior, sin prisa.
+
+**Qué hacer:** por definir. No se aborda hasta tener el núcleo web + SP-API estables.
+
+---
+
+## Nota sobre la TAREA 5 (reglas de PPC de David)
+Bloqueada a la espera de que **David entregue sus umbrales concretos** de ACoS/ROAS/TACoS.
+Hasta entonces no se puede parametrizar el motor con su método.
+
+---
+
 ## Orden recomendado
 1 (limpieza) → 3 (confirmar cron, rápido) → 2 (login Worker, la gorda) → 4 (motor acciones)
 → 5 (reglas David, cuando las traiga) → 6 (tokens) → 7 (SP-API, en paralelo, la inicia Venmon)
-→ 8 (publicar).
+→ 9 (detector de inventario, DESPUÉS de la SP-API — alta prioridad de negocio) → 8 (publicar)
+→ 10 (app, más adelante).
