@@ -94,9 +94,10 @@ Supabase (PostgreSQL) — base de datos europea con RLS
 | Entorno de pruebas Netlify | En montaje (repo GitHub) |
 
 ## Modelo de negocio
-- Founders Beta: 15€/6 meses · 100 plazas
-- Plan Análisis: 10€/mes (Ads API + CSV)
+- Founders Beta: **20€ / 3 meses · 50 plazas máximo** (antes 15€ / 6 meses / 100 plazas)
+- Después de la beta: **15€/mes**
 - Plan Completo: ~19€ (SP-API + Ads, todo automático)
+- (El antiguo "Plan Análisis 10€/mes" queda pendiente de reconfirmar con la nueva estructura de precios.)
 
 ## PENDIENTES (en orden de prioridad)
 1. **Seguridad**: clave de Google movida a `config.js` (hecho) · **login del navegador → Worker** (débil, es el punto flojo real)
