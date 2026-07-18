@@ -168,7 +168,6 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 .tab:hover:not(.active){background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.95)!important}
 .tabs::-webkit-scrollbar{display:none}
 </style>
-  <script src="config.js"></script>
 </head>
 <body>
 
@@ -1984,11 +1983,6 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 // ===== CONFIG =====
 // El login se valida en el servidor (Cloudflare Worker), no en el navegador.
 var SB_WORKER = 'https://sellerbrain-api.info-venmon.workers.dev';
-// Legacy: config.js/SB_CFG ya NO se usa para el login (se puede retirar cuando
-// el nuevo login esté confirmado en producción). Se conserva por compatibilidad.
-var SHEET_ID = (window.SB_CFG && window.SB_CFG.SHEET_ID) || '';
-var API_KEY = (window.SB_CFG && window.SB_CFG.API_KEY) || '';
-var SHEET_NAME = (window.SB_CFG && window.SB_CFG.SHEET_NAME) || 'hoja 1';
 
 // ===== VALIDACIÓN DE ACCESO =====
 async function validarAcceso() {

@@ -1,7 +1,5 @@
 # Configuración de Netlify — SellerBrain (ENTORNO DE PRUEBAS)
-# Sitio estático. En cada deploy se genera config.js desde las
-# variables de entorno definidas en Netlify (SB_SHEET_ID, SB_API_KEY,
-# SB_SHEET_NAME), así la clave NO vive en el repositorio.
+# Sitio estático puro. El login se valida en el Worker (Cloudflare), así que
+# ya no hace falta generar config.js ni variables de entorno.
 [build]
   publish = "."
-  command = "node scripts/build-config.js"
