@@ -8,9 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0D0D0D; --panel:#141414; --card:#1A1A1A; --card2:#1F1F1F; --bd:#262626; --bd2:#333;
+  --bg:#070B09; --panel:#0C1310; --card:#101A15; --card2:#132019; --bd:#1C2B23; --bd2:#27392F;
   --tx:#FFFFFF; --mu:rgba(255,255,255,.45); --mu2:rgba(255,255,255,.65);
-  --or:#FF5C2B; --or2:#FF7A50; --gn:#2ECC71; --am:#F5A623; --rd:#E84040; --bl:#4A9EDE;
+  --or:#2EE6A0; --or2:#6FEBBB; --gn:#2ECC71; --am:#F5A623; --rd:#E84040; --bl:#4A9EDE;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.45}
@@ -19,12 +19,12 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 /* ===== SIDEBAR ===== */
 .side{background:var(--panel);border-right:1px solid var(--bd);padding:16px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
 .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;padding:4px 10px 16px;display:flex;align-items:center;gap:8px}
-.logo b{color:#FF7A00}
-.logo .brain{width:26px;height:26px;background:linear-gradient(135deg,var(--or),#FF7A00);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.logo b{color:#14B87A}
+.logo .brain{width:26px;height:26px;background:linear-gradient(135deg,var(--or),#14B87A);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
 .nav{display:flex;flex-direction:column;gap:2px;flex:1}
 .nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--mu2);text-decoration:none;font-weight:500;font-size:12.5px;cursor:pointer;border:1px solid transparent}
 .nav a:hover{background:rgba(255,255,255,.04);color:var(--tx)}
-.nav a.on{background:rgba(255,92,43,.12);color:var(--or2);border-color:rgba(255,92,43,.25);font-weight:700}
+.nav a.on{background:rgba(46,230,160,.12);color:var(--or2);border-color:rgba(46,230,160,.25);font-weight:700}
 .nav .ic{width:18px;text-align:center;font-size:14px}
 .nav .sep{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);padding:14px 10px 4px}
 .side-foot{padding:10px;border-top:1px solid var(--bd);font-size:11px;color:var(--mu)}
@@ -36,7 +36,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 .topbar h1{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
 .top-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .chip{padding:7px 13px;background:var(--card);border:1px solid var(--bd2);border-radius:9px;font-size:12px;color:var(--mu2);cursor:pointer}
-.chip.on{background:rgba(255,92,43,.12);border-color:rgba(255,92,43,.4);color:var(--or2);font-weight:700}
+.chip.on{background:rgba(46,230,160,.12);border-color:rgba(46,230,160,.4);color:var(--or2);font-weight:700}
 .sync{font-size:11px;color:var(--mu);display:flex;align-items:center;gap:6px}
 .sync .dot{width:7px;height:7px;border-radius:50%;background:var(--gn);animation:pulse 2s infinite}
 @keyframes pulse{50%{opacity:.4}}
@@ -47,7 +47,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 @media(max-width:640px){.tiles{grid-template-columns:1fr}}
 .tile{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;cursor:pointer;transition:border-color .15s}
 .tile:hover{border-color:var(--bd2)}
-.tile.on{border-color:rgba(255,92,43,.5);background:linear-gradient(180deg,rgba(255,92,43,.07),var(--card))}
+.tile.on{border-color:rgba(46,230,160,.5);background:linear-gradient(180deg,rgba(46,230,160,.07),var(--card))}
 .tile .per{font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;justify-content:space-between}
 .tile .ben{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:2px}
 .tile .ben.pos{color:var(--gn)} .tile .ben.neg{color:var(--rd)}
@@ -65,7 +65,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 .card+.card{margin-top:14px}
 .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .ch h2{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
-.ch .ci{width:26px;height:26px;background:rgba(255,92,43,.12);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.ch .ci{width:26px;height:26px;background:rgba(46,230,160,.12);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
 .ch .more{font-size:11px;color:var(--mu);cursor:pointer}
 .ch .more:hover{color:var(--or2)}
 
@@ -106,12 +106,12 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 
 /* ===== COLUMNA DERECHA ===== */
 .brain-feed .accion{display:flex;gap:10px;padding:11px;border-radius:11px;margin-bottom:8px;background:var(--card2);border:1px solid var(--bd);cursor:pointer;transition:border-color .15s}
-.brain-feed .accion:hover{border-color:rgba(255,92,43,.4)}
+.brain-feed .accion:hover{border-color:rgba(46,230,160,.4)}
 .brain-feed .aic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .brain-feed .at{font-size:12px;font-weight:600;line-height:1.35}
 .brain-feed .av{font-size:11px;margin-top:3px;font-weight:700}
 .brain-feed .ap{font-size:10.5px;color:var(--mu);margin-top:2px}
-.brain-total{padding:12px;border-radius:11px;background:linear-gradient(135deg,rgba(255,92,43,.15),rgba(255,122,0,.06));border:1px solid rgba(255,92,43,.3);margin-bottom:12px;text-align:center}
+.brain-total{padding:12px;border-radius:11px;background:linear-gradient(135deg,rgba(46,230,160,.15),rgba(20,184,122,.06));border:1px solid rgba(46,230,160,.3);margin-bottom:12px;text-align:center}
 .brain-total .v{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--or2)}
 .brain-total .l{font-size:10.5px;color:var(--mu2)}
 .alert{display:flex;gap:9px;padding:9px 10px;border-radius:10px;margin-bottom:7px;font-size:11.5px;line-height:1.4;align-items:flex-start}
@@ -144,7 +144,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 
 <!-- ============ SIDEBAR ============ -->
 <aside class="side" id="side">
-  <div class="logo"><span class="brain">🧠</span>Seller<b>Brain</b></div>
+  <div class="logo"><svg width="26" height="26" viewBox="0 0 40 40" style="flex:none"><defs><linearGradient id="olg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2EE6A0"/><stop offset="1" stop-color="#0E9F6E"/></linearGradient></defs><circle cx="20" cy="20" r="14" fill="none" stroke="url(#olg)" stroke-width="7"/><circle cx="20" cy="20" r="4.6" fill="url(#olg)"/></svg>Seller<b>Brain</b></div>
   <nav class="nav">
     <a class="on" id="nav-dash" onclick="cambiarVista('dash')"><span class="ic">📊</span> Dashboard</a>
     <a id="nav-pl" onclick="cambiarVista('pl')"><span class="ic">💶</span> Beneficio por producto</a>
@@ -176,7 +176,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   </div>
   <div class="top-controls">
     <span class="chip" id="chip-conexion" style="cursor:pointer" onclick="toggleConexion()">🔌 Conexión</span>
-    <span class="chip" style="background:rgba(255,92,43,.15);border-color:rgba(255,92,43,.45);color:var(--or2);font-weight:700" onclick="togglePanel()">📥 Cargar mis datos</span>
+    <span class="chip" style="background:rgba(46,230,160,.15);border-color:rgba(46,230,160,.45);color:var(--or2);font-weight:700" onclick="togglePanel()">📥 Cargar mis datos</span>
     <span class="chip on">🇪🇸 + 🇫🇷 + 🇮🇹</span>
     <span class="chip">Todos los SKUs</span>
     <span class="sync"><span class="dot"></span> Datos: hace 2 h</span>
@@ -222,7 +222,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 </style>
 
 <!-- ===== PANEL DE CARGA (modo CSV: datos reales sin API) ===== -->
-<div class="card" id="panel-carga" style="display:none;margin-bottom:18px;border:1.5px solid rgba(255,92,43,.35)">
+<div class="card" id="panel-carga" style="display:none;margin-bottom:18px;border:1.5px solid rgba(46,230,160,.35)">
   <div class="ch"><h2><span class="ci">📥</span> Conecta tus datos reales (sin API — 3 archivos de Seller Central)</h2>
   <span class="more" onclick="togglePanel()">Cerrar ✕</span></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
@@ -255,7 +255,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 
 <style>
 .dz{background:var(--card2);border:1.5px dashed var(--bd2);border-radius:12px;padding:14px;cursor:pointer;font-size:12px;line-height:1.5;transition:border-color .15s}
-.dz:hover{border-color:rgba(255,92,43,.5)}
+.dz:hover{border-color:rgba(46,230,160,.5)}
 .dz.ok{border-style:solid;border-color:rgba(46,204,113,.5)}
 .dz-sub{color:var(--mu);font-size:10.5px;margin-top:3px}
 .dz-ok{color:var(--gn);font-size:11px;font-weight:700;margin-top:5px}
@@ -520,7 +520,7 @@ function renderPnl(){
   var esc=p.ventas/PNL.ventas; // escala demo
   var rows=[
     {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true},
-    {n:'Coste de producto',v:-PNL.prod*esc,c:'#FF5C2B'},
+    {n:'Coste de producto',v:-PNL.prod*esc,c:'#2EE6A0'},
     {n:'Tarifas FBA',v:-PNL.fba*esc,c:'#E84040'},
     {n:'Comisión Amazon',v:-PNL.com*esc,c:'#F5A623'},
     {n:'PPC',v:-PNL.ppc*esc,c:'#9B59B6'},
@@ -548,7 +548,7 @@ function renderChart(){
   }).join(' ');}
   var areaV='M'+pts('v').split(' ').join(' L')+' L'+(W-pad)+','+(H-pad)+' L'+pad+','+(H-pad)+' Z';
   var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto" preserveAspectRatio="none">'+
-    '<defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,92,43,.25)"/><stop offset="1" stop-color="rgba(255,92,43,0)"/></linearGradient></defs>'+
+    '<defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(46,230,160,.25)"/><stop offset="1" stop-color="rgba(46,230,160,0)"/></linearGradient></defs>'+
     '<path d="'+areaV+'" fill="url(#gv)"/>'+
     '<polyline points="'+pts('v')+'" fill="none" stroke="var(--or)" stroke-width="2"/>'+
     '<polyline points="'+pts('b')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+

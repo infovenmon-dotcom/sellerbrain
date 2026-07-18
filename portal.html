@@ -7,10 +7,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 /* ===== GHL OVERRIDE — LIMITED ===== */
-html { color-scheme: dark !important; background: #0A0A0A !important; }
-body { background: #0A0A0A !important; color: #fff !important; font-family: 'DM Sans', sans-serif !important; width: 100% !important; max-width: 100% !important; }
+html { color-scheme: dark !important; background: #070B09 !important; }
+body { background: #070B09 !important; color: #fff !important; font-family: 'DM Sans', sans-serif !important; width: 100% !important; max-width: 100% !important; }
 
-:root{--or:#FF5C2B;--dk:#1E1E1E;--cr:#161616;--cd:#242424;--bd:#2A2A2A;--tx:#F0F0F0;--mu:#999;--gn:#1DB87A;--rd:#E84040;--yw:#F5A623;--bl:#2980B9;}
+:root{--or:#2EE6A0;--dk:#0F1813;--cr:#0B120E;--cd:#15221B;--bd:#1E2E25;--tx:#F0F0F0;--mu:#999;--gn:#1DB87A;--rd:#E84040;--yw:#F5A623;--bl:#2980B9;}
 *{box-sizing:border-box;margin:0;padding:0;}
 /* Modo embebido: cuando el portal se muestra DENTRO del dashboard, se oculta
    la cabecera de venta (badge + top bar) Y la fila de pestañas internas —
@@ -19,14 +19,20 @@ body.embed{background:#0D0D0D !important;}
 body.embed #calc-hero-badge, body.embed #calc-hero-top{display:none !important;}
 body.embed .hero-c{border:none !important;}
 body.embed .tabs{display:none !important;}
+/* Anti-destello: html.embed-pre se pone ANTES de pintar (script en <head>),
+   así la vista de venta jamás llega a verse dentro del dashboard. */
+html.embed-pre body{background:#0D0D0D !important;}
+html.embed-pre #vista-venta, html.embed-pre #vista-login{display:none !important;}
+html.embed-pre #vista-calc{display:block !important;}
+html.embed-pre #calc-hero-badge, html.embed-pre #calc-hero-top, html.embed-pre .tabs{display:none !important;}
 html,body{width:100%!important;max-width:100%!important;}
 body{font-family:'DM Sans',sans-serif;background:#0D0D0D;color:#F0F0F0;}
 
 /* LOGIN */
 #vista-login{min-height:100vh;background:var(--dk);display:flex;align-items:center;justify-content:center;padding:20px;position:relative;overflow:hidden;}
-#vista-login::before{content:'';position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(255,92,43,.15) 0%,transparent 65%);border-radius:50%;}
+#vista-login::before{content:'';position:absolute;top:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(46,230,160,.15) 0%,transparent 65%);border-radius:50%;}
 .login-box{background:#1A1A1A;border-radius:20px;padding:36px 28px;max-width:420px;width:100%;border:1px solid #2A2A2A;box-shadow:0 24px 60px rgba(0,0,0,.5);position:relative;}
-.login-badge{display:inline-block;background:rgba(255,92,43,.15);border:1px solid rgba(255,92,43,.35);color:#FF7A50;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:5px 13px;border-radius:100px;margin-bottom:16px;}
+.login-badge{display:inline-block;background:rgba(46,230,160,.15);border:1px solid rgba(46,230,160,.35);color:#6FEBBB;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:5px 13px;border-radius:100px;margin-bottom:16px;}
 .login-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#fff;line-height:1.2;margin-bottom:8px;}
 .login-title span{color:var(--or);}
 .login-sub{font-size:13px;color:rgba(255,255,255,.4);line-height:1.6;margin-bottom:24px;}
@@ -35,7 +41,7 @@ body{font-family:'DM Sans',sans-serif;background:#0D0D0D;color:#F0F0F0;}
 .login-fi input{width:100%;padding:13px 16px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:11px;font-family:'DM Sans',sans-serif;font-size:15px;color:#fff;outline:none;transition:border-color .2s;}
 .login-fi input:focus{border-color:var(--or);background:rgba(255,255,255,.08);}
 .login-fi input::placeholder{color:rgba(255,255,255,.2);}
-.login-btn{width:100%;padding:15px;background:var(--or);color:#fff;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 6px 24px rgba(255,92,43,.4);margin-top:6px;transition:transform .15s;}
+.login-btn{width:100%;padding:15px;background:var(--or);color:#fff;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 6px 24px rgba(46,230,160,.4);margin-top:6px;transition:transform .15s;}
 .login-btn:hover{transform:translateY(-2px);}
 .login-btn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
 .login-error{background:rgba(232,64,64,.1);border:1px solid rgba(232,64,64,.3);color:#E84040;font-size:13px;padding:11px 14px;border-radius:10px;margin-top:12px;display:none;}
@@ -45,8 +51,8 @@ body{font-family:'DM Sans',sans-serif;background:#0D0D0D;color:#F0F0F0;}
 /* CALCULADORA */
 #vista-calc{display:none;}
 .hero-c{background:var(--dk);padding:32px 18px 44px;text-align:center;position:relative;overflow:hidden;}
-.hero-c::before{content:'';position:absolute;top:-50px;right:-50px;width:240px;height:240px;background:radial-gradient(circle,rgba(255,92,43,.18) 0%,transparent 70%);border-radius:50%;}
-.badge-c{display:inline-block;background:rgba(255,92,43,.15);border:1px solid rgba(255,92,43,.3);color:#FF7A50;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:5px 13px;border-radius:100px;margin-bottom:12px;}
+.hero-c::before{content:'';position:absolute;top:-50px;right:-50px;width:240px;height:240px;background:radial-gradient(circle,rgba(46,230,160,.18) 0%,transparent 70%);border-radius:50%;}
+.badge-c{display:inline-block;background:rgba(46,230,160,.15);border:1px solid rgba(46,230,160,.3);color:#6FEBBB;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:5px 13px;border-radius:100px;margin-bottom:12px;}
 .hero-c h1{font-family:'Syne',sans-serif;font-size:clamp(20px,5vw,32px);font-weight:800;color:#fff;line-height:1.15;}
 .hero-c h1 span{color:var(--or);}
 .hero-c p{color:rgba(255,255,255,.4);font-size:12px;max-width:340px;margin:8px auto 0;line-height:1.6;}
@@ -58,14 +64,14 @@ body{font-family:'DM Sans',sans-serif;background:#0D0D0D;color:#F0F0F0;}
 .sec{display:none;}.sec.active{display:block;}
 .card{background:var(--cd);border-radius:14px;padding:18px;margin-bottom:10px;border:1px solid var(--bd);box-shadow:0 2px 12px rgba(0,0,0,.05);}
 .ct{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or);margin-bottom:12px;display:flex;align-items:center;gap:6px;}
-.ci{width:22px;height:22px;background:rgba(255,92,43,.1);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;}
+.ci{width:22px;height:22px;background:rgba(46,230,160,.1);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;}
 .fi{margin-bottom:11px;}.fi label{display:block;font-size:11px;font-weight:500;color:var(--mu);margin-bottom:4px;}
 .fr{display:flex;gap:8px;}.fr .fi{flex:1;margin-bottom:0;}
 .iw{position:relative;}
 .ip{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--mu);pointer-events:none;}
 .is{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--mu);pointer-events:none;}
 input[type=number],select{width:100%;padding:10px 12px;border:1.5px solid var(--bd);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--tx);background:var(--cr);outline:none;transition:border-color .2s;}
-input[type=number]:focus,select:focus,input[type=text]:focus,input:focus{border-color:var(--or)!important;background:rgba(255,92,43,.08)!important;color:#fff!important;box-shadow:0 0 0 3px rgba(255,92,43,.15)!important;}
+input[type=number]:focus,select:focus,input[type=text]:focus,input:focus{border-color:var(--or)!important;background:rgba(46,230,160,.08)!important;color:#fff!important;box-shadow:0 0 0 3px rgba(46,230,160,.15)!important;}
 input::placeholder{color:rgba(255,255,255,.35)!important;}
 input,select,textarea{color:#fff!important;background:rgba(255,255,255,.06)!important;}
 select option{background:#1a1a1a!important;color:#fff!important;}
@@ -75,15 +81,15 @@ input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2p
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--or);cursor:pointer;}
 .og{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
 .op{border:1.5px solid var(--bd);border-radius:10px;padding:9px;cursor:pointer;transition:all .2s;background:var(--cr);}
-.op.active{border-color:var(--or);background:rgba(255,92,43,.05);}
+.op.active{border-color:var(--or);background:rgba(46,230,160,.05);}
 .op input[type=radio]{display:none;}
 .ol{font-size:12px;font-weight:600;color:var(--tx);display:block;margin-bottom:1px;}
 .os{font-size:11px;color:var(--mu);}
-.btn-c{width:100%;padding:14px;background:var(--or);color:#fff;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(255,92,43,.35);margin-top:6px;transition:transform .15s;}
+.btn-c{width:100%;padding:14px;background:var(--or);color:#fff;border:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(46,230,160,.35);margin-top:6px;transition:transform .15s;}
 .btn-c:hover{transform:translateY(-1px);}
 .btn-sec-c{width:100%;padding:12px;background:transparent;border:1.5px solid var(--bd);border-radius:12px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--mu);cursor:pointer;margin-top:8px;}
 .rh{background:var(--dk);border-radius:14px;padding:20px;margin-bottom:10px;text-align:center;position:relative;overflow:hidden;}
-.rh::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at top,rgba(255,92,43,.18) 0%,transparent 65%);}
+.rh::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at top,rgba(46,230,160,.18) 0%,transparent 65%);}
 .rl{font-size:10px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;position:relative;}
 .rm{font-family:'Syne',sans-serif;font-size:52px;font-weight:800;line-height:1;position:relative;margin-bottom:3px;}
 .rs{font-size:12px;color:rgba(255,255,255,.45);position:relative;}
@@ -91,7 +97,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;heigh
 .rts{display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px;}
 .rts::-webkit-scrollbar{height:0;}
 .rt{padding:6px 12px;border:1.5px solid var(--bd);border-radius:100px;font-size:11px;font-weight:500;color:var(--mu);cursor:pointer;white-space:nowrap;background:var(--cr);transition:all .2s;flex-shrink:0;}
-.rt.active{border-color:var(--or);color:var(--or);background:rgba(255,92,43,.05);}
+.rt.active{border-color:var(--or);color:var(--or);background:rgba(46,230,160,.05);}
 .rb{display:none;}.rb.active{display:block;}
 .bb{display:flex;height:6px;border-radius:100px;overflow:hidden;margin:12px 0 11px;gap:2px;}
 .bs{height:100%;border-radius:2px;}
@@ -104,20 +110,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;heigh
 .bv.pos{color:var(--gn);}.bv.neg{color:var(--rd);}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .sc{border-radius:12px;padding:12px;border:1.5px solid var(--bd);background:var(--cr);}
-.sc.hl{border-color:var(--or);background:rgba(255,92,43,.04);}
+.sc.hl{border-color:var(--or);background:rgba(46,230,160,.04);}
 .sn{font-size:10px;color:var(--mu);margin-bottom:3px;}
 .sm{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
 .se{font-size:11px;color:var(--mu);margin-top:2px;}
 .stt{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;margin-top:6px;padding-top:6px;border-top:1px solid var(--bd);}
 .dv{border-radius:10px;padding:9px 7px;border:1.5px solid var(--bd);background:var(--cr);text-align:center;}
-.dv.act{border-color:var(--or);background:rgba(255,92,43,.05);}
+.dv.act{border-color:var(--or);background:rgba(46,230,160,.05);}
 .dp{font-size:10px;color:var(--mu);margin-bottom:2px;}.dm{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;}.de{font-size:10px;color:var(--mu);margin-top:1px;}
 .sg{display:grid;gap:8px;}
 .sig{display:flex;align-items:flex-start;gap:9px;padding:11px 13px;border-radius:11px;border:1px solid var(--bd);background:var(--cr);}
 .si{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
 .ok .si{background:rgba(29,184,122,.12);}.warn .si{background:rgba(245,166,35,.12);}.bad .si{background:rgba(232,64,64,.12);}
 .st2{font-size:13px;font-weight:600;margin-bottom:2px;}.sd{font-size:12px;color:var(--mu);line-height:1.5;}
-.fr-res{border-radius:12px;padding:14px;border:2px solid var(--or);background:rgba(255,92,43,.04);margin-bottom:10px;}
+.fr-res{border-radius:12px;padding:14px;border:2px solid var(--or);background:rgba(46,230,160,.04);margin-bottom:10px;}
 .fc{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--or);margin-bottom:4px;}
 .ft{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:var(--dk);}
 .fss{font-size:12px;color:var(--mu);margin-top:2px;}
@@ -141,7 +147,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;heigh
 .opt-table tr.mejor td:first-child{border-left:3px solid var(--gn);padding-left:5px;}
 .bl3{display:inline-block;background:rgba(41,128,185,.12);color:var(--bl);font-size:10px;padding:1px 5px;border-radius:4px;}
 .bs2{display:inline-block;background:rgba(136,136,136,.12);color:var(--mu);font-size:10px;padding:1px 5px;border-radius:4px;}
-.tnw{background:rgba(255,92,43,.12);color:var(--or);font-size:10px;padding:1px 6px;border-radius:100px;font-weight:600;margin-left:4px;vertical-align:middle;}
+.tnw{background:rgba(46,230,160,.12);color:var(--or);font-size:10px;padding:1px 6px;border-radius:100px;font-weight:600;margin-left:4px;vertical-align:middle;}
 .inf{font-size:11px;color:var(--mu);background:var(--cr);border:1px solid var(--bd);border-radius:9px;padding:8px 11px;margin-bottom:10px;line-height:1.6;}
 .lp-badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:100px;font-weight:600;margin-left:5px;vertical-align:middle;}
 .lp-si{background:rgba(41,128,185,.12);color:var(--bl);}
@@ -175,6 +181,13 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 .tab:hover:not(.active){background:rgba(255,255,255,.06)!important;color:rgba(255,255,255,.95)!important}
 .tabs::-webkit-scrollbar{display:none}
 </style>
+<script>
+// Se ejecuta antes de pintar: si venimos embebidos en el dashboard, marcamos
+// el documento para que el CSS oculte la venta/login desde el primer frame.
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.documentElement.classList.add('embed-pre');
+}
+</script>
 </head>
 <body>
 
@@ -188,8 +201,8 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 
 .lp-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 80px;background:rgba(8,8,8,.95);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.06);position:sticky;top:0;z-index:100;}
 .lp-logo{font-family:'Inter',sans-serif;font-size:20px;font-weight:800;color:#fff;}
-.lp-logo em{color:#FF5C2B;font-style:normal;}
-.lp-nav-btn{background:linear-gradient(135deg,#FF5C2B,#E8400A);border:none;color:#fff;font-size:15px;font-weight:700;padding:10px 24px;border-radius:100px;cursor:pointer;font-family:'Inter',sans-serif;}
+.lp-logo em{color:#2EE6A0;font-style:normal;}
+.lp-nav-btn{background:linear-gradient(135deg,#2EE6A0,#E8400A);border:none;color:#fff;font-size:15px;font-weight:700;padding:10px 24px;border-radius:100px;cursor:pointer;font-family:'Inter',sans-serif;}
 
 .lp-w{width:100%;padding:0 80px;}
 
@@ -201,15 +214,15 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 /* Labels & titles */
 .lp-label{font-size:15px;color:#FF8050;text-transform:uppercase;letter-spacing:.18em;display:block;margin-bottom:10px;font-weight:700;}
 .lp-h1{font-family:'Inter',sans-serif;font-size:clamp(36px,4vw,60px);font-weight:900;color:#fff;line-height:1.1;margin:0 0 18px;}
-.lp-h1 em{color:#FF5C2B;font-style:normal;}
+.lp-h1 em{color:#2EE6A0;font-style:normal;}
 .lp-h2{font-family:'Inter',sans-serif;font-size:clamp(28px,3vw,44px);font-weight:900;color:#fff;line-height:1.15;margin:0 0 10px;}
-.lp-h2 em{color:#FF5C2B;font-style:normal;}
+.lp-h2 em{color:#2EE6A0;font-style:normal;}
 .lp-body{font-size:18px;color:rgba(255,255,255,.82);line-height:1.75;}
 .lp-body b{color:rgba(255,255,255,.8);}
 
 /* CTAs */
-.lp-cta{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,#FF5C2B,#E8400A);color:#fff;text-decoration:none;padding:16px 34px;border-radius:13px;font-family:'Inter',sans-serif;font-size:16px;font-weight:800;box-shadow:0 10px 36px rgba(255,92,43,.35);transition:transform .15s,box-shadow .15s;border:none;cursor:pointer;}
-.lp-cta:hover{transform:translateY(-2px);box-shadow:0 16px 44px rgba(255,92,43,.45);}
+.lp-cta{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,#2EE6A0,#E8400A);color:#fff;text-decoration:none;padding:16px 34px;border-radius:13px;font-family:'Inter',sans-serif;font-size:16px;font-weight:800;box-shadow:0 10px 36px rgba(46,230,160,.35);transition:transform .15s,box-shadow .15s;border:none;cursor:pointer;}
+.lp-cta:hover{transform:translateY(-2px);box-shadow:0 16px 44px rgba(46,230,160,.45);}
 .lp-cta-ghost{display:inline-flex;align-items:center;gap:8px;color:rgba(255,255,255,.75);font-size:14px;font-weight:600;background:transparent;border:1.5px solid rgba(255,255,255,.1);padding:14px 24px;border-radius:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:border-color .2s,color .2s;text-decoration:none;}
 .lp-cta-ghost:hover{border-color:rgba(255,255,255,.65);color:rgba(255,255,255,.65);}
 .lp-microcopy{font-size:14px;color:rgba(255,255,255,.6);margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;}
@@ -217,8 +230,8 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 
 /* Hero grid */
 .lp-hero-grid{display:grid;grid-template-columns:1fr 420px;gap:56px;align-items:center;}
-.lp-tag{display:inline-flex;align-items:center;gap:7px;background:rgba(255,92,43,.08);border:1px solid rgba(255,92,43,.2);color:#FF8050;font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:5px 14px;border-radius:100px;margin-bottom:20px;}
-.lp-dot{width:6px;height:6px;background:#FF5C2B;border-radius:50%;animation:lpdot 1.8s ease-in-out infinite;}
+.lp-tag{display:inline-flex;align-items:center;gap:7px;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.2);color:#FF8050;font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:5px 14px;border-radius:100px;margin-bottom:20px;}
+.lp-dot{width:6px;height:6px;background:#2EE6A0;border-radius:50%;animation:lpdot 1.8s ease-in-out infinite;}
 @keyframes lpdot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.5)}}
 .lp-checklist{display:grid;gap:8px;margin:18px 0 28px;}
 .lp-check-row{display:flex;align-items:center;gap:10px;font-size:16px;color:rgba(255,255,255,.88);}
@@ -267,9 +280,9 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 .lp-prob-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px;align-items:start;}
 .lp-prob-list{display:grid;gap:10px;}
 .lp-prob-item{display:flex;gap:10px;font-size:16px;color:rgba(255,255,255,.8);padding:12px 14px;background:#0D0D0D;border-radius:10px;border:1px solid rgba(255,255,255,.06);align-items:flex-start;line-height:1.5;}
-.lp-prob-item.s{border-color:rgba(255,92,43,.15);color:rgba(255,255,255,.65);}
+.lp-prob-item.s{border-color:rgba(46,230,160,.15);color:rgba(255,255,255,.65);}
 .lp-prob-icon{font-size:18px;flex-shrink:0;}
-.lp-prob-quote{background:#0D0D0D;border-left:3px solid #FF5C2B;border-radius:0 12px 12px 0;padding:20px 22px;}
+.lp-prob-quote{background:#0D0D0D;border-left:3px solid #2EE6A0;border-radius:0 12px 12px 0;padding:20px 22px;}
 .lp-prob-quote p{font-size:15px;color:rgba(255,255,255,.82);line-height:1.75;margin-bottom:10px;}
 .lp-prob-quote p b{color:#fff;}
 .lp-prob-pills{display:flex;flex-direction:column;gap:6px;margin-top:14px;}
@@ -280,11 +293,11 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 .lp-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:32px;}
 .lp-step{background:#0D0D0D;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:22px;}
 .lp-step.last{border-color:rgba(29,184,122,.18);}
-.lp-step-n{font-family:'Inter',sans-serif;font-size:38px;font-weight:900;color:#FF5C2B;line-height:1;margin-bottom:14px;}
+.lp-step-n{font-family:'Inter',sans-serif;font-size:38px;font-weight:900;color:#2EE6A0;line-height:1;margin-bottom:14px;}
 .lp-step.last .lp-step-n{color:#1DB87A;}
 .lp-step-title{font-size:16px;font-weight:800;color:#fff;margin-bottom:8px;}
 .lp-step-body{font-size:15px;color:rgba(255,255,255,.78);line-height:1.7;}
-.lp-step-path{font-size:15px;color:rgba(255,92,43,.65);background:rgba(255,92,43,.06);border-radius:6px;padding:5px 8px;margin-top:8px;font-family:monospace;line-height:1.5;}
+.lp-step-path{font-size:15px;color:rgba(46,230,160,.65);background:rgba(46,230,160,.06);border-radius:6px;padding:5px 8px;margin-top:8px;font-family:monospace;line-height:1.5;}
 .lp-step-list{margin-top:8px;display:grid;gap:3px;}
 .lp-step-list span{font-size:14px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:5px;}
 .lp-step-list span::before{content:"✔";color:#1DB87A;font-size:14px;}
@@ -312,16 +325,16 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 .lp-offer-txt p b{color:#fff;}
 .lp-offer-highlight{background:rgba(29,184,122,.05);border:1.5px solid rgba(29,184,122,.18);border-radius:12px;padding:16px 20px;margin-top:18px;font-size:14px;color:rgba(255,255,255,.82);line-height:1.7;}
 .lp-offer-highlight b{color:#1DB87A;font-size:16px;}
-.lp-price-card{background:#0D0D0D;border:1.5px solid rgba(255,92,43,.2);border-radius:18px;padding:28px;position:relative;overflow:hidden;}
-.lp-price-topbar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#FF5C2B,#FF8C00);}
-.lp-price-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#FF8050;background:rgba(255,92,43,.08);border:1px solid rgba(255,92,43,.2);padding:4px 12px;border-radius:100px;margin-bottom:16px;}
+.lp-price-card{background:#0D0D0D;border:1.5px solid rgba(46,230,160,.2);border-radius:18px;padding:28px;position:relative;overflow:hidden;}
+.lp-price-topbar{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#2EE6A0,#FF8C00);}
+.lp-price-badge{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:#FF8050;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.2);padding:4px 12px;border-radius:100px;margin-bottom:16px;}
 .lp-price-big{font-family:'Inter',sans-serif;font-size:60px;font-weight:800;color:#fff;line-height:1;}
 .lp-price-sub{font-size:15px;color:rgba(255,255,255,.72);margin-top:4px;}
 .lp-price-after{font-size:15px;color:rgba(255,255,255,.82);margin-top:3px;}
 .lp-price-list{display:grid;gap:7px;margin:18px 0;}
 .lp-price-item{display:flex;align-items:flex-start;gap:9px;font-size:14px;color:rgba(255,255,255,.78);}
 .lp-price-item .ok{color:#1DB87A;font-size:14px;flex-shrink:0;}
-.lp-cta-block{display:block;text-align:center;padding:15px;background:linear-gradient(135deg,#FF5C2B,#E8400A);color:#fff;text-decoration:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:16px;font-weight:800;box-shadow:0 6px 24px rgba(255,92,43,.35);transition:transform .15s;margin-bottom:10px;}
+.lp-cta-block{display:block;text-align:center;padding:15px;background:linear-gradient(135deg,#2EE6A0,#E8400A);color:#fff;text-decoration:none;border-radius:12px;font-family:'Inter',sans-serif;font-size:16px;font-weight:800;box-shadow:0 6px 24px rgba(46,230,160,.35);transition:transform .15s;margin-bottom:10px;}
 .lp-cta-block:hover{transform:translateY(-2px);}
 .lp-lock{background:rgba(29,184,122,.05);border:1.5px solid rgba(29,184,122,.16);border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:10px;margin-top:10px;}
 .lp-lock-txt{font-size:15px;color:rgba(255,255,255,.72);line-height:1.55;margin:0;}
@@ -693,7 +706,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   <!-- Seller blanco -->
   <text x="90" y="44" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="28" fill="#FFFFFF" letter-spacing="-0.5">Seller</text>
   <!-- Brain naranja -->
-  <text x="90" y="76" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="28" fill="#FF7A00" letter-spacing="-0.5">Brain</text>
+  <text x="90" y="76" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="28" fill="#14B87A" letter-spacing="-0.5">Brain</text>
 </svg></div></div>
     <div class="login-title">Accede a tu<br><span>Sellerbrain</span></div>
     <div class="login-sub">Introduce tu email y el c&oacute;digo personal que recibiste en el email de compra.</div>
@@ -715,13 +728,13 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 <!-- ===== CALCULADORA ===== -->
 <div id="vista-venta" style="display:none">
 <!-- BARRA ACCESO USUARIOS EXISTENTES -->
-<div style="width:100%;background:#161616;border-bottom:1px solid rgba(255,92,43,.15);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;box-sizing:border-box">
+<div style="width:100%;background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;box-sizing:border-box">
   <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:rgba(255,255,255,.7)">SellerBrain</div>
   <div style="display:flex;align-items:center;gap:10px">
     <span style="font-size:13px;color:rgba(255,255,255,.5)">¿Ya eres fundador?</span>
-    <button onclick="mostrarLogin()" style="background:rgba(255,92,43,.15);border:1.5px solid rgba(255,92,43,.4);color:#FF7A50;font-size:13px;font-weight:700;padding:7px 18px;border-radius:100px;cursor:pointer;font-family:'Syne',sans-serif"
-      onmouseover="this.style.background='rgba(255,92,43,.28)'"
-      onmouseout="this.style.background='rgba(255,92,43,.15)'">
+    <button onclick="mostrarLogin()" style="background:rgba(46,230,160,.15);border:1.5px solid rgba(46,230,160,.4);color:#6FEBBB;font-size:13px;font-weight:700;padding:7px 18px;border-radius:100px;cursor:pointer;font-family:'Syne',sans-serif"
+      onmouseover="this.style.background='rgba(46,230,160,.28)'"
+      onmouseout="this.style.background='rgba(46,230,160,.15)'">
       Acceder →
     </button>
   </div>
@@ -730,7 +743,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 
   <!-- HERO -->
   <div style="width:100%;background:linear-gradient(180deg,#1A1A1A 0%,#0D0D0D 100%);padding:40px 20px 50px;text-align:center;position:relative;overflow:hidden">
-    <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:300px;background:radial-gradient(ellipse,rgba(255,92,43,.18) 0%,transparent 70%);pointer-events:none"></div>
+    <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:300px;background:radial-gradient(ellipse,rgba(46,230,160,.18) 0%,transparent 70%);pointer-events:none"></div>
     <!-- Logo -->
     <div style="display:flex;justify-content:center;margin-bottom:20px">
       <div style="width:180px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 100" role="img" aria-label="SellersBrain">
@@ -767,10 +780,10 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   <!-- Seller blanco -->
   <text x="90" y="44" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="28" fill="#FFFFFF" letter-spacing="-0.5">Seller</text>
   <!-- Brain naranja -->
-  <text x="90" y="76" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="28" fill="#FF7A00" letter-spacing="-0.5">Brain</text>
+  <text x="90" y="76" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="28" fill="#14B87A" letter-spacing="-0.5">Brain</text>
 </svg></div>
     </div>
-    <div style="display:inline-block;background:rgba(255,92,43,.15);border:1px solid rgba(255,92,43,.3);color:#FF7A50;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:5px 14px;border-radius:100px;margin-bottom:16px">
+    <div style="display:inline-block;background:rgba(46,230,160,.15);border:1px solid rgba(46,230,160,.3);color:#6FEBBB;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:5px 14px;border-radius:100px;margin-bottom:16px">
       🔥 Solo 50 plazas fundadores · Precio bloqueado 3 meses
     </div>
     <h1 style="font-family:'Syne',sans-serif;font-size:clamp(24px,6vw,40px);font-weight:800;color:#fff;line-height:1.2;margin-bottom:14px;max-width:540px;margin-left:auto;margin-right:auto">
@@ -781,7 +794,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
     </p>
     <!-- CTA principal -->
     <a href="https://buy.stripe.com/cNifZje6xfwF3nIfVm0sU0b"
-       style="display:inline-block;padding:16px 32px;background:var(--or);color:#fff;text-decoration:none;border-radius:14px;font-family:'Syne',sans-serif;font-size:17px;font-weight:800;box-shadow:0 8px 32px rgba(255,92,43,.4);margin-bottom:10px;transition:transform .15s"
+       style="display:inline-block;padding:16px 32px;background:var(--or);color:#fff;text-decoration:none;border-radius:14px;font-family:'Syne',sans-serif;font-size:17px;font-weight:800;box-shadow:0 8px 32px rgba(46,230,160,.4);margin-bottom:10px;transition:transform .15s"
        onmouseover="this.style.transform='translateY(-2px)'"
        onmouseout="this.style.transform=''">
       Quiero ser fundador — 20€ · 3 meses →
@@ -801,7 +814,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   <div style="max-width:540px;width:100%;padding:0 20px;margin-top:32px">
 
     <!-- Bloque impacto económico -->
-    <div style="background:rgba(255,92,43,.06);border:1.5px solid rgba(255,92,43,.2);border-radius:14px;padding:20px;margin-bottom:16px;text-align:center">
+    <div style="background:rgba(46,230,160,.06);border:1.5px solid rgba(46,230,160,.2);border-radius:14px;padding:20px;margin-bottom:16px;text-align:center">
       <div style="font-size:12px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">El problema real</div>
       <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#fff;margin-bottom:6px">
         Si vendes 10.000€/mes, detectar un solo error puede pagarte esto <span style="color:var(--or)">100 veces.</span>
@@ -812,7 +825,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
     <!-- 3 pasos -->
     <div style="display:grid;gap:10px;margin-bottom:16px">
       <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px">
-        <div style="width:32px;height:32px;background:rgba(255,92,43,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📁</div>
+        <div style="width:32px;height:32px;background:rgba(46,230,160,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📁</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">Sube tu archivo de Seller Central</div>
           <div style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.7">
@@ -822,14 +835,14 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
         </div>
       </div>
       <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px">
-        <div style="width:32px;height:32px;background:rgba(255,92,43,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧠</div>
+        <div style="width:32px;height:32px;background:rgba(46,230,160,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🧠</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">SellerBrain analiza tu negocio</div>
           <div style="font-size:12px;color:rgba(255,255,255,.4)">Margen real por producto, dinero perdido, comparativa vs mes anterior.</div>
         </div>
       </div>
       <div style="background:#1A1A1A;border:1px solid #2A2A2A;border-radius:12px;padding:14px 16px;display:flex;align-items:flex-start;gap:12px">
-        <div style="width:32px;height:32px;background:rgba(255,92,43,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎯</div>
+        <div style="width:32px;height:32px;background:rgba(46,230,160,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">🎯</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:3px">Te dice exactamente qué hacer</div>
           <div style="font-size:12px;color:rgba(255,255,255,.4)">"Sube este precio +0.80€" · "Reduce PPC" · "Este producto escala ya"</div>
@@ -872,7 +885,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
           <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#F5A623">4</div>
           <div style="font-size:10px;color:rgba(255,255,255,.4)">Margen &lt;10% · pot. +€280</div>
         </div>
-        <div style="background:rgba(255,92,43,.05);border:1px solid rgba(255,92,43,.15);border-radius:8px;padding:10px;text-align:center">
+        <div style="background:rgba(46,230,160,.05);border:1px solid rgba(46,230,160,.15);border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:16px">🟡</div>
           <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--or)">3</div>
           <div style="font-size:10px;color:rgba(255,255,255,.4)">Mejorable</div>
@@ -883,14 +896,14 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
           <div style="font-size:10px;color:rgba(255,255,255,.4)">Escalar ya</div>
         </div>
       </div>
-      <div style="background:rgba(255,92,43,.08);border-radius:8px;padding:10px;text-align:center">
+      <div style="background:rgba(46,230,160,.08);border-radius:8px;padding:10px;text-align:center">
         <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:3px">Si aplicas las mejoras</div>
         <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--or)">+€620 el próximo mes</div>
       </div>
     </div>
 
     <!-- HÁBITO MENSUAL -->
-    <div style="background:rgba(255,92,43,.05);border:1px solid rgba(255,92,43,.15);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+    <div style="background:rgba(46,230,160,.05);border:1px solid rgba(46,230,160,.15);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
       <div style="font-size:24px;flex-shrink:0">📅</div>
       <div>
         <div style="font-size:12px;font-weight:700;color:var(--or);margin-bottom:2px">Haz este análisis cada mes</div>
@@ -899,8 +912,8 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
     </div>
 
     <!-- PRICING -->
-    <div style="background:#1A1A1A;border:1.5px solid rgba(255,92,43,.3);border-radius:14px;padding:20px;margin-bottom:16px;text-align:center">
-      <div style="display:inline-block;background:rgba(255,92,43,.15);border:1px solid rgba(255,92,43,.3);color:#FF7A50;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 12px;border-radius:100px;margin-bottom:14px">
+    <div style="background:#1A1A1A;border:1.5px solid rgba(46,230,160,.3);border-radius:14px;padding:20px;margin-bottom:16px;text-align:center">
+      <div style="display:inline-block;background:rgba(46,230,160,.15);border:1px solid rgba(46,230,160,.3);color:#6FEBBB;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:4px 12px;border-radius:100px;margin-bottom:14px">
         Founders Beta · 50 plazas
       </div>
       <div style="font-family:'Syne',sans-serif;font-size:42px;font-weight:800;color:#fff;line-height:1;margin-bottom:4px">20€</div>
@@ -931,7 +944,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
       </div>
 
       <a href="https://buy.stripe.com/cNifZje6xfwF3nIfVm0sU0b"
-         style="display:block;padding:16px;background:var(--or);color:#fff;text-decoration:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:16px;font-weight:800;box-shadow:0 6px 24px rgba(255,92,43,.4);margin-bottom:10px"
+         style="display:block;padding:16px;background:var(--or);color:#fff;text-decoration:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:16px;font-weight:800;box-shadow:0 6px 24px rgba(46,230,160,.4);margin-bottom:10px"
          onmouseover="this.style.transform='translateY(-2px)'"
          onmouseout="this.style.transform=''">
         Analizar mi cuenta →
@@ -959,7 +972,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 <div class="hero-c">
   <!-- Badge SELLERBRAIN top center con cerebro rosa -->
   <div id="calc-hero-badge" style="display:flex;justify-content:center;padding:20px 0 10px">
-    <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 18px;background:rgba(255,92,43,.10);border:1.5px solid rgba(255,92,43,.35);border-radius:24px;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:var(--or);letter-spacing:0.12em">
+    <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 18px;background:rgba(46,230,160,.10);border:1.5px solid rgba(46,230,160,.35);border-radius:24px;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:var(--or);letter-spacing:0.12em">
       <!-- Cerebro rosa estilo emoji -->
       <span style="font-size:14px;line-height:1">&#129504;</span>
       SELLERBRAIN
@@ -977,14 +990,14 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   </p>
   
   <!-- Top bar: logo izq + acceso verificado centro + toggles dcha -->
-  <div id="calc-hero-top" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--dk);border-top:1px solid rgba(255,92,43,.12);flex-wrap:wrap;gap:10px">
+  <div id="calc-hero-top" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--dk);border-top:1px solid rgba(46,230,160,.12);flex-wrap:wrap;gap:10px">
     <!-- Left: logo gráfico ascendente con SellerBrain -->
     <div style="display:flex;align-items:center;gap:8px;min-width:0">
       <svg xmlns="http://www.w3.org/2000/svg" width="28" height="24" viewBox="0 0 28 24" style="flex-shrink:0">
         <!-- Gráfico de barras ascendente naranja -->
         <rect x="2" y="16" width="4" height="6" rx="1" fill="#FF8C42"/>
         <rect x="8" y="11" width="4" height="11" rx="1" fill="#FF6B2C"/>
-        <rect x="14" y="6" width="4" height="16" rx="1" fill="#FF5C2B"/>
+        <rect x="14" y="6" width="4" height="16" rx="1" fill="#2EE6A0"/>
         <rect x="20" y="2" width="4" height="20" rx="1" fill="#E8472A"/>
         <!-- Línea de tendencia con punta de flecha -->
         <path d="M3 14 L9 9 L15 5 L21 1" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round"/>
@@ -992,7 +1005,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
       </svg>
       <div style="display:flex;flex-direction:column;line-height:1.05">
         <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:13px;color:#fff">Seller</span>
-        <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:13px;color:#FF5C2B">Brain</span>
+        <span style="font-family:'Syne',sans-serif;font-weight:800;font-size:13px;color:#2EE6A0">Brain</span>
       </div>
     </div>
     
@@ -1036,14 +1049,14 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 <!-- ===== AUDITOR DE CATEGORÍA - VISIBLE AL CARGAR ===== -->
 <div class="card" id="cat-auditor-card" style="margin-bottom:14px">
   <div class="ct" style="margin-bottom:12px">
-    <span class="ci" style="background:rgba(255,92,43,.15)">&#127981;&#65039;</span>
+    <span class="ci" style="background:rgba(46,230,160,.15)">&#127981;&#65039;</span>
     &iquest;Tienes la categor&iacute;a correcta asignada?
   </div>
   
   <!-- Banner de aviso rojo claro -->
   <div style="background:rgba(232,71,42,.06);border:1.5px solid rgba(232,71,42,.25);border-radius:12px;padding:14px 16px;margin-bottom:16px">
     <div style="font-size:13px;color:rgba(255,255,255,.85);line-height:1.6">
-      Amazon asigna internamente una <strong>categor&iacute;a de tarifa</strong> a tu producto que determina la comisi&oacute;n y si aplica Low Price FBA. Esta categor&iacute;a puede <span style="color:#FF5C2B;font-weight:700">no coincidir</span> con la categor&iacute;a donde aparece tu producto en el cat&aacute;logo. Una categor&iacute;a incorrecta puede costarte dinero cada mes sin que lo sepas.
+      Amazon asigna internamente una <strong>categor&iacute;a de tarifa</strong> a tu producto que determina la comisi&oacute;n y si aplica Low Price FBA. Esta categor&iacute;a puede <span style="color:#2EE6A0;font-weight:700">no coincidir</span> con la categor&iacute;a donde aparece tu producto en el cat&aacute;logo. Una categor&iacute;a incorrecta puede costarte dinero cada mes sin que lo sepas.
     </div>
     <div style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.65)">
       &#128269; Comprueba en Seller Central &rarr; <strong>Inventario</strong> &rarr; <strong>ASIN</strong> &rarr; <strong>Ver variables de tarifa</strong>
@@ -1152,7 +1165,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
         <option value="row">&#127760; Fuera de EU/UK</option>
       </select>
     </div>
-    <div id="dst-info" style="font-size:11px;color:var(--mu);background:rgba(255,92,43,.05);border:1px solid rgba(255,92,43,.2);border-radius:8px;padding:7px 10px;margin-bottom:10px;display:none"></div>
+    <div id="dst-info" style="font-size:11px;color:var(--mu);background:rgba(46,230,160,.05);border:1px solid rgba(46,230,160,.2);border-radius:8px;padding:7px 10px;margin-bottom:10px;display:none"></div>
     <div id="dst-toggle-wrap" style="display:none;margin-bottom:10px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--mu)">
         <input type="checkbox" id="dst-ya-incluida" onchange="updDSTinfo()" style="width:16px;height:16px;cursor:pointer">
@@ -1180,7 +1193,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   <div class="card">
     <div class="ct"><span class="ci">&#128666;</span> Log&iacute;stica FBA</div>
     <div class="fi"><label>Tarifa FBA real (de tu Seller Central)</label><div class="iw pl"><span class="ip">&euro;</span><input type="number" id="m-fba" placeholder="3.00" step="0.01" min="0"></div></div>
-    <div style="margin:4px 0 8px;padding:8px 12px;background:rgba(255,92,43,.06);border:1px dashed rgba(255,92,43,.25);border-radius:9px;font-size:11px;color:var(--mu)">
+    <div style="margin:4px 0 8px;padding:8px 12px;background:rgba(46,230,160,.06);border:1px dashed rgba(46,230,160,.25);border-radius:9px;font-size:11px;color:var(--mu)">
       &#128270; ¿No sabes la tarifa FBA? &rarr;
       <span onclick="showTab('fba')" style="color:var(--or);cursor:pointer;font-weight:700;text-decoration:underline;">&#128207; Ir a Dimensiones</span>
     </div>
@@ -1354,7 +1367,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
     <label>Tarifa FBA real (de tu Seller Central) <span style="font-size:10px;color:var(--mu)">en $</span></label>
     <div class="iw pl"><span class="ip">$</span><input type="number" id="u-fba-direct" placeholder="3.50" step="0.01" min="0" oninput="uSyncFBA()"></div>
   </div>
-  <div style="margin:4px 0 8px;padding:8px 12px;background:rgba(255,92,43,.06);border:1px dashed rgba(255,92,43,.25);border-radius:9px;font-size:11px;color:var(--mu)">
+  <div style="margin:4px 0 8px;padding:8px 12px;background:rgba(46,230,160,.06);border:1px dashed rgba(46,230,160,.25);border-radius:9px;font-size:11px;color:var(--mu)">
     &#128270; ¿No sabes la tarifa FBA? &rarr;
     <span onclick="showTab('fba')" style="color:var(--or);cursor:pointer;font-weight:700;text-decoration:underline;">&#128207; Ir a Dimensiones</span>
   </div>
@@ -1562,7 +1575,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 <div id="ppc-live" style="display:none">
 
 <!-- ===== ANÁLISIS INFORME DE TÉRMINOS DE BÚSQUEDA ===== -->
-  <div class="card" style="background:rgba(255,92,43,.04);border:1.5px solid rgba(255,92,43,.3)">
+  <div class="card" style="background:rgba(46,230,160,.04);border:1.5px solid rgba(46,230,160,.3)">
     <div class="ct"><span class="ci">&#128196;</span> An&aacute;lisis autom&aacute;tico — Informe de t&eacute;rminos de b&uacute;squeda</div>
     <div class="inf">Descarga el informe en <b>Amazon Ads &rarr; Informes &rarr; Sponsored Products &rarr; T&eacute;rminos de b&uacute;squeda</b> (&uacute;ltimos 30-60 d&iacute;as) y s&uacute;belo aqu&iacute;. SellerBrain detecta d&oacute;nde est&aacute;s quemando dinero y te dice qu&eacute; negativizar, qu&eacute; puja bajar y qu&eacute; escalar.</div>
     <div class="fr">
@@ -1574,9 +1587,9 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
       </div>
     </div>
     <div id="st-drop"
-         style="border:2px dashed rgba(255,92,43,.4);border-radius:12px;padding:20px;text-align:center;cursor:pointer;background:rgba(255,92,43,.03);margin-top:10px"
-         ondragover="event.preventDefault();this.style.background='rgba(255,92,43,.1)'"
-         ondragleave="this.style.background='rgba(255,92,43,.03)'"
+         style="border:2px dashed rgba(46,230,160,.4);border-radius:12px;padding:20px;text-align:center;cursor:pointer;background:rgba(46,230,160,.03);margin-top:10px"
+         ondragover="event.preventDefault();this.style.background='rgba(46,230,160,.1)'"
+         ondragleave="this.style.background='rgba(46,230,160,.03)'"
          ondrop="stOnDrop(event)"
          onclick="document.getElementById('st-file').click()">
       <div style="font-size:32px;margin-bottom:6px">&#128227;</div>
@@ -1645,8 +1658,8 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 <div class="sec" id="sec-pl">
 
 <!-- ===== 1. IMPORTAR CSV - SECCIÓN PRINCIPAL ===== -->
-<div class="card" style="background:linear-gradient(135deg,rgba(255,92,43,.10),rgba(232,71,42,.04));border:2px solid rgba(255,92,43,.4);margin-bottom:14px;padding:18px;box-shadow:0 4px 16px rgba(232,71,42,.12)">
-  <div class="ct" style="color:#FF5C2B;font-size:16px;margin-bottom:8px"><span class="ci" style="background:rgba(255,92,43,.18);font-size:18px">&#128228;</span> SUBIR CSV DE AMAZON — PRINCIPAL</div>
+<div class="card" style="background:linear-gradient(135deg,rgba(46,230,160,.10),rgba(232,71,42,.04));border:2px solid rgba(46,230,160,.4);margin-bottom:14px;padding:18px;box-shadow:0 4px 16px rgba(232,71,42,.12)">
+  <div class="ct" style="color:#2EE6A0;font-size:16px;margin-bottom:8px"><span class="ci" style="background:rgba(46,230,160,.18);font-size:18px">&#128228;</span> SUBIR CSV DE AMAZON — PRINCIPAL</div>
   <div class="inf" style="font-size:13px;color:rgba(255,255,255,.85);margin-bottom:14px">
     <strong style="color:#fff">Seller Central</strong> &rarr; Informes &rarr; <strong style="color:#fff">IVA</strong> &rarr; Informe de transacciones. S&uacute;belo cada mes para ver tu rentabilidad acumulada.
   </div>
@@ -1694,7 +1707,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   <div class="card" style="margin-bottom:10px;padding:10px 14px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span style="font-size:12px;font-weight:600;color:var(--tx)">Ver:</span>
-      <button class="sg-filtro active" onclick="sgFiltrar(this,'mes')" style="padding:6px 14px;border-radius:20px;border:1.5px solid var(--or);background:rgba(255,92,43,.1);color:var(--or);font-size:12px;font-weight:600;cursor:pointer">Último mes</button>
+      <button class="sg-filtro active" onclick="sgFiltrar(this,'mes')" style="padding:6px 14px;border-radius:20px;border:1.5px solid var(--or);background:rgba(46,230,160,.1);color:var(--or);font-size:12px;font-weight:600;cursor:pointer">Último mes</button>
       <button class="sg-filtro" onclick="sgFiltrar(this,'3m')" style="padding:6px 14px;border-radius:20px;border:1.5px solid var(--bd);background:transparent;color:var(--mu);font-size:12px;cursor:pointer">3 meses</button>
       <button class="sg-filtro" onclick="sgFiltrar(this,'anio')" style="padding:6px 14px;border-radius:20px;border:1.5px solid var(--bd);background:transparent;color:var(--mu);font-size:12px;cursor:pointer">Año</button>
       <select id="sg-anio-sel" onchange="sgFiltrarAnio(this.value)" style="padding:5px 8px;border:1.5px solid var(--bd);border-radius:8px;font-size:11px;color:var(--tx);background:var(--cr);display:none"></select>
@@ -2238,11 +2251,11 @@ function calcM(){
   var ben=+(neto-cost-fba-rec-com-dstTotal-stor-ppc).toFixed(2),mg=+(ben/neto*100).toFixed(1),mc=mg>=25?'mg':mg>=12?'mw':'mb';
   document.getElementById('rm-p').innerHTML='<span class="'+mc+'">'+mg+'%</span>';
   document.getElementById('rm-e').textContent=sgn(ben)+'\u20ac'+f(ben,2)+' por unidad vendida';
-  var bi=[{v:cost,c:'#FF5C2B'},{v:fba,c:'#E84040'},{v:rec,c:'#C0392B'},{v:com,c:'#F5A623'},{v:dstTotal,c:'#E67E22'},{v:stor,c:'#888'},{v:ppc,c:'#9B59B6'},{v:iva,c:'#3498DB'}].filter(function(i){return i.v>0;});
+  var bi=[{v:cost,c:'#2EE6A0'},{v:fba,c:'#E84040'},{v:rec,c:'#C0392B'},{v:com,c:'#F5A623'},{v:dstTotal,c:'#E67E22'},{v:stor,c:'#888'},{v:ppc,c:'#9B59B6'},{v:iva,c:'#3498DB'}].filter(function(i){return i.v>0;});
   var bh='';bi.forEach(function(i){bh+='<div class="bs" style="width:'+f(i.v/pvp*100,1)+'%;background:'+i.c+'"></div>';});
   if(ben>0)bh+='<div class="bs" style="flex:1;background:var(--gn)"></div>';
   document.getElementById('rm-bar').innerHTML=bh;
-  var rows=[{n:'PVP con IVA',p:'',v:'\u20ac'+f(pvp,2),c:'#1A1A1A',pos:true},{n:'IVA '+f(ivaR*100,0)+'%',p:f(iva/pvp*100,1)+'%',v:'-\u20ac'+f(iva,2),c:'#3498DB',pos:false},{n:'Ingreso neto',p:'',v:'\u20ac'+f(neto,2),c:'#1DB87A',pos:true},{n:'Coste producto',p:f(cost/pvp*100,1)+'%',v:'-\u20ac'+f(cost,2),c:'#FF5C2B',pos:false},{n:'FBA log\u00edstica',p:f(fba/pvp*100,1)+'%',v:'-\u20ac'+f(fba,2),c:'#E84040',pos:false},{n:'Recargo comb. '+f(recP*100,1)+'%',p:f(rec/pvp*100,2)+'%',v:'-\u20ac'+f(rec,3),c:'#C0392B',pos:false},{n:'Comisi\u00f3n Amazon',p:f(com/pvp*100,1)+'%',v:'-\u20ac'+f(com,2),c:'#F5A623',pos:false}].concat(dstTotal>0?[{n:'DST '+dst.com+'% com'+(dst.fba>0?' +'+dst.fba+'% FBA':''),p:f(dstTotal/pvp*100,2)+'%',v:'-\u20ac'+f(dstTotal,3),c:'#E67E22',pos:false}]:[]).concat([{n:'Almacenaje/ud',p:f(stor/pvp*100,1)+'%',v:'-\u20ac'+f(stor,2),c:'#888',pos:false}]);
+  var rows=[{n:'PVP con IVA',p:'',v:'\u20ac'+f(pvp,2),c:'#1A1A1A',pos:true},{n:'IVA '+f(ivaR*100,0)+'%',p:f(iva/pvp*100,1)+'%',v:'-\u20ac'+f(iva,2),c:'#3498DB',pos:false},{n:'Ingreso neto',p:'',v:'\u20ac'+f(neto,2),c:'#1DB87A',pos:true},{n:'Coste producto',p:f(cost/pvp*100,1)+'%',v:'-\u20ac'+f(cost,2),c:'#2EE6A0',pos:false},{n:'FBA log\u00edstica',p:f(fba/pvp*100,1)+'%',v:'-\u20ac'+f(fba,2),c:'#E84040',pos:false},{n:'Recargo comb. '+f(recP*100,1)+'%',p:f(rec/pvp*100,2)+'%',v:'-\u20ac'+f(rec,3),c:'#C0392B',pos:false},{n:'Comisi\u00f3n Amazon',p:f(com/pvp*100,1)+'%',v:'-\u20ac'+f(com,2),c:'#F5A623',pos:false}].concat(dstTotal>0?[{n:'DST '+dst.com+'% com'+(dst.fba>0?' +'+dst.fba+'% FBA':''),p:f(dstTotal/pvp*100,2)+'%',v:'-\u20ac'+f(dstTotal,3),c:'#E67E22',pos:false}]:[]).concat([{n:'Almacenaje/ud',p:f(stor/pvp*100,1)+'%',v:'-\u20ac'+f(stor,2),c:'#888',pos:false}]);
   if(ppc>0)rows.push({n:'PPC '+f(ppcR*100,0)+'%',p:f(ppc/pvp*100,1)+'%',v:'-\u20ac'+f(ppc,2),c:'#9B59B6',pos:false});
   rows.push({n:'Beneficio neto',p:mg+'%',v:sgn(ben)+'\u20ac'+f(ben,2),c:ben>=0?'#1DB87A':'#E84040',pos:ben>=0});
   var dh='';rows.forEach(function(r){dh+='<div class="bi"><div class="bl2"><div class="dot" style="background:'+r.c+'"></div><div><div class="bn">'+r.n+'</div>'+(r.p?'<div class="bpct">'+r.p+' del PVP</div>':'')+'</div></div><div class="bv '+(r.pos?'pos':'neg')+'">'+r.v+'</div></div>';});
@@ -2485,7 +2498,7 @@ function calcUSA() {
 
   // Barra
   var tots=[cost,fba,rec,com,stor,ppc].reduce(function(a,b){return a+b;},0);
-  var cols=['#FF5C2B','#E84040','#C0392B','#F5A623','#888','#9B59B6'];
+  var cols=['#2EE6A0','#E84040','#C0392B','#F5A623','#888','#9B59B6'];
   var vals=[cost,fba,rec,com,stor,ppc];
   var bh='';
   vals.forEach(function(v,i){if(v>0)bh+='<div class="bs" style="width:'+f(v/pvp*100,1)+'%;background:'+cols[i]+'"></div>';});
@@ -2495,7 +2508,7 @@ function calcUSA() {
   // Desglose
   var rows=[
     {n:'Precio de venta',v:'$'+f(pvp,2),c:'#1A1A1A',pos:true},
-    {n:'Coste producto',v:'-$'+f(cost,2),c:'#FF5C2B',pos:false},
+    {n:'Coste producto',v:'-$'+f(cost,2),c:'#2EE6A0',pos:false},
     {n:'FBA logística ('+tInfo.cat+')',v:'-$'+f(fba,2),c:'#E84040',pos:false},
     {n:'Recargo combustible 3,5%',v:'-$'+f(rec,3),c:'#C0392B',pos:false},
     {n:'Comisión Amazon',v:'-$'+f(com,2),c:'#F5A623',pos:false},
@@ -3148,7 +3161,7 @@ function plRenderResultados() {
 
   var rows = [
     {n:'Ingresos totales',         v:sym+f(totIng,2),      c:'var(--gn)'},
-    {n:'Coste productos',          v:'-'+sym+f(totCosProd,2), c:'#FF5C2B'},
+    {n:'Coste productos',          v:'-'+sym+f(totCosProd,2), c:'#2EE6A0'},
     {n:'Tarifas FBA + recargo',    v:'-'+sym+f(totFBA,2),  c:'#E84040'},
     {n:'Comisiones Amazon',        v:'-'+sym+f(totCom,2),  c:'#F5A623'},
     {n:'Almacenaje',               v:'-'+sym+f(totStor,2), c:'#888'},
@@ -3541,15 +3554,15 @@ plLoad = function() {
 // ===== CALENDARIO DE EVENTOS =====
 var CALENDARIO = [
   {mes:1,  nombre:'Enero',     eventos:[], color:'#888'},
-  {mes:2,  nombre:'Febrero',   eventos:['❤️ San Valentín (14 feb) — productos de regalo, cosmética, joyería'], color:'#FF5C2B'},
+  {mes:2,  nombre:'Febrero',   eventos:['❤️ San Valentín (14 feb) — productos de regalo, cosmética, joyería'], color:'#2EE6A0'},
   {mes:3,  nombre:'Marzo',     eventos:['🌸 Día de la Mujer (8 mar)', '☘️ San Patricio (17 mar) — nichos temáticos'], color:'#888'},
   {mes:4,  nombre:'Abril',     eventos:['🐣 Semana Santa — hogar, viajes, ocio', '🌿 Primavera — jardín, deportes exterior'], color:'#F5A623'},
-  {mes:5,  nombre:'Mayo',      eventos:['🌸 Día de la Madre — gran evento de ventas', '💪 Fitness primavera — suplementos, deportes'], color:'#FF5C2B'},
+  {mes:5,  nombre:'Mayo',      eventos:['🌸 Día de la Madre — gran evento de ventas', '💪 Fitness primavera — suplementos, deportes'], color:'#2EE6A0'},
   {mes:6,  nombre:'Junio',     eventos:['👔 Día del Padre', '🎓 Graduaciones y regalos', '☀️ Inicio verano — exterior, playa'], color:'#F5A623'},
-  {mes:7,  nombre:'Julio',     eventos:['⭐ PRIME DAY — el mayor evento del año', '☀️ Pleno verano — piscina, viajes, exterior'], color:'#FF5C2B'},
+  {mes:7,  nombre:'Julio',     eventos:['⭐ PRIME DAY — el mayor evento del año', '☀️ Pleno verano — piscina, viajes, exterior'], color:'#2EE6A0'},
   {mes:8,  nombre:'Agosto',    eventos:['🏫 Back to School — material escolar, mochilas', '☀️ Fin de temporada verano — liquidaciones'], color:'#F5A623'},
   {mes:9,  nombre:'Septiembre',eventos:['🏫 Back to School continúa', '🍂 Inicio otoño — hogar, cocina', '💪 Vuelta al gym — fitness, suplementos'], color:'#888'},
-  {mes:10, nombre:'Octubre',   eventos:['🎃 Halloween (31 oct) — decoración, disfraces', '📦 Preparar stock para Q4 — CRÍTICO'], color:'#FF5C2B'},
+  {mes:10, nombre:'Octubre',   eventos:['🎃 Halloween (31 oct) — decoración, disfraces', '📦 Preparar stock para Q4 — CRÍTICO'], color:'#2EE6A0'},
   {mes:11, nombre:'Noviembre', eventos:['⚫ BLACK FRIDAY — segundo mayor evento del año', '💻 Cyber Monday', '🎄 Inicio compras navidad'], color:'#E84040'},
   {mes:12, nombre:'Diciembre', eventos:['🎄 Navidad — pico máximo de ventas', '🤴 Reyes Magos — preparar envíos a tiempo'], color:'#E84040'},
 ];
@@ -3571,7 +3584,7 @@ function plRenderCalendario() {
     var esActual = m.mes === mesActual;
     var esPasado = m.mes < mesActual;
     var borde = esActual ? '2px solid var(--or)' : '1px solid var(--bd)';
-    var bg = esActual ? 'rgba(255,92,43,.05)' : esPasado ? 'rgba(0,0,0,.02)' : 'var(--cr)';
+    var bg = esActual ? 'rgba(46,230,160,.05)' : esPasado ? 'rgba(0,0,0,.02)' : 'var(--cr)';
     var opacity = esPasado ? '0.6' : '1';
 
     gh += '<div style="border:'+borde+';border-radius:10px;padding:10px;background:'+bg+';opacity:'+opacity+'">';
@@ -3579,7 +3592,7 @@ function plRenderCalendario() {
     gh += '<div style="font-family:Syne,sans-serif;font-weight:700;font-size:13px;color:'+(esActual?'var(--or)':m.color==='#888'?'var(--mu)':m.color)+'">';
     gh += (esActual ? '▶ ' : '') + m.nombre + (esActual ? ' ← Ahora' : '') + '</div>';
     if(m.color === '#E84040') gh += '<span style="font-size:9px;font-weight:700;color:#E84040;background:rgba(232,64,64,.1);padding:2px 6px;border-radius:100px">🔥 CLAVE</span>';
-    else if(m.color === '#FF5C2B') gh += '<span style="font-size:9px;font-weight:700;color:var(--or);background:rgba(255,92,43,.1);padding:2px 6px;border-radius:100px">⭐ ALTO</span>';
+    else if(m.color === '#2EE6A0') gh += '<span style="font-size:9px;font-weight:700;color:var(--or);background:rgba(46,230,160,.1);padding:2px 6px;border-radius:100px">⭐ ALTO</span>';
     gh += '</div>';
 
     if(m.eventos.length > 0) {
@@ -3790,9 +3803,9 @@ function plExportarPDF() {
 
   var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+plActual+'</title>';
   html += '<style>body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333}';
-  html += 'h1{color:#FF5C2B;font-size:22px}h2{color:#333;font-size:16px;margin-top:20px;border-bottom:2px solid #FF5C2B;padding-bottom:4px}';
+  html += 'h1{color:#2EE6A0;font-size:22px}h2{color:#333;font-size:16px;margin-top:20px;border-bottom:2px solid #2EE6A0;padding-bottom:4px}';
   html += 'table{width:100%;border-collapse:collapse;margin:10px 0;font-size:12px}';
-  html += 'th{background:#FF5C2B;color:white;padding:6px 8px;text-align:left}';
+  html += 'th{background:#2EE6A0;color:white;padding:6px 8px;text-align:left}';
   html += 'td{padding:5px 8px;border-bottom:1px solid #eee}';
   html += '.pos{color:#1DB87A;font-weight:bold}.neg{color:#E84040;font-weight:bold}';
   html += '.kpi{display:inline-block;background:#f5f5f5;border-radius:8px;padding:12px 16px;margin:6px;text-align:center;min-width:120px}';
@@ -3824,7 +3837,7 @@ function plExportarPDF() {
     html += '<td class="'+mc+'">'+(r.ben>=0?'+':'')+sym+f(r.ben,2)+'</td><td class="'+mc+'">'+r.mg+'%</td></tr>';
   });
   html += '</tbody></table>';
-  html += '<button onclick="window.print()" style="background:#FF5C2B;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;margin-top:16px">🖨️ Imprimir / Guardar PDF</button>';
+  html += '<button onclick="window.print()" style="background:#2EE6A0;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-size:14px;margin-top:16px">🖨️ Imprimir / Guardar PDF</button>';
   html += '<\/body><\/html>';
 
   var win = window.open('','_blank');
@@ -4499,7 +4512,7 @@ function plResumenTotal() {
   html += '<div class="card" style="margin-bottom:10px"><div class="bll">';
   [
     {n:'Ingresos totales',     v:f(totales.ing,2),     c:'var(--gn)'},
-    {n:'Coste productos',      v:'-'+f(totales.cosProd,2), c:'#FF5C2B'},
+    {n:'Coste productos',      v:'-'+f(totales.cosProd,2), c:'#2EE6A0'},
     {n:'FBA + recargo',        v:'-'+f(totales.cosFBA,2),  c:'#E84040'},
     {n:'Comisiones Amazon',    v:'-'+f(totales.cosCom,2),  c:'#F5A623'},
     {n:'Almacenaje',           v:'-'+f(totales.cosStor,2), c:'#888'},
@@ -4748,7 +4761,7 @@ function calcFDimsUSA(la, an, al, pe, pvp, cat) {
   html += '<div class="bll"><div class="bi"><div class="bn">Clasificación</div><div class="bv">'+tipoUSA+'</div></div>';
   html += '<div class="bi"><div class="bn">Tarifa FBA base</div><div class="bv">$'+f(fba,2)+'</div></div>';
   html += '<div class="bi"><div class="bn">Recargo combustible 3,5%</div><div class="bv">$'+f(rec,3)+'</div></div>';
-  html += '<div class="bi" style="background:rgba(255,92,43,.05)"><div class="bn" style="font-weight:700">Total FBA USA</div><div class="bv" style="color:var(--or);font-weight:800">$'+f(total,2)+'</div></div>';
+  html += '<div class="bi" style="background:rgba(46,230,160,.05)"><div class="bn" style="font-weight:700">Total FBA USA</div><div class="bv" style="color:var(--or);font-weight:800">$'+f(total,2)+'</div></div>';
   if(pvp > 0) {
     var pct = f(total/pvp*100,1);
     html += '<div class="bi"><div class="bn">% sobre PVP</div><div class="bv">'+pct+'%</div></div>';
@@ -5179,7 +5192,7 @@ function rmCargarTabla() {
     '<th style="padding:8px;color:#fff;font-size:12px">Uds vendidas</th>' +
     '<th style="padding:8px;color:#fff;font-size:12px">PPC real</th>' +
     '<th style="padding:8px;color:#fff;font-size:12px">Devoluciones</th>' +
-    '<th style="padding:8px;color:#fff;font-size:12px;background:rgba(255,92,43,.25);border-radius:4px" title="Si hubo promocion introduce el PVP reducido">&#127991; PVP promo</th>' +
+    '<th style="padding:8px;color:#fff;font-size:12px;background:rgba(46,230,160,.25);border-radius:4px" title="Si hubo promocion introduce el PVP reducido">&#127991; PVP promo</th>' +
     '<th style="padding:8px;color:#fff;font-size:12px">Ben. estimado</th>' +
     '</tr>';
 
@@ -5194,7 +5207,7 @@ function rmCargarTabla() {
     rows += '<td style="padding:4px 8px"><input type="number" data-prod="' + prod + '" class="rm-uds" placeholder="0" min="0" step="1" oninput="rmActualizar(this)" style="width:70px;padding:6px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;text-align:center"></td>';
     rows += '<td style="padding:4px 8px"><div style="display:flex;align-items:center;gap:2px"><span style="font-size:11px;color:var(--mu)">' + sym + '</span><input type="number" data-prod="' + prod + '" class="rm-ppc" placeholder="0" min="0" step="0.01" oninput="rmActualizar(this)" style="width:70px;padding:6px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;text-align:center"></div></td>';
     rows += '<td style="padding:4px 8px"><input type="number" data-prod="' + prod + '" class="rm-devs" placeholder="0" min="0" step="1" style="width:50px;padding:6px;border:1.5px solid var(--bd);border-radius:8px;font-size:13px;text-align:center"></td>';
-    rows += '<td style="padding:4px 8px"><div style="display:flex;align-items:center;gap:2px"><span style="font-size:11px;color:var(--or)">' + sym + '</span><input type="number" data-prod="' + prod + '" class="rm-promo" placeholder="—" min="0" step="0.01" oninput="rmActualizar(this)" title="PVP durante la promocion. Si lo introduces, el margen se recalcula sobre este precio." style="width:65px;padding:6px;border:1.5px solid rgba(255,92,43,.4);border-radius:8px;font-size:13px;text-align:center;background:rgba(255,92,43,.04)"></div></td>';
+    rows += '<td style="padding:4px 8px"><div style="display:flex;align-items:center;gap:2px"><span style="font-size:11px;color:var(--or)">' + sym + '</span><input type="number" data-prod="' + prod + '" class="rm-promo" placeholder="—" min="0" step="0.01" oninput="rmActualizar(this)" title="PVP durante la promocion. Si lo introduces, el margen se recalcula sobre este precio." style="width:65px;padding:6px;border:1.5px solid rgba(46,230,160,.4);border-radius:8px;font-size:13px;text-align:center;background:rgba(46,230,160,.04)"></div></td>';
     rows += '<td style="padding:8px;text-align:center" id="rm-ben-' + prod.replace(/[^a-zA-Z0-9]/g,'_') + '"><span style="font-size:12px;color:var(--mu)">—</span></td>';
     rows += '</tr>';
   });
@@ -5240,7 +5253,7 @@ function rmActualizar(el) {
   var benEl = document.getElementById('rm-ben-' + key);
   if(benEl) {
     var mc = ben >= 0 ? 'var(--gn)' : 'var(--rd)';
-    var promoBadge = esPromo ? ' <span style="font-size:9px;background:rgba(255,92,43,.15);color:var(--or);padding:1px 5px;border-radius:4px;font-weight:700">PROMO</span>' : '';
+    var promoBadge = esPromo ? ' <span style="font-size:9px;background:rgba(46,230,160,.15);color:var(--or);padding:1px 5px;border-radius:4px;font-weight:700">PROMO</span>' : '';
     benEl.innerHTML = '<span style="font-size:12px;font-weight:700;color:' + mc + '">' + (ben>=0?'+':'') + sym + f(ben,2) + '</span>' + promoBadge;
     // Alerta si la promo genera pérdida
     if(esPromo && ben < 0 && uds > 0) {
@@ -5465,7 +5478,7 @@ function plInicioCargarTabla() {
     '<th style="padding:8px;color:#fff;font-size:11px">PVP</th>' +
     '<th style="padding:8px;color:#fff;font-size:11px">Uds vendidas</th>' +
     '<th style="padding:8px;color:#fff;font-size:11px">Gasto PPC</th>' +
-    '<th style="padding:8px;color:#fff;font-size:11px;background:rgba(255,92,43,.25)">🏷️ PVP promo</th>' +
+    '<th style="padding:8px;color:#fff;font-size:11px;background:rgba(46,230,160,.25)">🏷️ PVP promo</th>' +
     '<th style="padding:8px;color:#fff;font-size:11px">Beneficio est.</th>' +
     '</tr>';
 
@@ -5480,7 +5493,7 @@ function plInicioCargarTabla() {
     rows += '<td style="padding:7px 8px;text-align:center;font-size:11px;color:var(--mu)">' + sym + f(meta.pvp||0,2) + '</td>';
     rows += '<td style="padding:4px 6px"><input type="number" data-prod="'+prod+'" class="ini-uds" placeholder="0" min="0" step="1" oninput="plInicioActualizar(this)" style="width:60px;padding:5px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;text-align:center"></td>';
     rows += '<td style="padding:4px 6px"><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--mu)">'+sym+'</span><input type="number" data-prod="'+prod+'" class="ini-ppc" placeholder="0" min="0" step="0.01" oninput="plInicioActualizar(this)" style="width:60px;padding:5px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;text-align:center"></div></td>';
-    rows += '<td style="padding:4px 6px"><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--or)">'+sym+'</span><input type="number" data-prod="'+prod+'" class="ini-promo" placeholder="—" min="0" step="0.01" oninput="plInicioActualizar(this)" style="width:60px;padding:5px;border:1.5px solid rgba(255,92,43,.35);border-radius:7px;font-size:12px;text-align:center;background:rgba(255,92,43,.04)"></div></td>';
+    rows += '<td style="padding:4px 6px"><div style="display:flex;align-items:center;gap:2px"><span style="font-size:10px;color:var(--or)">'+sym+'</span><input type="number" data-prod="'+prod+'" class="ini-promo" placeholder="—" min="0" step="0.01" oninput="plInicioActualizar(this)" style="width:60px;padding:5px;border:1.5px solid rgba(46,230,160,.35);border-radius:7px;font-size:12px;text-align:center;background:rgba(46,230,160,.04)"></div></td>';
     rows += '<td style="padding:7px 8px;text-align:center" id="ini-ben-'+pid+'"><span style="font-size:11px;color:var(--mu)">—</span></td>';
     rows += '</tr>';
   });
@@ -5517,7 +5530,7 @@ function plInicioActualizar(el) {
   var benEl = document.getElementById('ini-ben-'+pid);
   if(benEl) {
     var mc = ben >= 0 ? 'var(--gn)' : 'var(--rd)';
-    var badge = promo > 0 ? ' <span style="font-size:9px;background:rgba(255,92,43,.15);color:var(--or);padding:1px 4px;border-radius:4px">PROMO</span>' : '';
+    var badge = promo > 0 ? ' <span style="font-size:9px;background:rgba(46,230,160,.15);color:var(--or);padding:1px 4px;border-radius:4px">PROMO</span>' : '';
     benEl.innerHTML = uds > 0
       ? '<span style="font-size:11px;font-weight:700;color:'+mc+'">'+(ben>=0?'+':'')+sym+f(ben,2)+'</span>'+badge
       : '<span style="font-size:11px;color:var(--mu)">—</span>';
@@ -6261,7 +6274,7 @@ function csvMostrarCambioCostes() {
   });
 
   html += '</div>';
-  html += '<div id="csv-coste-edit" style="display:none;margin-top:12px;background:rgba(255,92,43,.06);border:1.5px solid rgba(255,92,43,.2);border-radius:10px;padding:12px"></div>';
+  html += '<div id="csv-coste-edit" style="display:none;margin-top:12px;background:rgba(46,230,160,.06);border:1.5px solid rgba(46,230,160,.2);border-radius:10px;padding:12px"></div>';
   html += '<div style="display:flex;gap:8px;margin-top:12px">';
   html += '<button onclick="csvCerrarCostes()" class="btn-sec-c" style="flex:1">Cerrar sin cambiar</button>';
   html += '</div>';
@@ -6722,7 +6735,7 @@ function sgFiltrar(btn, periodo) {
     b.style.color = 'var(--mu)';
     b.style.fontWeight = '400';
   });
-  btn.style.background = 'rgba(255,92,43,.12)';
+  btn.style.background = 'rgba(46,230,160,.12)';
   btn.style.borderColor = 'var(--or)';
   btn.style.color = 'var(--or)';
   btn.style.fontWeight = '700';
@@ -6924,7 +6937,7 @@ function sgRenderTablaArts() {
 
     rows+='<tr style="border-bottom:1px solid var(--bd);cursor:pointer" '+
       'onclick="sgVerDetalle(\''+padre.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\',\'general\')" '+
-      'onmouseover="this.style.background=\'rgba(255,92,43,.04)\'" onmouseout="this.style.background=\'\'">';
+      'onmouseover="this.style.background=\'rgba(46,230,160,.04)\'" onmouseout="this.style.background=\'\'">';
     rows+='<td style="padding:8px 10px;font-size:12px;font-weight:600;max-width:140px;word-break:break-word">'+padre+'</td>';
     rows+='<td style="padding:8px;text-align:center;font-size:11px">'+mktsHtml+'</td>';
     rows+='<td style="padding:8px;text-align:center;font-size:13px;font-weight:800">'+d.uds+'</td>';
@@ -7076,7 +7089,7 @@ function sgRenderHistorial(padre) {
     var evIcon=EVENTOS_ICON2[r.evento]||'🔵';
     var badges='';
     if(r.fuenteCSV)badges+='<span style="font-size:9px;background:rgba(155,89,182,.15);color:#8E44AD;padding:1px 4px;border-radius:4px;margin-left:3px">CSV</span>';
-    if(r.precioModificado)badges+='<span style="font-size:9px;background:rgba(255,92,43,.15);color:var(--or);padding:1px 4px;border-radius:4px;margin-left:2px">PROMO</span>';
+    if(r.precioModificado)badges+='<span style="font-size:9px;background:rgba(46,230,160,.15);color:var(--or);padding:1px 4px;border-radius:4px;margin-left:2px">PROMO</span>';
     // PPC editable
     var ppcHtml='<div style="display:flex;align-items:center;gap:4px">'+
       '<span style="font-size:11px;color:var(--mu)">€</span>'+
@@ -7397,7 +7410,7 @@ function sgMostrarDiagnostico(periodoG, importados, precioAjustado) {
 
   // ── CABECERA IMPACTO ────────────────────────────────────────────
   html += '<div style="background:var(--dk);border-radius:14px;padding:20px;text-align:center;margin-bottom:10px;position:relative;overflow:hidden">';
-  html += '<div style="position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at top,rgba(255,92,43,.2) 0%,transparent 70%)"></div>';
+  html += '<div style="position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(ellipse at top,rgba(46,230,160,.2) 0%,transparent 70%)"></div>';
   html += '<div style="position:relative">';
   html += '<div style="font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">📊 Análisis completado — ' + periodoG + '</div>';
   html += '<div style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0;align-items:center;max-width:340px;margin:0 auto">';
@@ -7422,15 +7435,15 @@ function sgMostrarDiagnostico(periodoG, importados, precioAjustado) {
   html += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">';
   html += sgDiagKpi('❌', nMal.length, 'Pierden dinero', benMal>0?'-€'+f(benMal,0):'', 'rgba(232,64,64,.1)', 'var(--rd)');
   html += sgDiagKpi('⚠️', nRiesgo.length, 'Margen <10%', benRiesgo>0?'pot. +€'+f(benRiesgo,0):'', 'rgba(245,166,35,.08)', '#F5A623');
-  html += sgDiagKpi('🟡', nOk.length, 'Mejorable', '', 'rgba(255,92,43,.06)', 'var(--or)');
+  html += sgDiagKpi('🟡', nOk.length, 'Mejorable', '', 'rgba(46,230,160,.06)', 'var(--or)');
   html += sgDiagKpi('✅', nBien.length, 'Escalar ya', '', 'rgba(29,184,122,.1)', 'var(--gn)');
   html += '</div>';
 
   // ── LISTA DE PRODUCTOS ──────────────────────────────────────────
   html += '<div style="display:grid;gap:7px;margin-bottom:12px">';
   resultados.forEach(function(r) {
-    var bgColor = {mal:'rgba(232,64,64,.06)',riesgo:'rgba(245,166,35,.05)',ok:'rgba(255,92,43,.04)',bien:'rgba(29,184,122,.05)'}[r.status];
-    var bdColor = {mal:'rgba(232,64,64,.25)',riesgo:'rgba(245,166,35,.2)',ok:'rgba(255,92,43,.15)',bien:'rgba(29,184,122,.2)'}[r.status];
+    var bgColor = {mal:'rgba(232,64,64,.06)',riesgo:'rgba(245,166,35,.05)',ok:'rgba(46,230,160,.04)',bien:'rgba(29,184,122,.05)'}[r.status];
+    var bdColor = {mal:'rgba(232,64,64,.25)',riesgo:'rgba(245,166,35,.2)',ok:'rgba(46,230,160,.15)',bien:'rgba(29,184,122,.2)'}[r.status];
     var benC = r.ben >= 0 ? 'var(--gn)' : 'var(--rd)';
 
     html += '<div style="background:' + bgColor + ';border:1.5px solid ' + bdColor + ';border-radius:12px;padding:11px 13px">';
@@ -7447,7 +7460,7 @@ function sgMostrarDiagnostico(periodoG, importados, precioAjustado) {
       var dCol = r.delta > 0 ? 'var(--gn)' : 'var(--rd)';
       html += ' <span style="color:' + dCol + '">' + (r.delta>0?'📈 +':'📉 ') + r.delta + '% vs mes ant.</span>';
     }
-    if(r.precioModificado) html += ' <span style="color:var(--or);font-size:10px;background:rgba(255,92,43,.12);padding:1px 5px;border-radius:4px">PROMO</span>';
+    if(r.precioModificado) html += ' <span style="color:var(--or);font-size:10px;background:rgba(46,230,160,.12);padding:1px 5px;border-radius:4px">PROMO</span>';
     html += '</div></div>';
     // Beneficio
     html += '<div style="text-align:right;flex-shrink:0">';
@@ -7467,7 +7480,7 @@ function sgMostrarDiagnostico(periodoG, importados, precioAjustado) {
 
   // ── BLOQUE SI HACES ESTO ────────────────────────────────────────
   if(totalMejora > 0) {
-    html += '<div style="background:linear-gradient(135deg,rgba(255,92,43,.1),rgba(255,140,0,.08));border:1.5px solid rgba(255,92,43,.25);border-radius:12px;padding:14px;text-align:center;margin-bottom:10px">';
+    html += '<div style="background:linear-gradient(135deg,rgba(46,230,160,.1),rgba(255,140,0,.08));border:1.5px solid rgba(46,230,160,.25);border-radius:12px;padding:14px;text-align:center;margin-bottom:10px">';
     html += '<div style="font-size:12px;font-weight:700;color:var(--or);margin-bottom:4px">🚀 Si aplicas estas mejoras este mes</div>';
     html += '<div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:var(--or)">+€' + f(totalMejora,0) + '</div>';
     html += '<div style="font-size:11px;color:var(--mu);margin-top:3px">de beneficio adicional potencial el próximo mes</div>';
@@ -7481,7 +7494,7 @@ function sgMostrarDiagnostico(periodoG, importados, precioAjustado) {
   if(mesProx > 12) { mesProx = 1; anioProx++; }
   var diaProx = '1 de ' + (MESES_ES[mesProx]||'') + ' ' + anioProx;
 
-  html += '<div style="background:rgba(255,92,43,.05);border:1.5px solid rgba(255,92,43,.15);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">';
+  html += '<div style="background:rgba(46,230,160,.05);border:1.5px solid rgba(46,230,160,.15);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">';
   html += '<div>';
   html += '<div style="font-size:12px;font-weight:700;color:var(--or)">📅 Próximo chequeo: ' + diaProx + '</div>';
   html += '<div style="font-size:11px;color:var(--mu);margin-top:2px">🔁 Sube el CSV de ' + (MESES_ES[mesProx]||'') + ' para ver si tus mejoras funcionaron</div>';
@@ -7961,7 +7974,7 @@ function cargarDemo() {
     if(!banner) {
       banner = document.createElement('div');
       banner.id = 'demo-banner';
-      banner.style.cssText = 'position:fixed;bottom:20px;right:20px;background:rgba(255,92,43,.95);color:#fff;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;z-index:999;box-shadow:0 8px 24px rgba(255,92,43,.4);display:flex;align-items:center;gap:10px;max-width:280px';
+      banner.style.cssText = 'position:fixed;bottom:20px;right:20px;background:rgba(46,230,160,.95);color:#fff;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;z-index:999;box-shadow:0 8px 24px rgba(46,230,160,.4);display:flex;align-items:center;gap:10px;max-width:280px';
       banner.innerHTML = '<span style="font-size:20px">🎭</span><div><div style="margin-bottom:2px">Modo demo activo</div><div style="font-size:11px;font-weight:400;opacity:.85">Datos ficticios para explorar</div></div><button onclick="document.getElementById(\'demo-banner\').remove()" style="background:transparent;border:none;color:#fff;cursor:pointer;font-size:16px;padding:0;margin-left:8px;opacity:.7">✕</button>';
       document.body.appendChild(banner);
     }
@@ -8653,7 +8666,7 @@ function gestorCSVBorrarTodo() {
 function diagSeg() {
   var miCodigo = sessionStorage.getItem('fba_codigo') || localStorage.getItem('fba_codigo_saved');
   if(!miCodigo) {
-    return '<div style="padding:14px;background:#1a1a1a;border:2px solid #FF5C2B;border-radius:10px;color:#FFA500">No estás logueado. Inicia sesión para ver tus datos.</div>';
+    return '<div style="padding:14px;background:#1a1a1a;border:2px solid #2EE6A0;border-radius:10px;color:#FFA500">No estás logueado. Inicia sesión para ver tus datos.</div>';
   }
   // Solo mostrar la key del usuario actual y posibles variantes (mayus/minus, con/sin guion)
   var miKey = 'seg_' + miCodigo;
@@ -8681,9 +8694,9 @@ function diagSeg() {
   }
   
   var actual = plGetKey();
-  var html = '<div style="padding:14px;background:#1a1a1a;border:2px solid #FF5C2B;border-radius:10px;margin:10px 0;color:#fff">';
-  html += '<div style="font-weight:700;color:#FF5C2B;margin-bottom:10px;font-size:14px">\u26A0\uFE0F Diagn\u00f3stico de datos guardados</div>';
-  html += '<div style="font-size:12px;margin-bottom:8px">Tu c\u00f3digo actual: <code style="background:rgba(255,92,43,.2);padding:2px 6px;border-radius:4px;color:#FF5C2B">' + actual + '</code></div>';
+  var html = '<div style="padding:14px;background:#1a1a1a;border:2px solid #2EE6A0;border-radius:10px;margin:10px 0;color:#fff">';
+  html += '<div style="font-weight:700;color:#2EE6A0;margin-bottom:10px;font-size:14px">\u26A0\uFE0F Diagn\u00f3stico de datos guardados</div>';
+  html += '<div style="font-size:12px;margin-bottom:8px">Tu c\u00f3digo actual: <code style="background:rgba(46,230,160,.2);padding:2px 6px;border-radius:4px;color:#2EE6A0">' + actual + '</code></div>';
   
   if(keys.length === 0) {
     html += '<div style="color:#FFA500;font-size:13px">No se encontraron datos guardados.</div>';
@@ -8700,7 +8713,7 @@ function diagSeg() {
       html += '<td style="padding:6px;text-align:center">' + (k.size/1024).toFixed(1) + ' KB</td>';
       html += '<td style="padding:6px;text-align:center">';
       if(!isActual && k.registros > 0) {
-        html += '<button onclick="diagRecuperar(\'' + k.codigo + '\')" style="background:#FF5C2B;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Recuperar</button>';
+        html += '<button onclick="diagRecuperar(\'' + k.codigo + '\')" style="background:#2EE6A0;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Recuperar</button>';
       } else if(isActual) {
         html += '<span style="color:#1DB87A;font-size:11px">en uso</span>';
       }
@@ -8744,7 +8757,7 @@ var stData = [];
 
 function stOnDrop(ev) {
   ev.preventDefault();
-  document.getElementById('st-drop').style.background = 'rgba(255,92,43,.03)';
+  document.getElementById('st-drop').style.background = 'rgba(46,230,160,.03)';
   var file = ev.dataTransfer.files[0];
   if(file) stCargar(file);
 }
@@ -8942,7 +8955,7 @@ function stRender(neg, bajar, escalar, vigilar, k) {
   var h = '<div class="card">';
   h += '<div class="ct"><span class="ci">&#128202;</span> Diagn&oacute;stico PPC — ' + k.nTerm + ' t&eacute;rminos analizados</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px">';
-  h += stKpi('&#128176;', sym + f(k.gastoTotal,2), 'Gasto total PPC', '', 'rgba(255,92,43,.08)', 'var(--or)');
+  h += stKpi('&#128176;', sym + f(k.gastoTotal,2), 'Gasto total PPC', '', 'rgba(46,230,160,.08)', 'var(--or)');
   h += stKpi('&#128722;', sym + f(k.ventasTotal,2), 'Ventas atribuidas', '', 'rgba(46,204,113,.08)', 'var(--gn)');
   h += stKpi('&#9878;&#65039;', f(k.acosGlobal,1) + '%', 'ACoS global', 'Break-even: ' + f(k.beAcos,1) + '%', 'rgba(255,255,255,.04)', acosCol);
   h += stKpi('&#128293;', sym + f(k.desperdiciado,2), 'Dinero quemado', 'clics sin ninguna venta', 'rgba(232,64,64,.08)', 'var(--rd)');
@@ -9010,12 +9023,12 @@ function stCopiar(arr) {
 
 </script>
 <div id="paywall" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#1A1A1A;border:1.5px solid rgba(255,92,43,.3);border-radius:20px;padding:28px 24px;max-width:380px;width:100%;text-align:center">
+  <div style="background:#1A1A1A;border:1.5px solid rgba(46,230,160,.3);border-radius:20px;padding:28px 24px;max-width:380px;width:100%;text-align:center">
     <div style="font-size:32px;margin-bottom:10px">🔒</div>
     <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#fff;margin-bottom:8px">Acceso de fundadores</div>
     <div style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:20px;line-height:1.6">Consigue acceso completo a SellerBrain por <b style="color:var(--or)">20€ los primeros 3 meses</b>. Sin permanencia.</div>
     <a href="https://buy.stripe.com/cNifZje6xfwF3nIfVm0sU0b"
-       style="display:block;padding:14px;background:var(--or);color:#fff;text-decoration:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;margin-bottom:10px;box-shadow:0 6px 24px rgba(255,92,43,.4)">
+       style="display:block;padding:14px;background:var(--or);color:#fff;text-decoration:none;border-radius:12px;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;margin-bottom:10px;box-shadow:0 6px 24px rgba(46,230,160,.4)">
       Quiero ser fundador — 20€ · 3 meses →
     </a>
     <button onclick="cerrarPaywall()" style="background:none;border:none;color:rgba(255,255,255,.3);font-size:12px;cursor:pointer">Seguir viendo la demo gratis</button>
