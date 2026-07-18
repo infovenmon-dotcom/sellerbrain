@@ -1982,8 +1982,10 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 
 
 // ===== CONFIG =====
-// Las credenciales viven en config.js (fuera del repositorio, ver config.example.js).
-// Fallback seguro si config.js no está cargado: el login mostrará aviso.
+// El login se valida en el servidor (Cloudflare Worker), no en el navegador.
+var SB_WORKER = 'https://sellerbrain-api.info-venmon.workers.dev';
+// Legacy: config.js/SB_CFG ya NO se usa para el login (se puede retirar cuando
+// el nuevo login esté confirmado en producción). Se conserva por compatibilidad.
 var SHEET_ID = (window.SB_CFG && window.SB_CFG.SHEET_ID) || '';
 var API_KEY = (window.SB_CFG && window.SB_CFG.API_KEY) || '';
 var SHEET_NAME = (window.SB_CFG && window.SB_CFG.SHEET_NAME) || 'hoja 1';
@@ -2007,27 +2009,22 @@ async function validarAcceso() {
   loading.style.display = 'block';
 
   try {
-    var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + SHEET_NAME + '?key=' + API_KEY;
-    var resp = await fetch(url);
-    var data = await resp.json();
-    var rows = data.values || [];
-
-    var encontrado = false;
-    for(var i = 1; i < rows.length; i++) {
-      var rowEmail = (rows[i][0] || '').trim().toLowerCase();
-      var rowCodigo = (rows[i][1] || '').trim().toUpperCase();
-      if(rowEmail === email && rowCodigo === codigo) {
-        encontrado = true;
-        break;
-      }
-    }
+    // Validación en el servidor: el navegador solo manda credenciales.
+    var resp = await fetch(SB_WORKER + '/v1/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, codigo: codigo })
+    });
+    var data = {};
+    try { data = await resp.json(); } catch(_) {}
 
     loading.style.display = 'none';
     btn.disabled = false;
 
-    if(encontrado) {
-      // Guardar acceso en localStorage
+    if(resp.ok && data.ok) {
+      // Guardar acceso de la sesión (el token queda para futuros usos)
       sessionStorage.setItem('fba_acceso', 'ok');
+      if(data.token) sessionStorage.setItem('fba_token', data.token);
       localStorage.setItem('fba_codigo_saved', codigo);
       sessionStorage.setItem('fba_email', email);
       sessionStorage.setItem('fba_codigo', codigo);
