@@ -147,19 +147,21 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   <div class="logo"><span class="brain">🧠</span>Seller<b>Brain</b></div>
   <nav class="nav">
     <a class="on" id="nav-dash" onclick="cambiarVista('dash')"><span class="ic">📊</span> Dashboard</a>
-    <a><span class="ic">💶</span> Beneficio por producto</a>
+    <a id="nav-pl" onclick="cambiarVista('pl')"><span class="ic">💶</span> Beneficio por producto</a>
     <a id="nav-ppc" onclick="cambiarVista('ppc')"><span class="ic">📣</span> PPC · En vivo</a>
-    <a><span class="ic">🕐</span> PPC · Horas</a>
+    <a id="nav-horas" onclick="cambiarVista('horas')"><span class="ic">🕐</span> PPC · Horas</a>
+    <a id="nav-ppccalc" onclick="cambiarVista('ppccalc')"><span class="ic">🎯</span> PPC · Calculadora</a>
     <div class="sep">Auditoría</div>
-    <a><span class="ic">🔍</span> Detector sobrecobros FBA</a>
-    <a><span class="ic">📐</span> Dimensiones y categoría</a>
-    <a><span class="ic">↩️</span> Devoluciones</a>
+    <a id="nav-sobre" onclick="cambiarVista('sobre')"><span class="ic">🔍</span> Detector sobrecobros FBA</a>
+    <a id="nav-fba" onclick="cambiarVista('fba')"><span class="ic">📐</span> Dimensiones y categoría</a>
+    <a id="nav-dev" onclick="cambiarVista('dev')"><span class="ic">↩️</span> Devoluciones</a>
     <div class="sep">Planificación</div>
-    <a><span class="ic">📦</span> Stock y reposición</a>
-    <a><span class="ic">🔑</span> Keywords</a>
+    <a id="nav-stock" onclick="cambiarVista('stock')"><span class="ic">📦</span> Stock y reposición</a>
+    <a id="nav-kw" onclick="cambiarVista('kw')"><span class="ic">🔑</span> Keywords</a>
     <a id="nav-calc" onclick="cambiarVista('calc')"><span class="ic">🧮</span> Calculadora EU / USA</a>
+    <a id="nav-epr" onclick="cambiarVista('epr')"><span class="ic">♻️</span> EPR envases</a>
     <div class="sep"></div>
-    <a><span class="ic">⚙️</span> Ajustes</a>
+    <a id="nav-ajustes" onclick="cambiarVista('ajustes')"><span class="ic">⚙️</span> Ajustes</a>
   </nav>
   <div class="side-foot">Plan <b>Fundador</b> · 53 SKUs<br>hola@sellersbrain.io</div>
 </aside>
@@ -393,9 +395,25 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 </div>
 </div><!-- /vista-dash -->
 
-<!-- ===== CALCULADORA EU / USA (portal embebido, mismo shell del dashboard) ===== -->
-<div id="vista-calc" style="display:none">
-  <iframe id="if-calc" title="Calculadora EU / USA" style="width:100%;height:calc(100vh - 96px);border:none;border-radius:14px;background:var(--bg)"></iframe>
+<!-- ===== HERRAMIENTA EMBEBIDA (cada ítem de la barra abre SOLO su apartado) ===== -->
+<div id="vista-tool" style="display:none">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+    <h2 id="tool-title" style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800"></h2>
+    <div id="tool-chips" style="display:none;gap:8px">
+      <span class="chip on" id="chip-eu" onclick="calcRegion('eu')" style="cursor:pointer">🇪🇺 Europa</span>
+      <span class="chip" id="chip-usa" onclick="calcRegion('usa')" style="cursor:pointer">🇺🇸 USA</span>
+    </div>
+  </div>
+  <iframe id="if-tool" title="Herramienta" style="width:100%;height:calc(100vh - 140px);border:none;border-radius:14px;background:var(--bg)"></iframe>
+</div>
+
+<!-- ===== SECCIONES EN DESARROLLO ===== -->
+<div id="vista-soon" style="display:none">
+  <div class="card" style="max-width:640px;margin:40px auto;text-align:center;padding:48px 32px">
+    <div style="font-size:40px;margin-bottom:14px">🚧</div>
+    <h2 id="soon-title" style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:10px"></h2>
+    <p style="font-size:14px;color:var(--mu2);max-width:420px;margin:0 auto">Esta sección está en desarrollo. Forma parte del plan de SellerBrain y se activará en una próxima fase — tu feedback como fundador decide su prioridad.</p>
+  </div>
 </div>
 
 </main>
@@ -984,16 +1002,46 @@ function pedirVentasTotales(){
   if(n>0){localStorage.setItem('sb_ventas_totales_30d',n);SB_VENTAS_REALES=false;renderPPC(document.getElementById('ppc-fuente').textContent);}
 }
 
+// Cada ítem de la barra lateral abre SOLO su apartado.
+// Herramientas embebidas (portal en modo embed muestra únicamente la sección pedida):
+var TOOL_SRC = {
+  pl:      { src:'portal.html?embed=1&tab=pl',     title:'Beneficio por producto · Seguimiento mensual' },
+  ppccalc: { src:'portal.html?embed=1&tab=ppc',    title:'PPC · Calculadora' },
+  horas:   { src:'ppc-horas.html',                 title:'PPC · Horas (dayparting)' },
+  fba:     { src:'portal.html?embed=1&tab=fba',    title:'Dimensiones y categoría' },
+  kw:      { src:'portal.html?embed=1&tab=kw',     title:'Keywords' },
+  calc:    { src:'portal.html?embed=1&tab=margen', title:'Calculadora de margen', chips:true },
+  epr:     { src:'epr.html',                       title:'EPR envases (PPWR)' }
+};
+// Secciones aún no construidas → aviso "en desarrollo":
+var SOON = { sobre:'Detector de sobrecobros FBA', dev:'Devoluciones', stock:'Stock y reposición', ajustes:'Ajustes' };
+
 function cambiarVista(v){
   document.getElementById('vista-dash').style.display = v==='dash'?'block':'none';
-  document.getElementById('vista-ppc').style.display = v==='ppc'?'block':'none';
-  document.getElementById('vista-calc').style.display = v==='calc'?'block':'none';
-  document.getElementById('nav-dash').classList.toggle('on', v==='dash');
-  document.getElementById('nav-ppc').classList.toggle('on', v==='ppc');
-  document.getElementById('nav-calc').classList.toggle('on', v==='calc');
+  document.getElementById('vista-ppc').style.display  = v==='ppc'?'block':'none';
+  document.getElementById('vista-tool').style.display = TOOL_SRC[v]?'block':'none';
+  document.getElementById('vista-soon').style.display = SOON[v]?'block':'none';
+  document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
+  var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
-  // Carga perezosa del portal embebido la primera vez que se abre la calculadora.
-  if(v==='calc'){ var f=document.getElementById('if-calc'); if(!f.getAttribute('src')) f.src='portal.html?embed=1'; }
+  if(TOOL_SRC[v]){
+    var meta=TOOL_SRC[v], f=document.getElementById('if-tool');
+    if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
+    document.getElementById('tool-title').textContent=meta.title;
+    document.getElementById('tool-chips').style.display=meta.chips?'flex':'none';
+  }
+  if(SOON[v]) document.getElementById('soon-title').textContent=SOON[v];
+  // En móvil, cerrar la barra al elegir
+  document.getElementById('side').classList.remove('open');
+}
+
+// Switch de la calculadora de margen: Europa ↔ USA
+function calcRegion(r){
+  var f=document.getElementById('if-tool');
+  f.src='portal.html?embed=1&tab='+(r==='usa'?'usa':'margen');
+  f.setAttribute('data-key','calc');
+  document.getElementById('chip-eu').classList.toggle('on', r!=='usa');
+  document.getElementById('chip-usa').classList.toggle('on', r==='usa');
 }
 
 function cargarPPC(){

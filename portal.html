@@ -13,10 +13,12 @@ body { background: #0A0A0A !important; color: #fff !important; font-family: 'DM 
 :root{--or:#FF5C2B;--dk:#1E1E1E;--cr:#161616;--cd:#242424;--bd:#2A2A2A;--tx:#F0F0F0;--mu:#999;--gn:#1DB87A;--rd:#E84040;--yw:#F5A623;--bl:#2980B9;}
 *{box-sizing:border-box;margin:0;padding:0;}
 /* Modo embebido: cuando el portal se muestra DENTRO del dashboard, se oculta
-   la cabecera de venta (badge + top bar), dejando solo la calculadora. */
+   la cabecera de venta (badge + top bar) Y la fila de pestañas internas —
+   cada ítem de la barra lateral del dashboard abre SOLO su herramienta. */
 body.embed{background:#0D0D0D !important;}
 body.embed #calc-hero-badge, body.embed #calc-hero-top{display:none !important;}
 body.embed .hero-c{border:none !important;}
+body.embed .tabs{display:none !important;}
 html,body{width:100%!important;max-width:100%!important;}
 body{font-family:'DM Sans',sans-serif;background:#0D0D0D;color:#F0F0F0;}
 
