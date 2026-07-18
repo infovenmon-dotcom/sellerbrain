@@ -1,53 +1,61 @@
 -- =====================================================================
--- TAREA 2 — Login propio en el Worker · tabla de miembros
--- Ejecuta en Supabase → SQL Editor. (Recuerda: si el navegador te traduce
--- la página, ponla en original — el SQL debe estar en inglés.)
+-- TAREA 2 — Login propio · tabla de miembros (clave = CÓDIGO)
+-- Ejecuta en Supabase → SQL Editor. (Desactiva la traducción del navegador.)
 --
--- Los códigos NO serán legibles desde el navegador: RLS bloquea la clave
--- pública; solo el Worker (service key) puede leer esta tabla.
+-- Modelo: la clave es el CÓDIGO (único, siempre presente). El email puede ir
+-- VACÍO: son códigos aún sin asignar (pruebas gratis / feedback — David y su
+-- mujer, testers, etc.). El email se rellena solo cuando la persona entra por
+-- primera vez con ese código. Una persona puede tener varios códigos.
+--
+-- Seguro re-ejecutar: recrea la tabla (ahora está vacía). El aviso de
+-- "operación destructiva" es por el DROP de una tabla vacía; no pierdes datos.
 -- =====================================================================
 
-create table if not exists miembros (
-  email   text primary key,
-  codigo  text not null,
-  nombre  text,                  -- para personalizar el correo del mes 4
+drop table if exists miembros cascade;
+
+create table miembros (
+  codigo  text primary key,          -- clave: el código de acceso (único)
+  email   text,                       -- se rellena al primer login; puede repetirse
+  nombre  text,
   activo  boolean not null default true,
-  plan    text default 'beta',
+  plan    text default 'beta',        -- 'beta' (de pago, caduca 3m) · 'equipo'/'gratis' (no caducan)
   alta    timestamptz not null default now(),
-  expira  timestamptz            -- null = sin caducidad (se autocalcula en miembros-expira.sql)
+  expira  timestamptz                 -- se autocalcula abajo (solo plan 'beta')
 );
 
--- Seguridad a nivel de fila: la clave pública (anon) no lee ni escribe.
--- No creamos políticas para 'anon': el Worker usa la service key, que salta
--- RLS. Así la tabla queda invisible desde el navegador.
+-- Seguridad: invisible desde el navegador; solo el Worker (service key) lee.
 alter table miembros enable row level security;
+create index if not exists idx_miembros_email on miembros (email);
 
--- Índice para acelerar el login (por email de miembros activos).
-create index if not exists idx_miembros_email_activo on miembros (email) where activo;
+-- Auto-caducidad: SOLO los 'beta' (de pago) caducan a los 3 meses.
+-- Los de plan 'equipo'/'gratis' NO caducan (su expira queda en null).
+create or replace function set_expira_miembros() returns trigger as $$
+begin
+  if new.expira is null and coalesce(new.plan, 'beta') = 'beta' then
+    new.expira := new.alta + interval '3 months';
+  end if;
+  return new;
+end;
+$$ language plpgsql;
 
--- IMPORTANTE — la caducidad de la prueba (3 meses):
--- Ejecuta también `sql/miembros-expira.sql`, que hace que `expira` se calcule
--- solo como `alta + 3 meses`. Así el aviso puede saltar al final de la prueba.
--- Para que la fecha sea la REAL de cada miembro, incluye su fecha en la columna
--- `alta` al migrar (ver abajo). Si no la incluyes, `alta` será la de importación.
+drop trigger if exists trg_expira_miembros on miembros;
+create trigger trg_expira_miembros
+  before insert or update on miembros
+  for each row execute function set_expira_miembros();
 
 -- ---------------------------------------------------------------------
--- MIGRACIÓN de la lista actual (Google Sheet -> esta tabla)
---
--- Opción A (recomendada): exporta el Google Sheet a CSV con cabeceras
---   email,codigo,alta,nombre
--- (alta = la columna 'fecha' del Sheet, en formato ISO AAAA-MM-DD, p.ej.
---  2026-07-15). En Supabase: Table Editor -> miembros -> Insert ->
--- Import data from CSV. (activo=true y plan='beta' se ponen solos; expira
--- se autocalcula.)
---
--- Opción B: insertar a mano (ejemplo, borra estas líneas y pon los tuyos):
+-- MIGRACIÓN: Table Editor -> miembros -> Insert -> Import data from CSV
+-- Tu CSV vale TAL CUAL. Cabeceras: email,codigo,alta,nombre
+--   - codigo  : obligatorio (es la clave)
+--   - email   : puede ir vacío (código sin asignar)
+--   - alta    : la columna 'fecha' del Sheet (ISO 'AAAA-MM-DD HH:MM:SS')
+--   - nombre  : opcional
+-- expira se calcula sola. No la incluyas.
 -- ---------------------------------------------------------------------
--- insert into miembros (email, codigo, plan, alta) values
---   ('cliente1@ejemplo.com', 'CODIGO1', 'beta', '2026-07-15'),
---   ('cliente2@ejemplo.com', 'CODIGO2', 'beta', '2026-07-16')
--- on conflict (email) do update
---   set codigo = excluded.codigo, activo = true;
 
--- Comprobar que entraron (y ver cuándo caduca cada prueba):
--- select email, activo, plan, alta::date, expira::date from miembros order by alta desc;
+-- Marcar a alguien como EQUIPO / GRATIS (no caduca) tras importar:
+-- update miembros set plan = 'equipo', expira = null where codigo = 'FBA-XXXX';
+
+-- Ver el estado:
+-- select codigo, email, nombre, plan, alta::date, expira::date
+-- from miembros order by alta;

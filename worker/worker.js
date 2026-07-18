@@ -75,21 +75,31 @@ export default {
       }
 
       // --- Login propio del portal (público): valida email+código en el
-      //     servidor contra la tabla `miembros`. El navegador solo manda
-      //     credenciales y recibe sí/no (+ token). Nunca decide él. ---
+      //     servidor contra la tabla `miembros`. La clave es el CÓDIGO (único).
+      //     Si el código aún no tiene email (código sin asignar / prueba
+      //     gratis), se liga a este email en el primer uso. El navegador solo
+      //     manda credenciales y recibe sí/no (+ token). Nunca decide él. ---
       if (url.pathname === '/v1/login' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch (_) { body = {}; }
         const email = (body.email || '').trim().toLowerCase();
         const codigo = (body.codigo || '').trim();
         if (!email || !codigo) return json({ ok: false, error: 'faltan_credenciales' }, cors, 400);
+        // Buscar por código (case-insensitive; los códigos no llevan % ni _).
         const filas = await selectSupabase(env,
-          'miembros?email=eq.' + encodeURIComponent(email) + '&activo=eq.true&limit=1');
+          'miembros?codigo=ilike.' + encodeURIComponent(codigo) + '&activo=eq.true&limit=1');
         const m = (filas || [])[0];
-        const ok = !!m
-          && String(m.codigo).trim().toUpperCase() === codigo.toUpperCase()
-          && (!m.expira || new Date(m.expira) > new Date());
-        if (!ok) return json({ ok: false }, cors, 401);
+        if (!m || (m.expira && new Date(m.expira) <= new Date())) {
+          return json({ ok: false }, cors, 401);
+        }
+        const emailGuardado = (m.email || '').trim().toLowerCase();
+        if (emailGuardado && emailGuardado !== email) {
+          return json({ ok: false }, cors, 401); // código ya ligado a otro email
+        }
+        if (!emailGuardado) {
+          // Primer uso del código: lo ligamos a este email.
+          await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, email: email }]);
+        }
         const token = await firmarJWT(env, { email, plan: m.plan || 'beta' });
         return json({ ok: true, token, plan: m.plan || 'beta', expira: m.expira || null }, cors);
       }
