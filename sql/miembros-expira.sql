@@ -7,6 +7,9 @@
 -- `alta + 3 meses`. Así sabes cuándo termina su prueba para lanzar el aviso.
 -- =====================================================================
 
+-- 0) Guardar también el nombre del miembro (para personalizar el correo del mes 4)
+alter table miembros add column if not exists nombre text;
+
 -- 1) Función que pone expira = alta + 3 meses (solo si no se indicó a mano)
 create or replace function set_expira_miembros() returns trigger as $$
 begin

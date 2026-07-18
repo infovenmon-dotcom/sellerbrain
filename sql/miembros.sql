@@ -10,10 +10,11 @@
 create table if not exists miembros (
   email   text primary key,
   codigo  text not null,
+  nombre  text,                  -- para personalizar el correo del mes 4
   activo  boolean not null default true,
   plan    text default 'beta',
   alta    timestamptz not null default now(),
-  expira  timestamptz            -- null = sin caducidad
+  expira  timestamptz            -- null = sin caducidad (se autocalcula en miembros-expira.sql)
 );
 
 -- Seguridad a nivel de fila: la clave pública (anon) no lee ni escribe.
@@ -34,11 +35,11 @@ create index if not exists idx_miembros_email_activo on miembros (email) where a
 -- MIGRACIÓN de la lista actual (Google Sheet -> esta tabla)
 --
 -- Opción A (recomendada): exporta el Google Sheet a CSV con cabeceras
---   email,codigo,alta
--- (alta = fecha de compra/alta en formato ISO AAAA-MM-DD, p.ej. 2026-07-15).
--- Si no tienes fecha, deja solo  email,codigo  y `alta` se pondrá a la fecha
--- de importación. En Supabase: Table Editor -> miembros -> Insert ->
--- Import data from CSV. (activo=true y plan='beta' se ponen solos.)
+--   email,codigo,alta,nombre
+-- (alta = la columna 'fecha' del Sheet, en formato ISO AAAA-MM-DD, p.ej.
+--  2026-07-15). En Supabase: Table Editor -> miembros -> Insert ->
+-- Import data from CSV. (activo=true y plan='beta' se ponen solos; expira
+-- se autocalcula.)
 --
 -- Opción B: insertar a mano (ejemplo, borra estas líneas y pon los tuyos):
 -- ---------------------------------------------------------------------
