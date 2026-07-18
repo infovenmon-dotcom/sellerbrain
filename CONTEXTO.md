@@ -39,7 +39,7 @@ Supabase (PostgreSQL) — base de datos europea con RLS
 - **Cloudflare**: cuenta info.venmon@gmail.com · Worker `sellerbrain-api` · subdominio `info-venmon.workers.dev`
 - **Supabase**: proyecto `sellersbrain` · URL `https://ttvixrppcjqggzaqtllp.supabase.co`
 - **Web pública**: GoHighLevel (GHL) sirve sellersbrain.io · dominio en IONOS
-- **Pagos**: Stripe · link Founders `https://buy.stripe.com/4gM14p3rTfwF5vQ4cE0sU07`
+- **Pagos**: Stripe · link Founders `https://buy.stripe.com/cNifZje6xfwF3nIfVm0sU0b`
 - **Amazon Ads**: Security Profile "SellerBrain Ads" · Client ID `amzn1.application-oa2-client.6fee20076c2c4b50ad04b89c7743a920`
 - **Repo**: GitHub (privado) conectado a Netlify para el entorno de PRUEBAS
 
