@@ -64,13 +64,34 @@ export default {
       // ============ SEGURIDAD ============
       // Todos los endpoints /v1/* requieren la clave privada (secreto SB_API_KEY).
       // Se acepta como cabecera "Authorization: Bearer LACLAVE" o como ?key=LACLAVE.
-      // Las rutas /auth/ads/* quedan públicas: son el flujo OAuth de los clientes.
-      if (url.pathname.startsWith('/v1/')) {
+      // Excepciones públicas: /auth/ads/* (OAuth de clientes) y /v1/login (el
+      // login del portal lo llama el navegador, que NO puede tener SB_API_KEY).
+      if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/login') {
         const auth = (request.headers.get('Authorization') || '').replace('Bearer ', '');
         const key = auth || url.searchParams.get('key') || '';
         if (!env.SB_API_KEY || key !== env.SB_API_KEY) {
           return json({ error: 'no_autorizado' }, cors, 401);
         }
+      }
+
+      // --- Login propio del portal (público): valida email+código en el
+      //     servidor contra la tabla `miembros`. El navegador solo manda
+      //     credenciales y recibe sí/no (+ token). Nunca decide él. ---
+      if (url.pathname === '/v1/login' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch (_) { body = {}; }
+        const email = (body.email || '').trim().toLowerCase();
+        const codigo = (body.codigo || '').trim();
+        if (!email || !codigo) return json({ ok: false, error: 'faltan_credenciales' }, cors, 400);
+        const filas = await selectSupabase(env,
+          'miembros?email=eq.' + encodeURIComponent(email) + '&activo=eq.true&limit=1');
+        const m = (filas || [])[0];
+        const ok = !!m
+          && String(m.codigo).trim().toUpperCase() === codigo.toUpperCase()
+          && (!m.expira || new Date(m.expira) > new Date());
+        if (!ok) return json({ ok: false }, cors, 401);
+        const token = await firmarJWT(env, { email, plan: m.plan || 'beta' });
+        return json({ ok: true, token, plan: m.plan || 'beta', expira: m.expira || null }, cors);
       }
 
       // --- Contrato del dashboard (lo que consume el frontend) ---
@@ -672,6 +693,30 @@ function mapearSettlement(lineas, reportId) {
       importe: +(l['amount'] || '0').replace(',', '.'),
       cantidad: +l['quantity-purchased'] || 0
     }));
+}
+
+/* =====================================================================
+ * JWT — token de sesión firmado (HMAC-SHA256) para el login del portal
+ * Si no hay secreto SB_JWT_SECRET, devuelve null (el login sigue
+ * funcionando con {ok:true}); cuando lo pongas, empieza a firmar tokens.
+ * =================================================================== */
+async function firmarJWT(env, payload) {
+  if (!env.SB_JWT_SECRET) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const body = { ...payload, iat: now, exp: now + 60 * 60 * 24 * 7 }; // 7 días
+  const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
+  const data = enc(header) + '.' + enc(body);
+  const key = await crypto.subtle.importKey('raw',
+    new TextEncoder().encode(env.SB_JWT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+  return data + '.' + b64url(new Uint8Array(sig));
+}
+function b64url(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /* ===== utils ===== */
