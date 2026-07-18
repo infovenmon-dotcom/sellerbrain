@@ -2077,6 +2077,8 @@ window.onload = function() {
   var params = new URLSearchParams(location.search);
   // Modo embebido: el portal se muestra DENTRO del dashboard (solo la calculadora).
   if(params.get('embed') === '1') { activarEmbed(params.get('tab') || 'margen'); return; }
+  // Acceso directo al login desde la landing ("Acceder").
+  if(params.get('login') === '1' && sessionStorage.getItem('fba_acceso') !== 'ok') { mostrarLogin(); return; }
   var acceso = sessionStorage.getItem('fba_acceso');
   if(acceso === 'ok') {
     // Ya logueado → el panel de control es el dashboard.

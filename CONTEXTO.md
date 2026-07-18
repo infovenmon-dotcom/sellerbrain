@@ -112,7 +112,11 @@ Detalle completo del ciclo de vida y reparto en `docs/precios-y-ciclo.md`.
 8. Anonimizar datos de la demo
 
 ## Convenciones
-- Tema oscuro (#0D0D0D / negros cálidos), naranja brasa→ámbar, verde SOLO para dinero
+- **Marca (jul-2026): concepto ORBIT** — logo anillo verde esmeralda + punto (SVG inline),
+  wordmark Seller**Brain** (Brain en verde), tagline "Data. Decisions. More Profit."
+  Tema oscuro (#070B09) + verde esmeralda (#2EE6A0→#14B87A) como color primario.
+  Aplicado en la landing; dashboard/portal pendientes de re-tematizar (aún naranja brasa).
+- (Regla anterior: naranja brasa→ámbar, verde SOLO para dinero — sustituida por ORBIT.)
 - Copy sin promesas infladas — reflejar solo lo que existe
 - Documentación en Miro: https://miro.com/app/board/uXjVGu3XV4Y=/
 - Contacto: hola@sellersbrain.io
