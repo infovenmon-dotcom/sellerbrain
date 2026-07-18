@@ -14,13 +14,14 @@
 drop table if exists miembros cascade;
 
 create table miembros (
-  codigo  text primary key,          -- clave: el código de acceso (único)
-  email   text,                       -- se rellena al primer login; puede repetirse
-  nombre  text,
-  activo  boolean not null default true,
-  plan    text default 'beta',        -- 'beta' (de pago, caduca 3m) · 'equipo'/'gratis' (no caducan)
-  alta    timestamptz not null default now(),
-  expira  timestamptz                 -- se autocalcula abajo (solo plan 'beta')
+  codigo    text primary key,        -- clave: el código de acceso (único)
+  email     text,                     -- se rellena al primer login; puede repetirse
+  nombre    text,
+  activo    boolean not null default true,
+  plan      text default 'beta',      -- 'beta' (de pago, caduca 3m) · 'creador'/'equipo' (no caducan)
+  vitalicio boolean not null default false, -- true = acceso de por vida (nunca caduca)
+  alta      timestamptz not null default now(),
+  expira    timestamptz               -- se autocalcula abajo
 );
 
 -- Seguridad: invisible desde el navegador; solo el Worker (service key) lee.
@@ -31,8 +32,10 @@ create index if not exists idx_miembros_email on miembros (email);
 -- Los de plan 'equipo'/'gratis' NO caducan (su expira queda en null).
 create or replace function set_expira_miembros() returns trigger as $$
 begin
-  if new.expira is null and coalesce(new.plan, 'beta') = 'beta' then
-    new.expira := new.alta + interval '3 months';
+  if new.vitalicio then
+    new.expira := null;                                    -- vitalicio = nunca caduca
+  elsif new.expira is null and coalesce(new.plan, 'beta') = 'beta' then
+    new.expira := new.alta + interval '3 months';          -- beta = 3 meses
   end if;
   return new;
 end;
