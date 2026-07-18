@@ -12,6 +12,11 @@ body { background: #0A0A0A !important; color: #fff !important; font-family: 'DM 
 
 :root{--or:#FF5C2B;--dk:#1E1E1E;--cr:#161616;--cd:#242424;--bd:#2A2A2A;--tx:#F0F0F0;--mu:#999;--gn:#1DB87A;--rd:#E84040;--yw:#F5A623;--bl:#2980B9;}
 *{box-sizing:border-box;margin:0;padding:0;}
+/* Modo embebido: cuando el portal se muestra DENTRO del dashboard, se oculta
+   la cabecera de venta (badge + top bar), dejando solo la calculadora. */
+body.embed{background:#0D0D0D !important;}
+body.embed #calc-hero-badge, body.embed #calc-hero-top{display:none !important;}
+body.embed .hero-c{border:none !important;}
 html,body{width:100%!important;max-width:100%!important;}
 body{font-family:'DM Sans',sans-serif;background:#0D0D0D;color:#F0F0F0;}
 
@@ -951,7 +956,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
 <div id="vista-calc" style="display:none">
 <div class="hero-c">
   <!-- Badge SELLERBRAIN top center con cerebro rosa -->
-  <div style="display:flex;justify-content:center;padding:20px 0 10px">
+  <div id="calc-hero-badge" style="display:flex;justify-content:center;padding:20px 0 10px">
     <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 18px;background:rgba(255,92,43,.10);border:1.5px solid rgba(255,92,43,.35);border-radius:24px;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:var(--or);letter-spacing:0.12em">
       <!-- Cerebro rosa estilo emoji -->
       <span style="font-size:14px;line-height:1">&#129504;</span>
@@ -970,7 +975,7 @@ body.modo-movil .sg-kpi-grid { grid-template-columns:repeat(2,1fr) !important; }
   </p>
   
   <!-- Top bar: logo izq + acceso verificado centro + toggles dcha -->
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--dk);border-top:1px solid rgba(255,92,43,.12);flex-wrap:wrap;gap:10px">
+  <div id="calc-hero-top" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--dk);border-top:1px solid rgba(255,92,43,.12);flex-wrap:wrap;gap:10px">
     <!-- Left: logo gráfico ascendente con SellerBrain -->
     <div style="display:flex;align-items:center;gap:8px;min-width:0">
       <svg xmlns="http://www.w3.org/2000/svg" width="28" height="24" viewBox="0 0 28 24" style="flex-shrink:0">
@@ -2022,7 +2027,8 @@ async function validarAcceso() {
       localStorage.setItem('fba_codigo_saved', codigo);
       sessionStorage.setItem('fba_email', email);
       sessionStorage.setItem('fba_codigo', codigo);
-      mostrarCalculadora();
+      // El panel de control es el dashboard: aterrizamos ahí.
+      window.location.href = 'dashboard.html';
     } else {
       error.textContent = '❌ Email o código incorrecto. Revisa el email que recibiste al comprar.';
       error.style.display = 'block';
@@ -2068,13 +2074,28 @@ function volverVenta() {
 
 // Solo mantener sesión mientras la pestaña está abierta (sessionStorage)
 window.onload = function() {
+  var params = new URLSearchParams(location.search);
+  // Modo embebido: el portal se muestra DENTRO del dashboard (solo la calculadora).
+  if(params.get('embed') === '1') { activarEmbed(params.get('tab') || 'margen'); return; }
   var acceso = sessionStorage.getItem('fba_acceso');
   if(acceso === 'ok') {
-    mostrarCalculadora();
+    // Ya logueado → el panel de control es el dashboard.
+    window.location.href = 'dashboard.html';
   } else {
     document.getElementById('vista-venta').style.display = 'block';
   }
 };
+
+// Muestra solo la calculadora (sin cabecera de venta) para incrustarla en el dashboard.
+function activarEmbed(tab){
+  document.body.classList.add('embed');
+  var vv=document.getElementById('vista-venta'); if(vv) vv.style.display='none';
+  var vl=document.getElementById('vista-login'); if(vl) vl.style.display='none';
+  document.getElementById('vista-calc').style.display='block';
+  try{ plLoad(); }catch(e){}
+  try{ showTab(tab); }catch(e){}
+  try{ setVista(sbDetectarVista()); }catch(e){}
+}
 
 // Enter en los campos
 document.addEventListener('keydown', function(e) {

@@ -136,6 +136,10 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 </style>
 </head>
 <body>
+<script>
+  // Panel protegido: sin código de acceso válido, al login.
+  if (sessionStorage.getItem('fba_acceso') !== 'ok') { location.replace('portal.html'); }
+</script>
 <div class="app">
 
 <!-- ============ SIDEBAR ============ -->
@@ -153,7 +157,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     <div class="sep">Planificación</div>
     <a><span class="ic">📦</span> Stock y reposición</a>
     <a><span class="ic">🔑</span> Keywords</a>
-    <a><span class="ic">🧮</span> Calculadora EU / USA</a>
+    <a id="nav-calc" onclick="cambiarVista('calc')"><span class="ic">🧮</span> Calculadora EU / USA</a>
     <div class="sep"></div>
     <a><span class="ic">⚙️</span> Ajustes</a>
   </nav>
@@ -388,6 +392,11 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 </div>
 </div>
 </div><!-- /vista-dash -->
+
+<!-- ===== CALCULADORA EU / USA (portal embebido, mismo shell del dashboard) ===== -->
+<div id="vista-calc" style="display:none">
+  <iframe id="if-calc" title="Calculadora EU / USA" style="width:100%;height:calc(100vh - 96px);border:none;border-radius:14px;background:var(--bg)"></iframe>
+</div>
 
 </main>
 </div>
@@ -978,9 +987,13 @@ function pedirVentasTotales(){
 function cambiarVista(v){
   document.getElementById('vista-dash').style.display = v==='dash'?'block':'none';
   document.getElementById('vista-ppc').style.display = v==='ppc'?'block':'none';
+  document.getElementById('vista-calc').style.display = v==='calc'?'block':'none';
   document.getElementById('nav-dash').classList.toggle('on', v==='dash');
   document.getElementById('nav-ppc').classList.toggle('on', v==='ppc');
+  document.getElementById('nav-calc').classList.toggle('on', v==='calc');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
+  // Carga perezosa del portal embebido la primera vez que se abre la calculadora.
+  if(v==='calc'){ var f=document.getElementById('if-calc'); if(!f.getAttribute('src')) f.src='portal.html?embed=1'; }
 }
 
 function cargarPPC(){
