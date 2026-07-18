@@ -24,21 +24,29 @@ alter table miembros enable row level security;
 -- Índice para acelerar el login (por email de miembros activos).
 create index if not exists idx_miembros_email_activo on miembros (email) where activo;
 
+-- IMPORTANTE — la caducidad de la prueba (3 meses):
+-- Ejecuta también `sql/miembros-expira.sql`, que hace que `expira` se calcule
+-- solo como `alta + 3 meses`. Así el aviso puede saltar al final de la prueba.
+-- Para que la fecha sea la REAL de cada miembro, incluye su fecha en la columna
+-- `alta` al migrar (ver abajo). Si no la incluyes, `alta` será la de importación.
+
 -- ---------------------------------------------------------------------
 -- MIGRACIÓN de la lista actual (Google Sheet -> esta tabla)
 --
 -- Opción A (recomendada): exporta el Google Sheet a CSV con cabeceras
---   email,codigo
--- y en Supabase: Table Editor -> miembros -> Insert -> Import data from CSV.
--- (activo se pone en true solo; plan queda 'beta' por defecto.)
+--   email,codigo,alta
+-- (alta = fecha de compra/alta en formato ISO AAAA-MM-DD, p.ej. 2026-07-15).
+-- Si no tienes fecha, deja solo  email,codigo  y `alta` se pondrá a la fecha
+-- de importación. En Supabase: Table Editor -> miembros -> Insert ->
+-- Import data from CSV. (activo=true y plan='beta' se ponen solos.)
 --
 -- Opción B: insertar a mano (ejemplo, borra estas líneas y pon los tuyos):
 -- ---------------------------------------------------------------------
--- insert into miembros (email, codigo, plan) values
---   ('cliente1@ejemplo.com', 'CODIGO1', 'beta'),
---   ('cliente2@ejemplo.com', 'CODIGO2', 'beta')
+-- insert into miembros (email, codigo, plan, alta) values
+--   ('cliente1@ejemplo.com', 'CODIGO1', 'beta', '2026-07-15'),
+--   ('cliente2@ejemplo.com', 'CODIGO2', 'beta', '2026-07-16')
 -- on conflict (email) do update
 --   set codigo = excluded.codigo, activo = true;
 
--- Comprobar que entraron:
--- select email, activo, plan, expira from miembros order by alta desc;
+-- Comprobar que entraron (y ver cuándo caduca cada prueba):
+-- select email, activo, plan, alta::date, expira::date from miembros order by alta desc;
