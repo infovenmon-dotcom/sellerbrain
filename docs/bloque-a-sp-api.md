@@ -83,6 +83,18 @@
    select count(*) from settlement_lineas; -- tarifas reales
    ```
 
+## ¿Y para TODOS los vendedores? (futuro Plan Completo para clientes)
+El acceso privado de esta guía solo conecta la cuenta propia. Para que cualquier
+vendedor autorice SellerBrain (como ya hacen con la Ads API) hay que **ampliar
+el perfil de desarrollador a público**:
+- Es el mismo perfil, la misma app y los mismos roles — se amplía y Amazon
+  re-revisa con un cuestionario de seguridad más exigente (semanas).
+- Nada de lo hecho en privado se pierde; el Worker ya tiene el patrón OAuth
+  (flujo de Ads) que se replica para SP-API.
+- Ventaja: al ir SIN PII, la revisión pública es mucho más llevadera.
+**Estrategia: privado ahora (datos propios ya) → público cuando el Plan
+Completo para clientes esté listo para venderse.**
+
 ## Estado
 - [ ] Fase 1 enviada (fecha: ____)
 - [ ] Aprobación recibida (fecha: ____)
