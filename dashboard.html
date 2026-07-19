@@ -228,7 +228,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
     <div class="dz" id="dz-orders" onclick="document.getElementById('f-orders').click()">
       <div style="font-size:20px">🛒</div><b>1 · Pedidos (All Orders)</b>
-      <div class="dz-sub">Informes → Logística de Amazon → Todos los pedidos (.txt, últimos 30-60 días)</div>
+      <div class="dz-sub">Todos los pedidos (.txt) · <b>Transacciones de Pagos</b> (.csv) · <b>Informe IVA mensual</b> (.csv) — el tipo se detecta solo</div>
       <div class="dz-ok" id="ok-orders"></div>
       <input type="file" id="f-orders" accept=".txt,.csv,.tsv" style="display:none" onchange="csvLeer(this.files[0],'orders')">
     </div>
@@ -643,11 +643,66 @@ function csvLeer(file, tipo){
     reader.readAsArrayBuffer(file);
   } else {
     reader.onload=function(e){
-      CSV_RAW[tipo]=csvParsearPlano(e.target.result);
+      CSV_RAW[tipo]=csvAdaptar(csvParsearPlano(e.target.result));
       csvMarcarOk(tipo, file.name, CSV_RAW[tipo].length);
     };
-    reader.readAsText(file,'ISO-8859-1'); // flat files de Amazon EU
+    // Flat files de Amazon (.txt/.tsv) van en latin-1; los CSV nuevos (IVA,
+    // Transacciones) vienen en UTF-8.
+    reader.readAsText(file, /\.(txt|tsv)$/i.test(file.name)?'ISO-8859-1':'UTF-8');
   }
+}
+
+// Autodetección de informes de Seller Central y conversión al formato interno
+// (equivalente a "All Orders"). Soporta:
+//  · Transacciones de Pagos (rango de fechas): trae TARIFAS REALES por pedido
+//    (comisión+FBA juntas), reembolsos y reembolsos de inventario. Las unidades
+//    se aproximan a 1 por pedido (el informe no trae cantidad).
+//  · Informe de IVA mensual (VAT Transactions): ventas por SKU con unidades
+//    reales, más reembolsos.
+function csvAdaptar(rows){
+  if(!rows.length) return rows;
+  var keys=Object.keys(rows[0]);
+  var kTipo=null; keys.forEach(function(k){ if(k.indexOf('tipo de transacci')===0) kTipo=k; });
+  var esIva=keys.indexOf('transaction_type')>-1&&keys.indexOf('activity_period')>-1;
+  if(kTipo){
+    window.CSV_FEES={porSku:{},total:0,ventas:0};
+    window.CSV_EXTRA=window.CSV_EXTRA||{reembolsos:0,reembInv:0,nReembInv:0};
+    var out=[];
+    rows.forEach(function(r){
+      var tipo=r[kTipo]||'';
+      var prod=(r['detalles del producto']||'—').slice(0,38);
+      var m=(r['fecha']||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      var iso=m?m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2):'';
+      if(tipo==='Pago del pedido'){
+        var cargos=csvNum(r['cargos por producto (total)']),fee=Math.abs(csvNum(r['tarifas de amazon']));
+        out.push({'sku':prod,'purchase-date':iso,'quantity':'1','item-price':String(cargos)});
+        if(!CSV_FEES.porSku[prod])CSV_FEES.porSku[prod]={total:0,uds:0};
+        CSV_FEES.porSku[prod].total+=fee; CSV_FEES.porSku[prod].uds++;
+        CSV_FEES.total+=fee; CSV_FEES.ventas+=cargos;
+      } else if(tipo==='Reembolso'){
+        CSV_EXTRA.reembolsos+=Math.abs(csvNum(r['total (eur)']));
+      } else if(tipo==='Reembolso de inventario'){
+        CSV_EXTRA.reembInv+=csvNum(r['total (eur)']); CSV_EXTRA.nReembInv++;
+      }
+    });
+    return out;
+  }
+  if(esIva){
+    window.CSV_EXTRA=window.CSV_EXTRA||{reembolsos:0,reembInv:0,nReembInv:0};
+    var out2=[];
+    rows.forEach(function(r){
+      var t=r['transaction_type'];
+      var m=(r['tax_calculation_date']||'').match(/(\d{2})-(\d{2})-(\d{4})/);
+      var iso=m?m[3]+'-'+m[2]+'-'+m[1]:'';
+      if(t==='SALE'){
+        out2.push({'sku':r['seller_sku']||'—','purchase-date':iso,'quantity':r['qty']||'1','item-price':r['total_activity_value_amt_vat_incl']||'0'});
+      } else if(t==='REFUND'){
+        CSV_EXTRA.reembolsos+=Math.abs(csvNum(r['total_activity_value_amt_vat_incl']));
+      }
+    });
+    return out2;
+  }
+  return rows;
 }
 
 function csvMarcarOk(tipo, nombre, filas){
@@ -695,7 +750,7 @@ function csvAnalizar(){
     SB_CONFIG.mode='csv';
     localStorage.setItem('sb_csv_payload', JSON.stringify(payload));
     aplicarDatos(payload);
-    msg.textContent='✓ Análisis completado con tus datos.';
+    var extra='';if(window.CSV_FEES&&CSV_FEES.ventas>0)extra+=' · tarifas reales aplicadas';if(window.CSV_EXTRA&&CSV_EXTRA.nReembInv>0)extra+=' · Amazon te reembolsó €'+CSV_EXTRA.reembInv.toFixed(2)+' por inventario ('+CSV_EXTRA.nReembInv+' abonos)';msg.textContent='✓ Análisis completado con tus datos.'+extra;
     togglePanel();
     window.scrollTo({top:0,behavior:'smooth'});
   }catch(e){ msg.textContent='❌ '+e.message; }
