@@ -95,9 +95,16 @@ el perfil de desarrollador a público**:
 **Estrategia: privado ahora (datos propios ya) → público cuando el Plan
 Completo para clientes esté listo para venderse.**
 
+> NOTA (jul-2026): Amazon ha movido el registro al **Solution Provider Portal**
+> (solutionproviderportal.amazon.com). El flujo real fue: registrarse → elegir
+> la cuenta de vendedor existente → "Crear aplicaciones que usen las API del
+> colaborador comercial" → verificar identidad (KYC: registro de empresa + DNI)
+> → configurar perfil/roles/seguridad (respuestas de esta guía) → crear la app.
+
 ## Estado
-- [ ] Fase 1 enviada (fecha: ____)
-- [ ] Aprobación recibida (fecha: ____)
-- [ ] App creada y autorizada
+- [x] Registro en Solution Provider Portal completado (19-07-2026)
+- [ ] Identidad verificada (KYC empresa + DNI)
+- [ ] Perfil/roles/seguridad configurados (5 roles, sin PII)
+- [ ] App de producción creada y autorizada (Client ID/Secret + Refresh Token)
 - [ ] Secretos en Cloudflare
 - [ ] Primera ingesta 'completo' verificada
