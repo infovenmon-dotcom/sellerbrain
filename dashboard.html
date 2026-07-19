@@ -234,7 +234,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     </div>
     <div class="dz" id="dz-settle" onclick="document.getElementById('f-settle').click()">
       <div style="font-size:20px">💶</div><b>2 · Extracto (Settlement V2)</b>
-      <div class="dz-sub">Informes → Pagos → Todos los extractos → Archivo plano V2 (.txt)</div>
+      <div class="dz-sub">Settlement V2 (.txt) · o <b>Transacciones de Pagos</b> (.csv) — de aquí salen las tarifas REALES</div>
       <div class="dz-ok" id="ok-settle"></div>
       <input type="file" id="f-settle" accept=".txt,.csv,.tsv" style="display:none" onchange="csvLeer(this.files[0],'settle')">
     </div>
