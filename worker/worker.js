@@ -69,9 +69,13 @@ export default {
       if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/login') {
         const auth = (request.headers.get('Authorization') || '').replace('Bearer ', '');
         const key = auth || url.searchParams.get('key') || '';
-        if (!env.SB_API_KEY || key !== env.SB_API_KEY) {
-          return json({ error: 'no_autorizado' }, cors, 401);
-        }
+        let ok = env.SB_API_KEY && key === env.SB_API_KEY;
+        // Endpoints de LECTURA que un miembro puede consultar con su token de
+        // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
+        // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
+        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan';
+        if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
+        if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
 
       // --- Login propio del portal (público): valida email+código en el
@@ -869,6 +873,29 @@ function b64url(bytes) {
   let bin = '';
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  const bin = atob(str);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+// Verifica el JWT del login (firma HMAC + caducidad). Devuelve el payload o null.
+async function verificarJWT(env, token) {
+  if (!env.SB_JWT_SECRET || !token || token.split('.').length !== 3) return null;
+  const [h, b, s] = token.split('.');
+  const key = await crypto.subtle.importKey('raw',
+    new TextEncoder().encode(env.SB_JWT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(h + '.' + b));
+  if (b64url(new Uint8Array(sig)) !== s) return null;          // firma no coincide
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(b64urlDecode(b)));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null; // caducado
+    return payload;
+  } catch (_) { return null; }
 }
 
 /* ===== utils ===== */

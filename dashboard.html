@@ -441,16 +441,28 @@ var SB_CONFIG = {
   apiKey: localStorage.getItem('sb_api_key') || ''
 };
 
+// Miembro autenticado: usa su token de login (fba_token) para leer SUS datos
+// reales vía API. Si no hay token, se queda en demo hasta que suba CSV o conecte.
+(function(){
+  try{
+    var tok = sessionStorage.getItem('fba_token');
+    if(tok && !SB_CONFIG.apiKey){ SB_CONFIG.mode='api'; SB_CONFIG.apiKey=tok; }
+  }catch(e){}
+})();
+
 var SB_PROVIDERS = {
   demo: function(){ return Promise.resolve(SB_DEMO); },
   api: function(){
+    window._apiFallo=false;
     return fetch(SB_CONFIG.apiBase + '/v1/dashboard', {
       headers: SB_CONFIG.apiKey ? {'Authorization':'Bearer '+SB_CONFIG.apiKey} : {}
     }).then(function(r){
       if(!r.ok) throw new Error('API '+r.status);
       return r.json(); // debe cumplir el mismo contrato que SB_DEMO
     }).catch(function(e){
-      console.warn('API no disponible, usando demo:', e.message);
+      console.warn('API no disponible:', e.message);
+      window._apiFallo=true;           // marca que no se pudo leer la API
+      SB_CONFIG.mode='demo';           // no mentir: si falla, es demo
       return SB_DEMO;
     });
   }
@@ -650,6 +662,22 @@ function aplicarDatos(d){
       el.innerHTML='<span class="dot"></span> Datos: '+(SB_CONFIG.mode==='demo'?'demo':SB_CONFIG.mode==='csv'?'tus archivos':(mins<60?'hace '+mins+' min':'hace '+Math.round(mins/60)+' h'));}
   }
   renderTiles();renderPnl();renderChart();renderProds();renderCerebro();renderAlertas();renderStock();
+  avisoDatos();
+}
+// Banner honesto: distingue "conectado sin ventas aún" de "demo" de "falló la API".
+function avisoDatos(){
+  var id='banner-datos', b=document.getElementById(id), msg='';
+  if(window._apiFallo){
+    msg='⚠️ No pude leer tus datos de la cuenta (muestro demo). Revisa tu sesión, o sube tus informes (CSV).';
+  } else if(SB_CONFIG.mode==='api' && (!PRODUCTOS||!PRODUCTOS.length)){
+    msg='🔌 Conectado a tu cuenta — aún sin ventas cargadas. Se llenará cuando la conexión con Amazon (SP-API) empiece a traer datos. Mientras, sube tus informes (CSV) para verlo ya.';
+  }
+  if(!msg){ if(b)b.remove(); return; }
+  if(!b){ b=document.createElement('div'); b.id=id;
+    b.style.cssText='margin:0 0 12px;padding:10px 14px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:10px;font-size:12px;color:var(--am);line-height:1.5';
+    var host=document.getElementById('vista-dash'); if(host)host.insertBefore(b, host.firstChild);
+  }
+  b.textContent=msg;
 }
 cargarDatos().then(aplicarDatos);
 
