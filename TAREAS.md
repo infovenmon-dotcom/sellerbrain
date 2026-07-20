@@ -157,6 +157,20 @@ Hasta entonces no se puede parametrizar el motor con su método.
 
 ---
 
+## Módulos del dashboard — hechos (jul-2026)
+- **EPR envases (`epr.html`):** declaración por país con 6 materiales de embalaje
+  (cartón, plástico, madera, metal, vidrio, otros). Sube el All Orders, pesa el
+  envase una vez por SKU, calcula kg/país/material y **descarga la declaración en CSV**
+  para presentarla al eco-organismo. Todo en el navegador.
+- **Devoluciones (`devoluciones.html`):** sube el informe FBA "Devoluciones de clientes"
+  (opcional: All Orders para la tasa %). Separa los motivos **controlables**
+  (ficha/expectativa, calidad, tallaje) de los **no controlables** (cliente cambió de idea,
+  logística, fraude), con recomendación por bloque. Muestra revendible vs pérdida,
+  reembolsos de Amazon, tabla de SKUs a revisar y **descarga CSV**. Todo en el navegador.
+  Ambos ya enlazados en la barra lateral del dashboard (`TOOL_SRC`).
+
+---
+
 ## Orden recomendado
 1 (limpieza) → 3 (confirmar cron, rápido) → 2 (login Worker, la gorda) → 4 (motor acciones)
 → 5 (reglas David, cuando las traiga) → 6 (tokens) → 7 (SP-API, en paralelo, la inicia Venmon)
