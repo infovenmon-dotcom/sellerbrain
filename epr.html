@@ -83,6 +83,13 @@ input.gr:focus{border-color:var(--or);outline:none}
   </div>
   <div class="oksub" id="ok-orders"></div>
   <div class="err" id="err"></div>
+  <div id="periodo-box" style="display:none;margin-top:12px;padding:12px 14px;background:var(--card2);border:1px solid var(--bd);border-radius:10px">
+    <div style="font-size:10.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;font-weight:700">🗓️ Periodo a declarar</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <select id="sel-periodo" onchange="aplicarPeriodo()" style="padding:9px 11px;background:#111;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-size:12.5px;font-family:'DM Sans',sans-serif"></select>
+      <span style="font-size:11px;color:var(--mu);max-width:520px">Las declaraciones EPR suelen ser <b>anuales</b> (kg puestos en el mercado en el año natural); algunos países/organismos piden <b>trimestrales</b>. Cada país es una declaración aparte — abajo verás los kg de cada mercado por separado.</span>
+    </div>
+  </div>
 </div>
 
 <!-- PASO 2 -->
@@ -91,7 +98,7 @@ input.gr:focus{border-color:var(--or);outline:none}
   <div class="inf">Pesa una vez cada envase con una báscula de cocina: <b>envase de venta + caja de envío + relleno</b> (producto envasado − producto). Repártelo por material — es como lo piden los eco-organismos. Se guarda en tu navegador.</div>
   <div style="overflow-x:auto">
   <table>
-    <thead><tr><th>SKU</th><th>Uds/año</th><th>Cartón/papel (g)</th><th>Plástico (g)</th><th>Madera (g)</th><th>Metal (g)</th><th>Vidrio (g)</th><th>Otros (g)</th><th>Total</th></tr></thead>
+    <thead><tr><th>SKU</th><th>Uds (periodo)</th><th>Cartón/papel (g)</th><th>Plástico (g)</th><th>Madera (g)</th><th>Metal (g)</th><th>Vidrio (g)</th><th>Otros (g)</th><th>Total</th></tr></thead>
     <tbody id="tabla-skus"></tbody>
   </table>
   </div>
@@ -105,7 +112,7 @@ input.gr:focus{border-color:var(--or);outline:none}
 <!-- PASO 3: RESULTADOS -->
 <div id="resultados" style="display:none">
   <div class="card">
-    <div class="ct"><span class="ci">3️⃣</span> Tu informe EPR — kg de envases por país (últimos 12 meses)</div>
+    <div class="ct"><span class="ci">3️⃣</span> Tu informe EPR — kg de envases por país (<span id="periodo-lbl">todo el archivo</span>)</div>
     <div class="inf">Estos son los números que declaran los eco-organismos, repartidos por material. La casilla de cada trámite se guarda para que lleves tu propio control.</div>
   </div>
   <div class="paises" id="paises"></div>
@@ -117,7 +124,7 @@ input.gr:focus{border-color:var(--or);outline:none}
 </div>
 
 <div class="disclaimer">
-⚠️ Herramienta orientativa de cálculo y organización — no constituye asesoría legal ni fiscal. Los umbrales, tarifas y obligaciones de cada eco-organismo cambian con frecuencia (especialmente con la entrada del PPWR en agosto de 2026): confirma siempre los importes y regímenes con el organismo o representante de cada país antes de declarar. SellerBrain procesa todo en tu navegador; tus datos no salen de tu equipo.
+⚠️ Herramienta orientativa de cálculo y organización — no constituye asesoría legal ni fiscal. <b>Alcance:</b> aplica a los marketplaces de la <b>UE</b> (Reglamento PPWR); cada país tiene su propio eco-organismo y calendario (anual o, en algunos, trimestral) y trata los materiales de forma distinta. En <b>EE. UU. no existe todavía un EPR de envases exigido por Amazon</b> (varios estados —California SB 54, Oregón, Colorado, Minnesota…— lo están implantando de forma escalonada entre 2025 y 2027). Los umbrales y tarifas cambian con frecuencia: confirma siempre importes y regímenes con el organismo o representante de cada país antes de declarar. SellerBrain procesa todo en tu navegador; tus datos no salen de tu equipo.
 </div>
 
 </div>
@@ -172,7 +179,8 @@ var PAISES = {
     tasa:'Por debajo del umbral de tonelaje la contribución puede ser 0 € — confirma si el registro sigue siendo necesario.'}
 };
 
-var unidadesPorSku = {};   // {sku: {ES: n, FR: n, ...}}
+var unidadesPorSku = {};   // {sku: {ES: n, FR: n, ...}} (ya filtrado por periodo)
+var ORDERS_RAW = [];       // [{sku,pais,uds,fecha:Date|null}] crudo del All Orders
 var PESOS = JSON.parse(localStorage.getItem('sb_epr_pesos')||'{}'); // {sku:{carton,plastico,otros}}
 var CHECKS = JSON.parse(localStorage.getItem('sb_epr_checks')||'{}');
 
@@ -203,14 +211,24 @@ function canalAPais(canal){
   return null;
 }
 
+function parseFecha(s){
+  if(!s)return null;
+  var m=String(s).match(/(\d{4})-(\d{2})-(\d{2})/);          // ISO: 2025-03-14T...
+  if(m)return new Date(+m[1],+m[2]-1,+m[3]);
+  var m2=String(s).match(/(\d{2})[\/.](\d{2})[\/.](\d{4})/);  // dd/mm/yyyy
+  if(m2)return new Date(+m2[3],+m2[2]-1,+m2[1]);
+  return null;
+}
+function trimestreMeses(q){return ['ene–mar','abr–jun','jul–sep','oct–dic'][q-1];}
+
 function leerOrders(file){
   if(!file)return;
   var r=new FileReader();
   r.onload=function(e){
     try{
       var rows=parsearPlano(e.target.result);
-      unidadesPorSku={};
-      var total=0, sinCanal=0;
+      ORDERS_RAW=[];
+      var sinCanal=0, sinFecha=0;
       rows.forEach(function(x){
         var estado=(x['item-status']||x['order-status']||'').toLowerCase();
         if(estado.indexOf('cancel')>-1)return;
@@ -218,17 +236,67 @@ function leerOrders(file){
         var pais=canalAPais(x['sales-channel']);
         if(!pais){sinCanal++;return;}
         var uds=+x['quantity']||0;
-        if(!unidadesPorSku[sku])unidadesPorSku[sku]={};
-        unidadesPorSku[sku][pais]=(unidadesPorSku[sku][pais]||0)+uds;
-        total+=uds;
+        if(!uds)return;
+        var fecha=parseFecha(x['purchase-date']||x['purchase date']||x['payments-date']||x['last-updated-date']);
+        if(!fecha)sinFecha++;
+        ORDERS_RAW.push({sku:sku,pais:pais,uds:uds,fecha:fecha});
       });
-      if(!total){mostrarError('No encontré unidades con marketplace reconocible. ¿Es el informe All Orders con la columna sales-channel?');return;}
-      document.getElementById('ok-orders').textContent='✓ '+file.name+' · '+total+' unidades en '+Object.keys(unidadesPorSku).length+' SKUs'+(sinCanal?' ('+sinCanal+' filas de otros marketplaces ignoradas)':'');
+      if(!ORDERS_RAW.length){mostrarError('No encontré unidades con marketplace reconocible. ¿Es el informe All Orders con la columna sales-channel?');return;}
+      window._ordMeta={file:file.name,sinCanal:sinCanal,sinFecha:sinFecha};
       document.getElementById('err').style.display='none';
-      pintarTablaSkus();
+      construirPeriodos();
+      aplicarPeriodo();
     }catch(err){mostrarError('Error al leer: '+err.message);}
   };
   r.readAsText(file,'ISO-8859-1');
+}
+
+function construirPeriodos(){
+  var anios={};
+  ORDERS_RAW.forEach(function(o){ if(o.fecha) anios[o.fecha.getFullYear()]=true; });
+  var lista=Object.keys(anios).sort().reverse();
+  var opts='<option value="all">Todo el archivo</option>';
+  lista.forEach(function(y){
+    opts+='<option value="Y'+y+'">Año '+y+' (natural)</option>';
+    for(var q=4;q>=1;q--){ opts+='<option value="Q'+y+'-'+q+'">T'+q+' '+y+' · '+trimestreMeses(q)+'</option>'; }
+  });
+  var sel=document.getElementById('sel-periodo');
+  sel.innerHTML=opts;
+  sel.value = lista.length ? 'Y'+lista[0] : 'all';   // por defecto, el año más reciente
+  document.getElementById('periodo-box').style.display = lista.length ? 'block' : 'none';
+}
+
+function periodoEtiqueta(v){
+  if(v.charAt(0)==='Y')return 'año '+v.slice(1);
+  if(v.charAt(0)==='Q'){var p=v.slice(1).split('-');return 'T'+p[1]+' '+p[0];}
+  return 'todo el archivo';
+}
+
+function aplicarPeriodo(){
+  var selEl=document.getElementById('sel-periodo');
+  var v=selEl?selEl.value:'all';
+  var filtro=function(){return true;};
+  if(v.charAt(0)==='Y'){var y=+v.slice(1);filtro=function(o){return o.fecha&&o.fecha.getFullYear()===y;};}
+  else if(v.charAt(0)==='Q'){var p=v.slice(1).split('-');var yy=+p[0],qq=+p[1];filtro=function(o){return o.fecha&&o.fecha.getFullYear()===yy&&(Math.floor(o.fecha.getMonth()/3)+1)===qq;};}
+  unidadesPorSku={};
+  var total=0;
+  ORDERS_RAW.forEach(function(o){
+    if(!filtro(o))return;
+    if(!unidadesPorSku[o.sku])unidadesPorSku[o.sku]={};
+    unidadesPorSku[o.sku][o.pais]=(unidadesPorSku[o.sku][o.pais]||0)+o.uds;
+    total+=o.uds;
+  });
+  window._periodoEtiqueta=periodoEtiqueta(v);
+  var meta=window._ordMeta||{};
+  document.getElementById('ok-orders').textContent='✓ '+(meta.file||'')+' · '+total+' unidades ('+window._periodoEtiqueta+') en '+Object.keys(unidadesPorSku).length+' SKUs'+(meta.sinCanal?' · '+meta.sinCanal+' de otros marketplaces ignoradas':'');
+  if(!total){
+    document.getElementById('tabla-skus').innerHTML='<tr><td colspan="9" style="color:var(--mu);text-align:center;padding:16px">No hay ventas en este periodo. Elige otro arriba.</td></tr>';
+    document.getElementById('paso2').style.display='block';
+    document.getElementById('resultados').style.display='none';
+    return;
+  }
+  pintarTablaSkus();
+  if(document.getElementById('resultados').style.display==='block')calcular();
 }
 
 function demoManual(){
@@ -242,7 +310,7 @@ function demoManual(){
     var n=parseInt(v)||0;
     if(n>0){unidadesPorSku['MI-PRODUCTO'][paises[i]]=n;alguna=true;}
   }
-  if(alguna){document.getElementById('ok-orders').textContent='✓ Unidades introducidas a mano';pintarTablaSkus();}
+  if(alguna){window._periodoEtiqueta='introducido a mano';document.getElementById('periodo-box').style.display='none';document.getElementById('ok-orders').textContent='✓ Unidades introducidas a mano';pintarTablaSkus();}
 }
 
 function mostrarError(m){var e=document.getElementById('err');e.style.display='block';e.innerHTML='❌ '+m;}
@@ -327,9 +395,10 @@ function calcular(){
   });
   document.getElementById('paises').innerHTML=h;
   window._eprPorPais=porPais;
+  var _pl=document.getElementById('periodo-lbl'); if(_pl)_pl.textContent=window._periodoEtiqueta||'todo el archivo';
 
   // Resumen copiable
-  var txt='INFORME EPR ENVASES — '+new Date().toLocaleDateString('es-ES')+' (últimos 12 meses aprox.)\n';
+  var txt='INFORME EPR ENVASES — Periodo: '+(window._periodoEtiqueta||'todo el archivo')+' (generado '+new Date().toLocaleDateString('es-ES')+')\n';
   Object.keys(porPais).forEach(function(pais){
     var d=porPais[pais];
     var det=MATS.filter(function(m){return d[m.k]>0.001;}).map(function(m){return m.n.toLowerCase()+' '+f(d[m.k],2)+' kg';}).join(' · ');
@@ -358,6 +427,7 @@ function descargarEPR(){
     lineas.push(fila.join(SEP));
   });
   lineas.push('');
+  lineas.push('Periodo declarado: '+(window._periodoEtiqueta||'todo el archivo')+'.');
   lineas.push('Declaracion EPR de envases generada por SellerBrain el '+new Date().toLocaleDateString('es-ES')+' — kg de material puestos en el mercado por pais (segun unidades vendidas).');
   var csv='\ufeff'+lineas.join('\r\n'); // BOM para acentos en Excel
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
