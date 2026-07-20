@@ -56,7 +56,17 @@ confirmado que corra bien (los primeros datos entraron por prueba manual).
 
 ---
 
-## TAREA 4 — Motor de acciones automático desde ppc_terminos
+## TAREA 4 — Motor de acciones automático desde ppc_terminos ✅ (hecho 20-07-2026)
+> **Hecho:** `generarAcciones()` (worker.js) ahora lee `ppc_terminos` (último snapshot)
+> y genera 3 tipos de acción con reglas en `REGLAS_PPC` (editables): **Negativiza**
+> (0 pedidos y ≥8 clics → € real desperdiciado), **Baja la puja** (ACoS ≥60%, muestra
+> ACoS real) y **Escala** (ACoS ≤20% y ≥2 pedidos). Se fusionan con la acción de
+> producto, se ordenan por impacto y se limitan a 10. Además el **cron** recoge los
+> términos a `ppc_terminos` cada **lunes** (ES/FR/IT) para que salga sin subir nada.
+> Los umbrales de `REGLAS_PPC` son el enganche para los de David (TAREA 5).
+> Nota honesta: son **recomendaciones**, no ejecuta cambios en las campañas de Amazon.
+
+
 **Por qué:** el diferencial de SellerBrain es "cada dato → una acción con €". Ya recogemos
 términos de búsqueda por API (tabla `ppc_terminos`). Falta que el motor genere solo las
 acciones "negativiza X" sin que el usuario suba nada.

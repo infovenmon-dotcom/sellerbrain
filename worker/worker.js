@@ -579,6 +579,27 @@ async function ingestaDiaria(env, origen) {
     } catch (e) { resultado.pasos.push({ ['ppc_' + pais + '_error']: e.message }); }
   }
 
+  // 5. Términos de búsqueda → ppc_terminos (para el motor de acciones).
+  //    Semanal (solo lunes UTC): el informe es un resumen de 30 días, no hace
+  //    falta a diario y así no saturamos la Ads API.
+  if (new Date().getUTCDay() === 1) {
+    const hastaT = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
+    for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
+      try {
+        const filas = await adsInformeTerminos(env, profileId, desdeT, hastaT);
+        await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({
+          pais, desde: desdeT, hasta: hastaT,
+          termino: t.searchTerm || '', keyword: t.keyword || '', tipo: t.matchType || '',
+          campania: t.campaignName || '',
+          gasto: +(t.cost || 0).toFixed(2), clics: t.clicks || 0, impresiones: t.impressions || 0,
+          ventas_ppc: +(t.sales14d || 0).toFixed(2), pedidos_ppc: t.purchases14d || 0
+        })));
+        resultado.pasos.push({ ['terminos_' + pais]: filas ? filas.length : 0 });
+      } catch (e) { resultado.pasos.push({ ['terminos_' + pais + '_error']: e.message }); }
+    }
+  }
+
   // Acta de la ejecución: queda registrada aunque haya fallos parciales
   try {
     await upsertSupabase(env, 'ingestas', [{
@@ -616,17 +637,78 @@ async function construirDashboard(env) {
   };
 }
 
+// Umbrales del motor (editables · aquí entrarán los de David — TAREA 5)
+const REGLAS_PPC = {
+  negClicsMin: 8,     // NEGATIVIZAR: 0 pedidos y al menos este nº de clics
+  acosAlto: 0.60,     // BAJAR PUJA:  >=1 pedido y ACoS por encima de esto
+  acosBajo: 0.20,     // ESCALAR:     ACoS por debajo de esto
+  escPedidosMin: 2    // ESCALAR:     al menos este nº de pedidos
+};
+
 async function generarAcciones(env, productos) {
   const acciones = [];
+
+  // --- 1) Acciones a nivel de PRODUCTO (P&L), como hasta ahora ---
   for (const p of (productos || [])) {
     if (p.mg < 0 && p.ppc > 0) acciones.push({
+      _v: p.ppc,
       ic: '⏸️', bg: 'rgba(245,166,35,.15)', c: 'var(--am)',
       t: 'Pausa PPC de «' + p.nom + '»',
       v: '+' + p.ppc.toFixed(2).replace('.', ',') + '€/mes',
       p: 'Margen ' + p.mg + '%: cada venta con clic pierde dinero'
     });
   }
-  return acciones.slice(0, 5);
+
+  // --- 2) Acciones a nivel de TÉRMINO de búsqueda (ppc_terminos) ---
+  // Se usa solo el último snapshot (max hasta) para no contar dos veces.
+  try {
+    const filas = await selectSupabase(env, 'ppc_terminos?order=hasta.desc,gasto.desc&limit=800');
+    if (filas && filas.length) {
+      const maxHasta = filas[0].hasta;
+      for (const t of filas.filter(f => f.hasta === maxHasta)) {
+        const gasto = +t.gasto || 0, clics = +t.clics || 0;
+        const pedidos = +t.pedidos_ppc || 0, ventas = +t.ventas_ppc || 0;
+        const acos = ventas > 0 ? gasto / ventas : null;
+        const term = (t.termino || '').slice(0, 60);
+        const donde = t.campania ? ' · ' + t.campania : '';
+
+        // NEGATIVIZAR — desperdicio puro → € real ahorrado (= lo gastado sin vender)
+        if (pedidos === 0 && clics >= REGLAS_PPC.negClicsMin && gasto > 0) {
+          acciones.push({
+            _v: gasto,
+            ic: '🚫', bg: 'rgba(232,64,64,.15)', c: 'var(--rd)',
+            t: 'Negativiza «' + term + '»' + donde,
+            v: '+' + gasto.toFixed(2).replace('.', ',') + '€/mes',
+            p: clics + ' clics y 0 ventas en 30 días: gasto tirado'
+          });
+        }
+        // BAJAR PUJA — sangra (ACoS alto). Muestra ACoS real, sin € prometido.
+        else if (pedidos >= 1 && acos !== null && acos >= REGLAS_PPC.acosAlto) {
+          acciones.push({
+            _v: gasto,
+            ic: '📉', bg: 'rgba(245,166,35,.15)', c: 'var(--am)',
+            t: 'Baja la puja de «' + term + '»' + donde,
+            v: 'ACoS ' + Math.round(acos * 100) + '%',
+            p: 'Gasta ' + gasto.toFixed(2).replace('.', ',') + '€ con ACoS alto (' + pedidos + ' pedidos)'
+          });
+        }
+        // ESCALAR — oro (ACoS bajo y convierte). Muestra ACoS real.
+        else if (pedidos >= REGLAS_PPC.escPedidosMin && acos !== null && acos <= REGLAS_PPC.acosBajo) {
+          acciones.push({
+            _v: ventas,
+            ic: '🚀', bg: 'rgba(46,230,160,.15)', c: 'var(--or)',
+            t: 'Escala «' + term + '»' + donde,
+            v: 'ACoS ' + Math.round(acos * 100) + '%',
+            p: pedidos + ' pedidos y ACoS bajo: sube puja o crea campaña exacta'
+          });
+        }
+      }
+    }
+  } catch (e) { /* si aún no hay términos, el motor sigue con las de producto */ }
+
+  // Ordenar por impacto (€/ventas reales) y limitar; quitar el campo interno _v
+  acciones.sort((a, b) => (b._v || 0) - (a._v || 0));
+  return acciones.slice(0, 10).map(a => { const { _v, ...rest } = a; return rest; });
 }
 
 /* =====================================================================
