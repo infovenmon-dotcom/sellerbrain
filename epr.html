@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SellerBrain — EPR Envases · Calculadora de cumplimiento</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
@@ -93,13 +94,13 @@ input.gr:focus{border-color:var(--or);outline:none}
 </div>
 
 <!-- PASO 2 -->
-<div class="card" id="paso2" style="display:none">
-  <div class="ct"><span class="ci">2️⃣</span> Peso del envase por producto</div>
-  <div class="inf">Pesa una vez cada envase con una báscula de cocina: <b>envase de venta + caja de envío + relleno</b> (producto envasado − producto). Repártelo por material — es como lo piden los eco-organismos. Se guarda en tu navegador.</div>
+<div class="card" id="paso2">
+  <div class="ct"><span class="ci">2️⃣</span> Peso del envase por producto <span style="font-size:11px;font-weight:400;color:var(--mu)">— lo pones tú, una sola vez</span></div>
+  <div class="inf">Este dato no lo tiene Amazon: lo pones tú. Pesa una vez cada envase con una <b>báscula de cocina</b> (<b>envase de venta + caja de envío + relleno</b>) y reparte los gramos por material en la tabla — es como lo piden los eco-organismos. SellerBrain multiplica ese peso por las unidades vendidas del periodo. Se guarda en tu navegador, así que solo lo haces una vez.</div>
   <div style="overflow-x:auto">
   <table>
     <thead><tr><th>SKU</th><th>Uds (periodo)</th><th>Cartón/papel (g)</th><th>Plástico (g)</th><th>Madera (g)</th><th>Metal (g)</th><th>Vidrio (g)</th><th>Otros (g)</th><th>Total</th></tr></thead>
-    <tbody id="tabla-skus"></tbody>
+    <tbody id="tabla-skus"><tr><td colspan="9" style="text-align:center;color:var(--mu);padding:18px;font-weight:400">👆 Sube primero el informe del Paso 1 (o pulsa "introducir unidades a mano") y aquí aparecerá <b>una fila por producto</b> para escribir el peso del envase.</td></tr></tbody>
   </table>
   </div>
   <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap">

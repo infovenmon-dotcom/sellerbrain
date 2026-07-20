@@ -144,6 +144,25 @@ NO se empieza hasta que la TAREA 7 esté aprobada y entrando datos.
 
 ---
 
+## TAREA 11 — Datos reales de PPC por hora (Amazon Marketing Stream)
+**Por qué:** el módulo "PPC · Horas" (dayparting) ya analiza y propone franjas, pero hoy la
+demo son datos **simulados** y el modo real exige un CSV con columna de hora que Amazon **no
+genera** en sus informes normales (son diarios). La única fuente legítima de datos horarios es
+**Amazon Marketing Stream** (feed push near-real-time).
+
+**Qué hacer:**
+- Suscribir la cuenta a **Amazon Marketing Stream** (datasets `sp-traffic` y `sp-conversion`,
+  que traen la hora en `time_window_start`). Entrega por AWS SQS/Firehose → endpoint del Worker.
+- Guardar los buckets horarios en Supabase (tabla `ppc_horas` o similar) y que el módulo
+  "PPC · Horas" lea de ahí en vez de pedir CSV → sale solo, sin subir nada.
+- Alternativa provisional (peor): sondear la Ads API cada hora y calcular deltas — solo hacia
+  adelante y menos fiable. Preferir Marketing Stream.
+
+**Dónde:** worker.js (nuevo consumidor de Stream + ingesta) + Supabase (tabla horaria) +
+ppc-horas.html / dashboard (leer datos reales). El análisis del front ya está hecho.
+
+---
+
 ## TAREA 10 — App móvil / de escritorio (más adelante)
 **Por qué:** llevar SellerBrain a una app propia. Fase posterior, sin prisa.
 

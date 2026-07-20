@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SellerBrain — PPC por Horas · Dayparting</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -117,11 +118,14 @@ td{padding:6px;border-bottom:1px solid rgba(255,255,255,.05)}
        onclick="document.getElementById('file').click()">
     <div style="font-size:30px;margin-bottom:6px">📊</div>
     <div style="font-weight:700;font-size:13px">Arrastra el export horario o haz clic para seleccionar</div>
-    <div style="font-size:11px;color:var(--mu);margin-top:3px">.csv o .xlsx · export del Administrador de campañas con granularidad por hora</div>
+    <div style="font-size:11px;color:var(--mu);margin-top:3px">.csv o .xlsx con columna de <b>hora</b> — hoy solo lo genera un feed horario (Amazon Marketing Stream) o una herramienta que ya lo capture</div>
     <input type="file" id="file" accept=".csv,.xlsx,.xls,.tsv,.txt" style="display:none" onchange="cargar(this.files[0])">
   </div>
   <div style="text-align:center;margin-top:10px">
-    <button class="btn-sec" onclick="demo()">👀 Ver con datos de ejemplo</button>
+    <button class="btn-sec" onclick="demo()">👀 Ver con datos de ejemplo (simulados)</button>
+  </div>
+  <div style="font-size:10.5px;color:var(--mu);text-align:center;margin-top:8px;line-height:1.5;max-width:620px;margin-left:auto;margin-right:auto">
+    ℹ️ El ejemplo son <b>datos simulados</b> solo para enseñar el análisis. Amazon <b>no da</b> el desglose por hora en los informes normales (son diarios): el dato real por hora llega vía <b>Amazon Marketing Stream</b>, que SellerBrain conectará en el backend para que esto salga solo, sin subir nada.
   </div>
   <div id="loading" style="display:none;text-align:center;padding:14px;font-size:13px;color:var(--mu)">🔄 Analizando horas...</div>
   <div class="err" id="err"></div>
