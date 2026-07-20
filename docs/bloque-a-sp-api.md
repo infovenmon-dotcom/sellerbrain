@@ -106,7 +106,7 @@ Completo para clientes esté listo para venderse.**
 - [x] Identidad verificada (reutilizó el KYC existente de la cuenta)
 - [x] MFA activado en Supabase y Cloudflare (20-07-2026)
 - [x] Perfil enviado: 5 roles sin PII, "desarrollador privado" — **EN REVISIÓN por Amazon** (20-07-2026)
-- [ ] Aprobación recibida (vigilar email fernando.gil@me.com y el "caso" del portal)
+- [x] **APROBADO por Amazon (20-07-2026, el mismo día)** — acceso global con los 5 roles
 - [ ] App de producción creada y autorizada (Client ID/Secret + Refresh Token)
 - [ ] Secretos en Cloudflare
 - [ ] Primera ingesta 'completo' verificada
