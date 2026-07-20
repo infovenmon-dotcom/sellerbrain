@@ -190,7 +190,10 @@ ppc-horas.html / dashboard (leer datos reales). El análisis del front ya está 
 ## TAREA 10 — App móvil / de escritorio (más adelante)
 **Por qué:** llevar SellerBrain a una app propia. Fase posterior, sin prisa.
 
-**Qué hacer:** por definir. No se aborda hasta tener el núcleo web + SP-API estables.
+**Preparado (ver `docs/app-movil.md`):** el Worker YA es la API de la app (login JWT + endpoints
+`/v1/dashboard,ppc,plan,keywords` + integraciones Ads/Claude/Supabase/SP-API). Recomendación:
+empezar por **PWA** sobre el dashboard actual (instalable + push web, reutiliza todo) y saltar a
+**React Native/Expo** cuando toquen las tiendas. Falta: push, cerrar CORS, multicuenta.
 
 ---
 

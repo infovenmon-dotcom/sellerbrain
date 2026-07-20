@@ -4108,7 +4108,49 @@ function kwRenderListing() {
 }
 
 // ===== GENERADOR DE LISTING =====
+// Mini-Markdown → HTML para el listing generado por IA
+function kwMd(t){
+  var esc=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc.split('\n').map(function(l){
+    l=l.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    if(/^#{1,6}\s/.test(l))return '<div style="font-weight:800;color:var(--or2,#6FEBBB);margin:12px 0 4px">'+l.replace(/^#{1,6}\s/,'')+'</div>';
+    if(/^\s*[-*]\s/.test(l))return '<div style="padding:3px 0 3px 14px;text-indent:-10px">• '+l.replace(/^\s*[-*]\s/,'')+'</div>';
+    if(!l.trim())return '';
+    return '<div style="margin:5px 0">'+l+'</div>';
+  }).join('');
+}
+
+// IA REAL (Claude vía Worker); si no hay sesión/API, cae al generador de plantilla.
 function kwGenerarListing() {
+  var prodDesc = document.getElementById('kw-prod-desc').value.trim();
+  var idioma   = document.getElementById('kw-idioma').value;
+  var resDiv   = document.getElementById('kw-listing-gen-res');
+  if(!prodDesc) { alert('Introduce una descripción del producto.'); return; }
+  if(kwData.length === 0) { alert('Primero carga un archivo de keywords.'); return; }
+
+  var token = (function(){try{return sessionStorage.getItem('fba_token');}catch(e){return null;}})();
+  if(!token){ return kwGenerarListingLocal(); }   // sin sesión → respaldo local
+
+  // Top keywords con volumen para la IA
+  var top = kwDataFiltrada.filter(function(r){return r.listingScore>=30;})
+    .sort(function(a,b){return b.listingScore-a.listingScore;}).slice(0,50);
+  if(!top.length) top = kwData.slice().sort(function(a,b){return (b.vol||0)-(a.vol||0);}).slice(0,30);
+  var keywords = top.map(function(r){return {kw:r.kw, vol:r.vol||0};});
+
+  resDiv.innerHTML='<div style="color:var(--mu,#888);font-size:13px">🧠 La IA está escribiendo tu listing…</div>';
+  fetch(SB_WORKER+'/v1/keywords',{method:'POST',headers:{'Authorization':'Bearer '+token,'content-type':'application/json'},
+    body:JSON.stringify({producto:prodDesc, idioma:idioma, keywords:keywords})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.listing){
+        resDiv.innerHTML='<div style="background:rgba(46,230,160,.05);border:1px solid rgba(46,230,160,.25);border-radius:12px;padding:14px;font-size:13px;line-height:1.6">'+kwMd(d.listing)+
+          '<div style="font-size:10.5px;color:var(--mu,#888);margin-top:10px">Generado por '+(d.modelo||'IA')+' · edítalo a tu gusto antes de publicar</div></div>';
+      } else { kwGenerarListingLocal(); if(d.error) console.warn('IA keywords:',d.error); }
+    })
+    .catch(function(e){ console.warn('IA keywords falló, uso plantilla:',e.message); kwGenerarListingLocal(); });
+}
+
+function kwGenerarListingLocal() {
   var prodDesc = document.getElementById('kw-prod-desc').value.trim();
   var idioma   = document.getElementById('kw-idioma').value;
   var resDiv   = document.getElementById('kw-listing-gen-res');

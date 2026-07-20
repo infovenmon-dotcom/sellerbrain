@@ -73,7 +73,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan';
+        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -215,6 +215,20 @@ export default {
           return json({ plan, modelo: MODELO_IA, generado: new Date().toISOString(), n_acciones: acciones.length }, cors);
         } catch (e) {
           return json({ error: e.message, acciones }, cors, 500);
+        }
+      }
+
+      // --- Listing con IA a partir de keywords de Helium 10 ---
+      // Uso: POST /v1/keywords {producto, idioma, keywords:[{kw,vol}]}
+      if (url.pathname === '/v1/keywords' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch (_) { body = {}; }
+        if (!body.keywords || !body.keywords.length) return json({ error: 'faltan keywords' }, cors, 400);
+        try {
+          const listing = await analizarKeywordsClaude(env, body);
+          if (!listing) return json({ error: 'IA no disponible (falta ANTHROPIC_API_KEY).' }, cors, 200);
+          return json({ listing, modelo: MODELO_IA }, cors);
+        } catch (e) {
+          return json({ error: e.message }, cors, 500);
         }
       }
 
@@ -768,6 +782,39 @@ async function generarPlanClaude(env, acciones, contexto) {
       system: sys,
       messages: [{ role: 'user', content: user }]
     })
+  });
+  if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
+  const j = await r.json();
+  const texto = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+  return texto || null;
+}
+
+// Genera un LISTING optimizado (título + bullets + backend + estrategia) a partir
+// de las keywords reales de Helium 10. Usa SOLO esas keywords, no inventa producto.
+async function analizarKeywordsClaude(env, datos) {
+  if (!env.ANTHROPIC_API_KEY) return null;
+  const kws = (datos.keywords || []).slice(0, 60);
+  if (!kws.length) return null;
+  const sys =
+    'Eres experto en SEO y listings de Amazon FBA. Te doy un producto y una lista de keywords REALES ' +
+    '(de Helium 10) con su volumen. Escribe un listing optimizado en el idioma pedido. Reglas estrictas: ' +
+    'usa SOLO estas keywords (no inventes otras ni marcas), no inventes características del producto que ' +
+    'no se deduzcan de la descripción, no prometas resultados. Devuelve Markdown, conciso, con: ' +
+    '(1) **Título** (máx 200 caracteres, con las keywords de más volumen de forma natural y legible; NADA ' +
+    'de rellenar con "|"), (2) **5 bullet points** (cada uno empieza con 2-4 palabras EN MAYÚSCULAS y luego ' +
+    'una frase, integrando keywords relevantes de forma natural), (3) **Términos de búsqueda backend** (una ' +
+    'sola línea, las keywords que no entraron arriba, separadas por espacios, sin comas ni repetir palabras), ' +
+    '(4) **Estrategia PPC** (2-3 líneas: qué keywords a coincidencia exacta, cuáles a amplia/auto, cuáles ' +
+    'vigilar o negativizar por poco relevantes).';
+  const IDIOMAS = { es: 'español', en: 'inglés', fr: 'francés', de: 'alemán', it: 'italiano' };
+  const user = 'Producto: ' + (datos.producto || '(sin descripción)') +
+    '\nIdioma del listing: ' + (IDIOMAS[datos.idioma] || 'español') +
+    '\nKeywords (frase · volumen):\n' +
+    kws.map(k => (typeof k === 'string' ? k : (k.kw + ' · ' + (k.vol || 0)))).join('\n');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: MODELO_IA, max_tokens: 1800, system: sys, messages: [{ role: 'user', content: user }] })
   });
   if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
   const j = await r.json();
