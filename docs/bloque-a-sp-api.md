@@ -107,6 +107,9 @@ Completo para clientes esté listo para venderse.**
 - [x] MFA activado en Supabase y Cloudflare (20-07-2026)
 - [x] Perfil enviado: 5 roles sin PII, "desarrollador privado" — **EN REVISIÓN por Amazon** (20-07-2026)
 - [x] **APROBADO por Amazon (20-07-2026, el mismo día)** — acceso global con los 5 roles
-- [ ] App de producción creada y autorizada (Client ID/Secret + Refresh Token)
-- [ ] Secretos en Cloudflare
-- [ ] Primera ingesta 'completo' verificada
+- [~] App de producción creada y autorizada (Client ID/Secret + Refresh Token) — Venmon indica que ya está hecho (20-07-2026)
+- [~] Secretos en Cloudflare (`LWA_CLIENT_ID`, `LWA_CLIENT_SECRET`, `SPAPI_REFRESH_TOKEN`) — Venmon indica subidos; **pendiente de confirmar** con la 1ª ingesta
+- [ ] **Primera ingesta 'completo' verificada** — la tabla `ingestas` estaba vacía (0 filas): la ingesta completa solo corre por el cron 03:00 UTC o por `POST /v1/ingest`. Se deja al **cron de la noche del 20→21-07-2026**.
+  - Verificación (mañana): `select ejecutada, plan, resumen from ingestas order by ejecutada desc limit 3;`
+    - `plan='completo'` → secretos SP-API OK; `resumen` trae los pasos (pedidos/settlements/devoluciones/brand_analytics) con sus errores si los hubiera.
+    - `plan='analisis(ads-only)'` → los `LWA_*`/`SPAPI_*` no se detectan (revisar nombre exacto/valor/Worker).
