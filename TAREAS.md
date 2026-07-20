@@ -154,6 +154,20 @@ NO se empieza hasta que la TAREA 7 esté aprobada y entrando datos.
 
 ---
 
+## TAREA 12 — Capa de IA (Claude) sobre el motor de reglas ✅ (hecho 20-07-2026)
+> **Hecho:** `generarPlanClaude()` en worker.js llama a la API de Claude (`claude-opus-4-8`,
+> constante `MODELO_IA` editable) vía HTTP directo con `env.ANTHROPIC_API_KEY`. Endpoint
+> `POST /v1/plan` (con SB_API_KEY): toma las acciones que ya calcularon las reglas + títulos
+> de producto y devuelve un **plan de la semana redactado y priorizado**, que además **juzga la
+> relevancia de cada término** (negativizar de verdad vs. bajar puja). Se genera **bajo demanda**
+> (botón "Generar plan de la semana" en el Cerebro del dashboard), no en cada carga, para
+> controlar el coste. Norma dura respetada: **la IA no inventa cifras** — los € y el ACoS salen
+> de las reglas; Claude solo explica, prioriza y juzga.
+> Arquitectura: **reglas = los números, Claude = el criterio y la redacción.**
+> Pendiente: desplegar worker.js en Cloudflare (lo hace Venmon).
+
+---
+
 ## TAREA 11 — Datos reales de PPC por hora (Amazon Marketing Stream)
 **Por qué:** el módulo "PPC · Horas" (dayparting) ya analiza y propone franjas, pero hoy la
 demo son datos **simulados** y el modo real exige un CSV con columna de hora que Amazon **no

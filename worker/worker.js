@@ -197,6 +197,23 @@ export default {
         return json(res, cors);
       }
 
+      // --- Plan de acción redactado por IA (capa Claude sobre el motor de reglas) ---
+      // Uso: POST /v1/plan  (con SB_API_KEY). Genera bajo demanda (no en cada carga).
+      if (url.pathname === '/v1/plan' && request.method === 'POST') {
+        const productos = await selectSupabase(env, 'v_productos_mes').catch(() => []);
+        const acciones = await generarAcciones(env, productos);
+        if (!acciones.length) return json({ plan: null, mensaje: 'No hay acciones esta semana.' }, cors);
+        // Contexto ligero: títulos de producto para que la IA juzgue relevancia de términos.
+        const contexto = { productos: (productos || []).slice(0, 50).map(p => ({ sku: p.sku, nombre: p.nom })) };
+        try {
+          const plan = await generarPlanClaude(env, acciones, contexto);
+          if (!plan) return json({ plan: null, mensaje: 'IA no disponible (falta ANTHROPIC_API_KEY).', acciones }, cors);
+          return json({ plan, modelo: MODELO_IA, generado: new Date().toISOString(), n_acciones: acciones.length }, cors);
+        } catch (e) {
+          return json({ error: e.message, acciones }, cors, 500);
+        }
+      }
+
       // --- Recoger un informe de Ads ya generado (por su reportId) ---
       // Uso: /v1/ads/fetch?pais=ES&id=REPORT_ID
       if (url.pathname === '/v1/ads/fetch') {
@@ -709,6 +726,49 @@ async function generarAcciones(env, productos) {
   // Ordenar por impacto (€/ventas reales) y limitar; quitar el campo interno _v
   acciones.sort((a, b) => (b._v || 0) - (a._v || 0));
   return acciones.slice(0, 10).map(a => { const { _v, ...rest } = a; return rest; });
+}
+
+/* =====================================================================
+ * CAPA IA (Claude) — redacta y prioriza el plan SOBRE las reglas.
+ * Las reglas ya calcularon los números; Claude solo explica, prioriza
+ * y juzga la relevancia de cada término. NUNCA inventa cifras.
+ * =================================================================== */
+const MODELO_IA = 'claude-opus-4-8'; // editable; para abaratar: 'claude-haiku-4-5' o 'claude-sonnet-5'
+
+async function generarPlanClaude(env, acciones, contexto) {
+  if (!env.ANTHROPIC_API_KEY) return null;            // sin clave → no hay capa IA
+  if (!acciones || !acciones.length) return null;
+  const sys =
+    'Eres el cerebro de SellerBrain, copiloto de PPC para vendedores de Amazon FBA. ' +
+    'Recibes ACCIONES ya calculadas por reglas, con cifras REALES. Reglas estrictas: ' +
+    'NO inventes ni modifiques ningún número, € ni ACoS: usa SOLO los que te doy. ' +
+    'No prometas resultados ni rentabilidad futura. Tu trabajo es priorizar, explicar en ' +
+    'lenguaje claro y directo, y juzgar la RELEVANCIA de cada término: si un término de ' +
+    'búsqueda no encaja con el producto, confirma negativizar; si es relevante pero caro, ' +
+    'recomienda bajar la puja en vez de negativizar. Responde en español, en Markdown, breve ' +
+    'y accionable. Estructura: (1) un titular con el ahorro total en € (suma SOLO los € de las ' +
+    'acciones de negativizar que te paso), (2) "Haz primero" (máximo 5, cada una con su porqué en ' +
+    'una línea), (3) "Vigila" (máximo 3). Nada de relleno ni de introducciones.';
+  const user = 'Acciones y contexto de esta semana (JSON):\n' +
+    JSON.stringify({ acciones: acciones, contexto: contexto || {} }).slice(0, 12000);
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: MODELO_IA,
+      max_tokens: 1500,
+      system: sys,
+      messages: [{ role: 'user', content: user }]
+    })
+  });
+  if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
+  const j = await r.json();
+  const texto = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+  return texto || null;
 }
 
 /* =====================================================================

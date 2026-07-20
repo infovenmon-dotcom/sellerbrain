@@ -382,6 +382,13 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     <div id="acciones"></div>
   </div>
 
+  <div class="card brain-feed">
+    <div class="ch"><h2><span class="ci">✍️</span> Plan de la semana</h2></div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:10px;line-height:1.5">El Cerebro lee tus acciones y te escribe un plan priorizado, decidiendo qué negativizar de verdad y qué solo vigilar.</div>
+    <button id="btn-plan" onclick="generarPlanIA()" style="width:100%;padding:11px;background:var(--or);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-weight:800;font-size:12.5px;cursor:pointer">🧠 Generar plan de la semana</button>
+    <div id="plan-ia" style="font-size:12px;line-height:1.6;color:var(--mu2);margin-top:12px"></div>
+  </div>
+
   <div class="card">
     <div class="ch"><h2><span class="ci">🚨</span> Alertas</h2></div>
     <div id="alertas"></div>
@@ -587,6 +594,33 @@ function renderCerebro(){
   });
   document.getElementById('acciones').innerHTML=h;
   document.getElementById('brain-total').textContent='+'+f(total,2)+'€';
+}
+
+// Mini-Markdown → HTML (negritas, títulos y listas) para el plan de la IA
+function mdMini(t){
+  var esc=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var out=esc.split('\n').map(function(l){
+    l=l.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--tx)">$1</b>');
+    if(/^#{1,6}\s/.test(l))return '<div style="font-family:Syne,sans-serif;font-weight:800;color:var(--or2);margin:10px 0 4px">'+l.replace(/^#{1,6}\s/,'')+'</div>';
+    if(/^\s*[-*]\s/.test(l))return '<div style="padding:2px 0 2px 14px;text-indent:-10px">• '+l.replace(/^\s*[-*]\s/,'')+'</div>';
+    if(!l.trim())return '';
+    return '<div style="margin:4px 0">'+l+'</div>';
+  });
+  return out.join('');
+}
+
+function generarPlanIA(){
+  var btn=document.getElementById('btn-plan'), box=document.getElementById('plan-ia');
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){box.innerHTML='<span style="color:var(--am)">Conecta la API (Ajustes) para usar el plan con IA.</span>';return;}
+  btn.disabled=true; var txt0=btn.textContent; btn.textContent='🧠 Pensando…'; box.innerHTML='';
+  fetch(SB_CONFIG.apiBase+'/v1/plan',{method:'POST',headers:{'Authorization':'Bearer '+SB_CONFIG.apiKey}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.plan){box.innerHTML=mdMini(d.plan)+'<div style="font-size:10px;color:var(--mu);margin-top:8px">Generado por '+(d.modelo||'IA')+' sobre '+(d.n_acciones||0)+' acciones · las cifras salen de tus datos reales</div>';}
+      else box.innerHTML='<span style="color:var(--mu)">'+(d.mensaje||d.error||'No se pudo generar el plan.')+'</span>';
+    })
+    .catch(function(e){box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>';})
+    .then(function(){btn.disabled=false;btn.textContent=txt0;});
 }
 
 function renderAlertas(){
