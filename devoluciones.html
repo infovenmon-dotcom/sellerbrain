@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Devoluciones · Por qué te devuelven y qué puedes controlar</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:980px;margin:0 auto;padding:0 16px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:34px 0 20px;text-align:center}
+.hero h1{font-family:'Syne',sans-serif;font-size:25px;font-weight:800;line-height:1.25}
+.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:660px;margin:10px auto 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}
+.inf b{color:rgba(255,255,255,.75)}
+.drop{border:2px dashed rgba(46,230,160,.4);border-radius:12px;padding:20px;text-align:center;cursor:pointer;background:rgba(46,230,160,.03)}
+.drop:hover{background:rgba(46,230,160,.08)}
+.drop.op{border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.02)}
+.btn{display:inline-block;padding:11px 18px;background:var(--or);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;cursor:pointer}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:9px 14px;border-radius:10px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
+.kpi{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:15px 16px}
+.kpi .n{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;line-height:1}
+.kpi .l{font-size:11px;color:var(--mu);margin-top:6px;line-height:1.35}
+.kpi.good .n{color:var(--gn)}.kpi.warn .n{color:var(--am)}.kpi.bad .n{color:var(--rd)}.kpi.or .n{color:var(--or2)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:right;padding:7px 8px;color:var(--mu);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bd);white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05);text-align:right;white-space:nowrap}
+td:first-child{text-align:left;font-weight:600;white-space:normal}
+.bar{height:7px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:4px}
+.bar>span{display:block;height:100%;border-radius:99px}
+.motivo{margin-top:12px;border:1px solid var(--bd);border-radius:12px;padding:14px;background:var(--card2)}
+.motivo .mh{display:flex;align-items:center;gap:9px;justify-content:space-between}
+.motivo .mt{font-family:'Syne',sans-serif;font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px}
+.motivo .mn{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.motivo .rec{font-size:11.5px;color:var(--mu2);margin-top:8px;line-height:1.55;border-top:1px solid var(--bd);padding-top:8px}
+.motivo .rec b{color:var(--or2)}
+.tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700}
+.tag.ctrl{background:rgba(46,230,160,.12);color:var(--or2)}
+.tag.noctrl{background:rgba(255,255,255,.07);color:var(--mu)}
+.tag.gn{background:rgba(46,204,113,.14);color:var(--gn)}
+.tag.am{background:rgba(245,166,35,.14);color:var(--am)}
+.tag.rd{background:rgba(232,64,64,.14);color:var(--rd)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+@media(max-width:640px){.split{grid-template-columns:1fr}}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:720px;margin-left:auto;margin-right:auto}
+.err{display:none;margin-top:10px;padding:12px;border-radius:10px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.25);font-size:12px;color:var(--rd)}
+.oksub{color:var(--gn);font-size:11px;font-weight:700;margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Seller<b>Brain</b></div>
+  <div class="badge">↩️ Devoluciones</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>¿Por qué te devuelven, y <span>qué está en tu mano</span> arreglar?</h1>
+  <p>Sube el informe de <b>Devoluciones de clientes</b> de Logística de Amazon y SellerBrain separa lo que puedes controlar (listing, calidad, tallaje) de lo que no (el cliente cambió de idea), te dice qué producto arreglar primero y cuánto stock vuelve revendible frente a lo que es pérdida.</p>
+</div>
+
+<!-- PASO 1 -->
+<div class="card">
+  <div class="ct"><span class="ci">1️⃣</span> Sube tu informe de devoluciones FBA</div>
+  <div class="inf">Seller Central → Informes → Logística de Amazon → <b>Devoluciones de clientes</b> (Customer Returns). Elige el rango que quieras analizar (p. ej. los últimos 3–12 meses) y descárgalo. Es un archivo <b>.txt/.csv</b>.</div>
+  <div class="drop" onclick="document.getElementById('f-ret').click()">
+    <div style="font-size:26px;margin-bottom:4px">↩️</div>
+    <div style="font-weight:700;font-size:13px">Arrastra o haz clic para subir Devoluciones de clientes (.txt)</div>
+    <div style="font-size:11px;color:var(--mu);margin-top:3px">Todo se procesa en tu navegador — nada sale de tu equipo</div>
+    <input type="file" id="f-ret" accept=".txt,.csv,.tsv" style="display:none" onchange="leerReturns(this.files[0])">
+  </div>
+  <div class="oksub" id="ok-ret"></div>
+  <div class="err" id="err"></div>
+</div>
+
+<!-- PASO 2 (opcional) -->
+<div class="card">
+  <div class="ct"><span class="ci">2️⃣</span> <span style="font-weight:700">Opcional</span> · Sube "Todos los pedidos" para la tasa de devolución</div>
+  <div class="inf">Sin esto verás el número de devoluciones y sus motivos. Si además subes el <b>All Orders</b> (.txt) del <b>mismo periodo</b>, SellerBrain calcula la <b>tasa de devolución %</b> por SKU (devoluciones ÷ unidades vendidas) — la métrica que de verdad importa.</div>
+  <div class="drop op" onclick="document.getElementById('f-ord').click()">
+    <div style="font-size:22px;margin-bottom:4px">🛒</div>
+    <div style="font-weight:700;font-size:12.5px">Subir "Todos los pedidos" (opcional)</div>
+    <input type="file" id="f-ord" accept=".txt,.csv,.tsv" style="display:none" onchange="leerOrders(this.files[0])">
+  </div>
+  <div class="oksub" id="ok-ord"></div>
+</div>
+
+<!-- RESULTADOS -->
+<div id="resultados" style="display:none">
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">🎯</span> Motivos de devolución — ¿controlable o no?</div>
+    <div class="inf">Agrupamos cada motivo por lo que puedes hacer con él. Empieza por los bloques marcados <span class="tag ctrl">EN TU MANO</span>: son los que bajas arreglando la ficha, el producto o la guía de tallas.</div>
+    <div id="motivos"></div>
+  </div>
+
+  <div class="split">
+    <div class="card" style="margin-top:0">
+      <div class="ct"><span class="ci">📦</span> Estado del producto devuelto</div>
+      <div class="inf">Lo revendible vuelve a tu stock; el resto es mercancía perdida (salvo reembolso de Amazon).</div>
+      <div id="dispos"></div>
+    </div>
+    <div class="card" style="margin-top:0">
+      <div class="ct"><span class="ci">🛡️</span> Reembolsos de Amazon</div>
+      <div class="inf">Unidades que Amazon marcó como reembolsadas a tu favor (daño en almacén/transporte). Cuadra que las hayas cobrado.</div>
+      <div id="reemb"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">🔧</span> Productos a revisar primero</div>
+    <div class="inf">Ordenados por lo que más te cuesta. <b>Tasa</b> aparece si subiste el All Orders. Fíjate en los que devuelven mucho por motivos <b>controlables</b>.</div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>SKU / producto</th><th>Devol.</th><th id="th-tasa" style="display:none">Uds</th><th id="th-tasa2" style="display:none">Tasa</th><th>Motivo nº1</th><th>Revendible</th></tr></thead>
+      <tbody id="tabla-skus"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">📋</span> Resumen y descarga</div>
+    <div id="resumen-txt" style="font-size:12px;line-height:1.7;color:var(--mu2)"></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn" onclick="descargarCSV()">⬇️ Descargar análisis (CSV)</button>
+      <button class="btn-sec" onclick="copiarResumen()">📋 Copiar resumen</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="disclaimer">
+⚠️ Herramienta orientativa de análisis. Amazon puede localizar los encabezados del informe en tu idioma; SellerBrain reconoce las columnas habituales del informe de Devoluciones de clientes (return-date, sku, quantity, reason, detailed-disposition, status). Si algún dato no aparece, revisa que sea ese informe. Todo se procesa en tu navegador; tus datos no salen de tu equipo.
+</div>
+
+</div>
+
+<script>
+function f(n,d){return (+n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function pct(n){return f(n,1)+'%';}
+
+/* ===== Motivos de devolución: traducción + categoría de control =====
+   cat: 'listing' | 'calidad' | 'talla' | 'logistica' | 'cliente' | 'fraude' */
+var REASONS = {
+  NOT_AS_DESCRIBED:      {n:'No coincide con la descripción', cat:'listing'},
+  PRODUCT_NOT_AS_DESCRIBED:{n:'No coincide con la descripción', cat:'listing'},
+  ORDERED_WRONG_ITEM:    {n:'Pidió el artículo equivocado', cat:'listing'},
+  MISORDERED:            {n:'Pidió el artículo equivocado', cat:'listing'},
+  DIFFERENT_ITEM_SHIPPED:{n:'Recibió un artículo distinto', cat:'listing'},
+  DEFECTIVE:             {n:'Defectuoso', cat:'calidad'},
+  ITEM_DEFECTIVE:        {n:'Defectuoso', cat:'calidad'},
+  ITEM_NOT_WORKING:      {n:'No funciona', cat:'calidad'},
+  QUALITY_UNACCEPTABLE:  {n:'Calidad no aceptable', cat:'calidad'},
+  MISSING_PARTS:         {n:'Faltan piezas', cat:'calidad'},
+  PRODUCT_DAMAGED:       {n:'Producto dañado (defecto)', cat:'calidad'},
+  APPAREL_TOO_SMALL:     {n:'Talla pequeña', cat:'talla'},
+  APPAREL_TOO_LARGE:     {n:'Talla grande', cat:'talla'},
+  TOO_SMALL:             {n:'Demasiado pequeño', cat:'talla'},
+  TOO_LARGE:             {n:'Demasiado grande', cat:'talla'},
+  APPAREL_STYLE:         {n:'No le gustó el estilo/ajuste', cat:'talla'},
+  DAMAGED_BY_CARRIER:    {n:'Dañado en transporte', cat:'logistica'},
+  DAMAGED_BY_FC:         {n:'Dañado en almacén Amazon', cat:'logistica'},
+  MISSED_ESTIMATED_DELIVERY:{n:'Llegó tarde', cat:'logistica'},
+  UNDELIVERABLE_UNKNOWN: {n:'No se pudo entregar', cat:'logistica'},
+  UNWANTED_ITEM:         {n:'Ya no lo quería', cat:'cliente'},
+  NO_REASON_GIVEN:       {n:'Sin motivo indicado', cat:'cliente'},
+  UNAUTHORIZED_PURCHASE: {n:'Compra no autorizada', cat:'cliente'},
+  ACCIDENTAL_ORDER:      {n:'Pedido por error', cat:'cliente'},
+  BOUGHT_BY_MISTAKE:     {n:'Comprado por error', cat:'cliente'},
+  FOUND_BETTER_PRICE:    {n:'Encontró mejor precio', cat:'cliente'},
+  NO_LONGER_NEEDED:      {n:'Ya no lo necesita', cat:'cliente'},
+  SWITCHEROO:            {n:'Devolvió otro producto (sospecha)', cat:'fraude'},
+  EXTRA_ITEM:            {n:'Recibió artículo de más', cat:'fraude'}
+};
+var CATS = {
+  listing:  {n:'Ficha / expectativa', ic:'📝', ctrl:true,  color:'#F5A623',
+    rec:'<b>Está en tu mano.</b> El cliente esperaba algo distinto: revisa fotos, título, bullets, dimensiones y vídeo. Añade fotos con escala real y aclara medidas/uso. Suele ser el motivo más rentable de atacar.'},
+  calidad:  {n:'Calidad del producto', ic:'🔧', ctrl:true,  color:'#E84040',
+    rec:'<b>Está en tu mano.</b> Producto defectuoso o incompleto: habla con tu fábrica, refuerza el control de calidad de lote y el packaging. Si se repite en un SKU, puede acabar en alerta de salud del producto en Amazon.'},
+  talla:    {n:'Tallaje / ajuste', ic:'📏', ctrl:true,  color:'#F5A623',
+    rec:'<b>Está en tu mano.</b> Añade o corrige la guía de tallas, indica si talla grande/pequeño y pon medidas exactas en cm. Un buen size chart baja mucho estas devoluciones.'},
+  logistica:{n:'Logística / transporte', ic:'🚚', ctrl:false, color:'#4A9EDE',
+    rec:'Daños o retrasos gestionados por Amazon. Poco control directo, pero si el daño es por embalaje insuficiente, refuérzalo. Verifica que Amazon te reembolsa los dañados por su almacén/transporte.'},
+  cliente:  {n:'Decisión del cliente', ic:'🤷', ctrl:false, color:'#8894A3',
+    rec:'Cambió de idea, lo compró por error o encontró otro precio. Poco que arreglar en el listing; es el "ruido" normal de vender en Amazon.'},
+  fraude:   {n:'Posible fraude / abuso', ic:'🚨', ctrl:false, color:'#E84040',
+    rec:'Sospecha de cambiazo o artículo distinto devuelto. Revisa estas unidades una a una y, si se confirma, abre reclamación a Amazon (SAFE-T / garantía A-a-Z).'}
+};
+var CAT_ORDER = ['listing','calidad','talla','fraude','logistica','cliente'];
+
+var DISPOS = {
+  SELLABLE:        {n:'Revendible', ok:true},
+  CUSTOMER_DAMAGED:{n:'Dañado por el cliente', ok:false},
+  DEFECTIVE:       {n:'Defectuoso', ok:false},
+  CARRIER_DAMAGED: {n:'Dañado en transporte', ok:false},
+  DAMAGED:         {n:'Dañado', ok:false},
+  EXPIRED:         {n:'Caducado', ok:false}
+};
+
+var RET=[];        // filas de devoluciones normalizadas
+var ORD={};        // {sku: uds vendidas} del All Orders (opcional)
+
+/* ===== Parser (mismo patrón que EPR / dashboard) ===== */
+function parsearPlano(texto){
+  var lineas=texto.split('\n').filter(function(l){return l.trim();});
+  if(!lineas.length) return [];
+  var sep=lineas[0].indexOf('\t')>-1?'\t':(lineas[0].split(';').length>lineas[0].split(',').length?';':',');
+  function partir(linea){
+    var out=[],cur='',q=false;
+    for(var i=0;i<linea.length;i++){var c=linea[i];
+      if(c==='"'){q=!q;continue;}
+      if(c===sep&&!q){out.push(cur.trim());cur='';}else cur+=c;}
+    out.push(cur.trim());return out;
+  }
+  var heads=partir(lineas[0]).map(function(h){return h.toLowerCase();});
+  return lineas.slice(1).map(function(l){var v=partir(l),o={};heads.forEach(function(h,i){o[h]=v[i]!==undefined?v[i]:'';});return o;});
+}
+function mostrarError(m){var e=document.getElementById('err');e.style.display='block';e.innerHTML='❌ '+m;}
+function col(x,names){for(var i=0;i<names.length;i++){if(x[names[i]]!==undefined&&x[names[i]]!=='')return x[names[i]];}return '';}
+
+function leerReturns(file){
+  if(!file)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    try{
+      var rows=parsearPlano(e.target.result);
+      RET=[];
+      rows.forEach(function(x){
+        var sku=col(x,['sku','merchant-sku']);
+        if(!sku)return;
+        var q=parseInt(col(x,['quantity','return-quantity']))||1;
+        RET.push({
+          sku:sku,
+          nombre:col(x,['product-name','product name'])||sku,
+          q:q,
+          reason:(col(x,['reason','return-reason'])||'').toUpperCase().trim(),
+          dispo:(col(x,['detailed-disposition','disposition','detailed disposition'])||'').toUpperCase().trim(),
+          status:(col(x,['status'])||'').toLowerCase()
+        });
+      });
+      if(!RET.length){mostrarError('No encontré filas de devolución con columna "sku". ¿Es el informe "Devoluciones de clientes" de Logística de Amazon?');return;}
+      var tot=RET.reduce(function(a,b){return a+b.q;},0);
+      document.getElementById('ok-ret').textContent='✓ '+file.name+' · '+tot+' unidades devueltas en '+RET.length+' líneas';
+      document.getElementById('err').style.display='none';
+      calcular();
+    }catch(err){mostrarError('Error al leer: '+err.message);}
+  };
+  r.readAsText(file,'ISO-8859-1');
+}
+
+function leerOrders(file){
+  if(!file)return;
+  var r=new FileReader();
+  r.onload=function(e){
+    try{
+      var rows=parsearPlano(e.target.result);
+      ORD={};var total=0;
+      rows.forEach(function(x){
+        var estado=(col(x,['item-status','order-status'])||'').toLowerCase();
+        if(estado.indexOf('cancel')>-1)return;
+        var sku=col(x,['sku','merchant-sku']);if(!sku)return;
+        var uds=parseInt(col(x,['quantity','quantity-purchased']))||0;
+        ORD[sku]=(ORD[sku]||0)+uds;total+=uds;
+      });
+      document.getElementById('ok-ord').textContent=total?('✓ '+file.name+' · '+total+' unidades vendidas — tasa de devolución activada'):'No reconocí unidades; revisa que sea el All Orders.';
+      if(RET.length)calcular();
+    }catch(err){document.getElementById('ok-ord').textContent='Error al leer el All Orders.';}
+  };
+  r.readAsText(file,'ISO-8859-1');
+}
+
+/* ===== Cálculo ===== */
+function calcular(){
+  var totUds=0, porCat={}, porSku={}, dispoAgg={}, reembUds=0, revendUds=0;
+  var hayOrders=Object.keys(ORD).length>0;
+
+  RET.forEach(function(row){
+    totUds+=row.q;
+    // categoría de motivo
+    var rmeta=REASONS[row.reason];
+    var cat=rmeta?rmeta.cat:'cliente';
+    var rn=rmeta?rmeta.n:(row.reason?titulo(row.reason):'Sin motivo indicado');
+    if(!porCat[cat])porCat[cat]={uds:0, motivos:{}};
+    porCat[cat].uds+=row.q;
+    porCat[cat].motivos[rn]=(porCat[cat].motivos[rn]||0)+row.q;
+    // por SKU
+    if(!porSku[row.sku])porSku[row.sku]={nombre:row.nombre,uds:0,motivos:{},revend:0};
+    porSku[row.sku].uds+=row.q;
+    porSku[row.sku].motivos[rn]=(porSku[row.sku].motivos[rn]||0)+row.q;
+    // disposición
+    var dm=DISPOS[row.dispo];
+    var dn=dm?dm.n:(row.dispo?titulo(row.dispo):'Sin clasificar');
+    dispoAgg[dn]=(dispoAgg[dn]||0)+row.q;
+    if(dm&&dm.ok){revendUds+=row.q;porSku[row.sku].revend+=row.q;}
+    // reembolsos
+    if(row.status.indexOf('reimburs')>-1||row.status.indexOf('reembols')>-1)reembUds+=row.q;
+  });
+
+  // KPIs
+  var ctrlUds=0;CAT_ORDER.forEach(function(c){if(CATS[c].ctrl&&porCat[c])ctrlUds+=porCat[c].uds;});
+  var tasaGlobal=hayOrders?(totUds/Math.max(1,sumaOrders())*100):null;
+  var kpis='';
+  kpis+=kpiCard('or',totUds,'unidades devueltas');
+  if(tasaGlobal!==null)kpis+=kpiCard(tasaGlobal>8?'bad':tasaGlobal>4?'warn':'good',pct(tasaGlobal),'tasa de devolución global');
+  kpis+=kpiCard(ctrlUds/Math.max(1,totUds)>0.4?'warn':'good',pct(ctrlUds/Math.max(1,totUds)*100),'por motivos que puedes controlar');
+  kpis+=kpiCard(revendUds/Math.max(1,totUds)>0.6?'good':'warn',pct(revendUds/Math.max(1,totUds)*100),'volvió como stock revendible');
+  document.getElementById('kpis').innerHTML=kpis;
+
+  // Motivos por categoría
+  var mh='';
+  CAT_ORDER.forEach(function(c){
+    if(!porCat[c]||!porCat[c].uds)return;
+    var d=porCat[c], meta=CATS[c];
+    var share=d.uds/Math.max(1,totUds)*100;
+    var det=Object.keys(d.motivos).sort(function(a,b){return d.motivos[b]-d.motivos[a];})
+      .map(function(m){return m+' ('+d.motivos[m]+')';}).join(' · ');
+    mh+='<div class="motivo">'+
+      '<div class="mh"><div class="mt">'+meta.ic+' '+meta.n+' '+(meta.ctrl?'<span class="tag ctrl">EN TU MANO</span>':'<span class="tag noctrl">poco control</span>')+'</div>'+
+        '<div class="mn">'+d.uds+' <span style="font-size:11px;color:var(--mu);font-weight:500">('+pct(share)+')</span></div></div>'+
+      '<div class="bar"><span style="width:'+Math.max(3,share)+'%;background:'+meta.color+'"></span></div>'+
+      '<div style="font-size:11px;color:var(--mu);margin-top:7px">'+det+'</div>'+
+      '<div class="rec">'+meta.rec+'</div>'+
+    '</div>';
+  });
+  document.getElementById('motivos').innerHTML=mh;
+
+  // Disposición
+  var dh='';
+  Object.keys(dispoAgg).sort(function(a,b){return dispoAgg[b]-dispoAgg[a];}).forEach(function(k){
+    var ok=/revendible/i.test(k);
+    dh+='<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12.5px;border-bottom:1px solid rgba(255,255,255,.05)"><span>'+(ok?'✅ ':'⚠️ ')+k+'</span><b style="color:'+(ok?'var(--gn)':'var(--am)')+'">'+dispoAgg[k]+'</b></div>';
+  });
+  dh+='<div style="margin-top:10px;font-size:11.5px;color:var(--mu2)">De '+totUds+' unidades, <b style="color:var(--gn)">'+revendUds+'</b> volvieron revendibles y <b style="color:var(--am)">'+(totUds-revendUds)+'</b> no (pérdida potencial salvo reembolso).</div>';
+  document.getElementById('dispos').innerHTML=dh;
+
+  // Reembolsos
+  document.getElementById('reemb').innerHTML=
+    '<div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:var(--or2)">'+reembUds+'</div>'+
+    '<div style="font-size:12px;color:var(--mu2);margin-top:4px">unidades marcadas como reembolsadas por Amazon en este informe.</div>'+
+    '<div style="font-size:11px;color:var(--mu);margin-top:8px">'+(reembUds?'Confirma que estos abonos aparecen en tu informe de pagos. Si Amazon dañó stock y no te lo reembolsó, reclámalo.':'Ninguna unidad figura como reembolsada aquí. Si tienes dañados por almacén/transporte sin abono, revisa reclamaciones.')+'</div>';
+
+  // Tabla SKUs
+  var showTasa=hayOrders;
+  document.getElementById('th-tasa').style.display=showTasa?'table-cell':'none';
+  document.getElementById('th-tasa2').style.display=showTasa?'table-cell':'none';
+  var th='';
+  Object.keys(porSku).sort(function(a,b){
+    if(showTasa){return tasaSku(porSku[b],b)-tasaSku(porSku[a],a);}
+    return porSku[b].uds-porSku[a].uds;
+  }).forEach(function(sku){
+    var s=porSku[sku];
+    var m1=Object.keys(s.motivos).sort(function(a,b){return s.motivos[b]-s.motivos[a];})[0];
+    var uds=ORD[sku]||0;
+    var tasa=uds?(s.uds/uds*100):null;
+    var tasaCell=showTasa?('<td>'+(uds?uds:'—')+'</td><td style="color:'+(tasa>10?'var(--rd)':tasa>5?'var(--am)':'var(--mu2)')+';font-weight:700">'+(tasa!==null?pct(tasa):'—')+'</td>'):'';
+    th+='<tr><td>'+esc(sku)+'<div style="font-weight:400;color:var(--mu);font-size:10.5px;white-space:normal">'+esc((s.nombre||'').slice(0,60))+'</div></td>'+
+      '<td style="font-weight:700">'+s.uds+'</td>'+tasaCell+
+      '<td style="white-space:normal;text-align:right;color:var(--mu2);font-size:11px">'+esc(m1||'—')+'</td>'+
+      '<td>'+s.revend+'/'+s.uds+'</td></tr>';
+  });
+  document.getElementById('tabla-skus').innerHTML=th;
+
+  // Resumen texto
+  var peor=Object.keys(porSku).sort(function(a,b){return porSku[b].uds-porSku[a].uds;})[0];
+  var txt='ANÁLISIS DE DEVOLUCIONES — '+new Date().toLocaleDateString('es-ES')+'\n';
+  txt+='Total: '+totUds+' unidades devueltas'+(tasaGlobal!==null?' · tasa global '+pct(tasaGlobal):'')+'.\n';
+  txt+='Controlables (ficha/calidad/talla): '+pct(ctrlUds/Math.max(1,totUds)*100)+' de las devoluciones — ahí está la palanca.\n';
+  txt+='Revendible: '+revendUds+' de '+totUds+' unidades volvieron a stock.\n';
+  if(peor)txt+='SKU con más devoluciones: '+peor+' ('+porSku[peor].uds+' uds).\n';
+  window._resumen=txt;
+  window._csvData={porCat:porCat,porSku:porSku,dispoAgg:dispoAgg,totUds:totUds,hayOrders:hayOrders};
+  document.getElementById('resumen-txt').textContent=txt;
+
+  document.getElementById('resultados').style.display='block';
+  document.getElementById('resultados').scrollIntoView({behavior:'smooth'});
+}
+
+function sumaOrders(){var t=0;Object.keys(ORD).forEach(function(k){t+=ORD[k];});return t;}
+function tasaSku(s,sku){var u=ORD[sku]||0;return u?(s.uds/u):0;}
+function kpiCard(cls,n,l){return '<div class="kpi '+cls+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
+function titulo(s){return s.toLowerCase().replace(/_/g,' ').replace(/^./,function(c){return c.toUpperCase();});}
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function descargarCSV(){
+  var D=window._csvData;
+  if(!D){alert('Analiza primero un informe.');return;}
+  var SEP=';';
+  var L=[];
+  L.push('ANÁLISIS DE DEVOLUCIONES SELLERBRAIN'+SEP+new Date().toLocaleDateString('es-ES'));
+  L.push('');
+  L.push('MOTIVOS POR CONTROL'+SEP+'Unidades'+SEP+'% del total'+SEP+'¿En tu mano?');
+  CAT_ORDER.forEach(function(c){
+    if(!D.porCat[c])return;var d=D.porCat[c];
+    L.push(CATS[c].n+SEP+d.uds+SEP+f(d.uds/Math.max(1,D.totUds)*100,1).replace('.',',')+'%'+SEP+(CATS[c].ctrl?'SI':'no'));
+  });
+  L.push('');
+  var head='SKU'+SEP+'Producto'+SEP+'Devoluciones'+(D.hayOrders?SEP+'Uds vendidas'+SEP+'Tasa %':'')+SEP+'Motivo principal'+SEP+'Revendibles';
+  L.push(head);
+  Object.keys(D.porSku).sort(function(a,b){return D.porSku[b].uds-D.porSku[a].uds;}).forEach(function(sku){
+    var s=D.porSku[sku];
+    var m1=Object.keys(s.motivos).sort(function(a,b){return s.motivos[b]-s.motivos[a];})[0]||'';
+    var uds=ORD[sku]||0;
+    var tasaTxt=D.hayOrders?(SEP+(uds||'')+SEP+(uds?f(s.uds/uds*100,1).replace('.',',')+'%':'')):'';
+    L.push('"'+sku+'"'+SEP+'"'+(s.nombre||'').replace(/"/g,"'")+'"'+SEP+s.uds+tasaTxt+SEP+'"'+m1+'"'+SEP+s.revend);
+  });
+  var csv='﻿'+L.join('\r\n');
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='devoluciones_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+
+function copiarResumen(){
+  var ta=document.createElement('textarea');ta.value=window._resumen||'';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');alert('✓ Resumen copiado.');}catch(e){}
+  document.body.removeChild(ta);
+}
+</script>
+</body>
+</html>

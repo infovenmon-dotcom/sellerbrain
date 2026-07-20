@@ -1066,10 +1066,11 @@ var TOOL_SRC = {
   fba:     { src:'portal.html?embed=1&tab=fba',    title:'Dimensiones y categoría' },
   kw:      { src:'portal.html?embed=1&tab=kw',     title:'Keywords' },
   calc:    { src:'portal.html?embed=1&tab=margen', title:'Calculadora de margen', chips:true },
-  epr:     { src:'epr.html',                       title:'EPR envases (PPWR)' }
+  epr:     { src:'epr.html',                       title:'EPR envases (PPWR)' },
+  dev:     { src:'devoluciones.html',              title:'Devoluciones · Motivos y control' }
 };
 // Secciones aún no construidas → aviso "en desarrollo":
-var SOON = { sobre:'Detector de sobrecobros FBA', dev:'Devoluciones', stock:'Stock y reposición', ajustes:'Ajustes' };
+var SOON = { sobre:'Detector de sobrecobros FBA', stock:'Stock y reposición', ajustes:'Ajustes' };
 
 function cambiarVista(v){
   document.getElementById('vista-dash').style.display = v==='dash'?'block':'none';
