@@ -211,6 +211,13 @@ Hasta entonces no se puede parametrizar el motor con su método.
   logística, fraude), con recomendación por bloque. Muestra revendible vs pérdida,
   reembolsos de Amazon, tabla de SKUs a revisar y **descarga CSV**. Todo en el navegador.
   Ambos ya enlazados en la barra lateral del dashboard (`TOOL_SRC`).
+- **Stock y reposición (`stock.html`):** con el All Orders (histórico) + inventario FBA (o stock
+  a mano) calcula **días de cobertura**, **fecha de rotura**, **punto de pedido** (según lead time)
+  y **cuánto reponer**. Incluye **análisis de periodo/campaña** (Black Friday, Prime Day, Navidad
+  o rango a medida) con el **multiplicador vs. la media**. Cliente, y pasará a automático con SP-API.
+- **Docs de apoyo:** `docs/informes-amazon.md` (ruta EXACTA de cada informe de Seller Central, por
+  módulo, con nombre técnico y columnas) y `docs/multicuenta.md` (qué cimientos multicuenta ya están
+  —JWT por miembro + OAuth Ads— y qué falta para conectar más sellers).
 
 ---
 
