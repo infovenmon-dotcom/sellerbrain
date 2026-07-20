@@ -91,7 +91,7 @@ input.gr:focus{border-color:var(--or);outline:none}
   <div class="inf">Pesa una vez cada envase con una báscula de cocina: <b>envase de venta + caja de envío + relleno</b> (producto envasado − producto). Repártelo por material — es como lo piden los eco-organismos. Se guarda en tu navegador.</div>
   <div style="overflow-x:auto">
   <table>
-    <thead><tr><th>SKU</th><th>Uds/año</th><th>Cartón/papel (g)</th><th>Plástico (g)</th><th>Otros (g)</th><th>Total envase</th></tr></thead>
+    <thead><tr><th>SKU</th><th>Uds/año</th><th>Cartón/papel (g)</th><th>Plástico (g)</th><th>Madera (g)</th><th>Metal (g)</th><th>Vidrio (g)</th><th>Otros (g)</th><th>Total</th></tr></thead>
     <tbody id="tabla-skus"></tbody>
   </table>
   </div>
@@ -112,7 +112,7 @@ input.gr:focus{border-color:var(--or);outline:none}
   <div class="card">
     <div class="ct"><span class="ci">📋</span> Resumen para tus declaraciones</div>
     <div id="resumen-txt" style="font-size:12px;line-height:1.7;color:var(--mu2)"></div>
-    <button class="btn-sec" style="margin-top:10px" onclick="copiarResumen()">📋 Copiar resumen (para tu gestor o eco-organismo)</button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px"><button class="btn" onclick="descargarEPR()">⬇️ Descargar declaración (CSV)</button><button class="btn-sec" onclick="copiarResumen()">📋 Copiar resumen (email)</button></div>
   </div>
 </div>
 
@@ -247,21 +247,19 @@ function demoManual(){
 
 function mostrarError(m){var e=document.getElementById('err');e.style.display='block';e.innerHTML='❌ '+m;}
 
+var MATS=[{k:'carton',n:'Cartón/papel',ic:'📦'},{k:'plastico',n:'Plástico',ic:'🧴'},{k:'madera',n:'Madera',ic:'🪵'},{k:'metal',n:'Metal',ic:'🥫'},{k:'vidrio',n:'Vidrio',ic:'🫙'},{k:'otros',n:'Otros/compuestos',ic:'♻️'}];
+function matTotal(p){var t=0;if(p)MATS.forEach(function(m){t+=+p[m.k]||0;});return t;}
 function pintarTablaSkus(){
   var h='';
   Object.keys(unidadesPorSku).sort(function(a,b){
     return totalUds(unidadesPorSku[b])-totalUds(unidadesPorSku[a]);
   }).forEach(function(sku){
-    var p=PESOS[sku]||{carton:'',plastico:'',otros:''};
-    var tot=(+p.carton||0)+(+p.plastico||0)+(+p.otros||0);
-    h+='<tr>'+
-      '<td>'+sku+'</td>'+
-      '<td>'+totalUds(unidadesPorSku[sku])+'</td>'+
-      '<td><input class="gr" data-sku="'+sku+'" data-mat="carton" value="'+p.carton+'" placeholder="0" onchange="guardarPeso(this)"></td>'+
-      '<td><input class="gr" data-sku="'+sku+'" data-mat="plastico" value="'+p.plastico+'" placeholder="0" onchange="guardarPeso(this)"></td>'+
-      '<td><input class="gr" data-sku="'+sku+'" data-mat="otros" value="'+p.otros+'" placeholder="0" onchange="guardarPeso(this)"></td>'+
-      '<td id="tot-'+cssId(sku)+'">'+(tot?tot+' g':'—')+'</td>'+
-    '</tr>';
+    var p=PESOS[sku]||{};
+    var tot=matTotal(p);
+    var celdas='';
+    MATS.forEach(function(m){celdas+='<td><input class="gr" data-sku="'+sku+'" data-mat="'+m.k+'" value="'+(p[m.k]||'')+'" placeholder="0" onchange="guardarPeso(this)"></td>';});
+    h+='<tr><td>'+sku+'</td><td>'+totalUds(unidadesPorSku[sku])+'</td>'+celdas+
+      '<td id="tot-'+cssId(sku)+'">'+(tot?f(tot,0)+' g':'—')+'</td></tr>';
   });
   document.getElementById('tabla-skus').innerHTML=h;
   document.getElementById('paso2').style.display='block';
@@ -272,12 +270,12 @@ function totalUds(m){var t=0;Object.keys(m).forEach(function(k){t+=m[k];});retur
 
 function guardarPeso(inp){
   var sku=inp.dataset.sku, mat=inp.dataset.mat;
-  if(!PESOS[sku])PESOS[sku]={carton:'',plastico:'',otros:''};
+  if(!PESOS[sku])PESOS[sku]={};
   PESOS[sku][mat]=inp.value;
   localStorage.setItem('sb_epr_pesos',JSON.stringify(PESOS));
-  var p=PESOS[sku], tot=(+p.carton||0)+(+p.plastico||0)+(+p.otros||0);
+  var p=PESOS[sku], tot=matTotal(p);
   var el=document.getElementById('tot-'+cssId(sku));
-  if(el)el.textContent=tot?tot+' g':'—';
+  if(el)el.textContent=tot?f(tot,0)+' g':'—';
 }
 
 function copiarPesos(){
@@ -296,14 +294,12 @@ function calcular(){
   var sinPeso=[];
   Object.keys(unidadesPorSku).forEach(function(sku){
     var p=PESOS[sku];
-    var tot=p?(+p.carton||0)+(+p.plastico||0)+(+p.otros||0):0;
+    var tot=p?matTotal(p):0;
     if(!tot){sinPeso.push(sku);return;}
     Object.keys(unidadesPorSku[sku]).forEach(function(pais){
       var uds=unidadesPorSku[sku][pais];
-      if(!porPais[pais])porPais[pais]={carton:0,plastico:0,otros:0,total:0,uds:0};
-      porPais[pais].carton+=uds*(+p.carton||0)/1000;
-      porPais[pais].plastico+=uds*(+p.plastico||0)/1000;
-      porPais[pais].otros+=uds*(+p.otros||0)/1000;
+      if(!porPais[pais]){porPais[pais]={total:0,uds:0};MATS.forEach(function(m){porPais[pais][m.k]=0;});}
+      MATS.forEach(function(m){porPais[pais][m.k]+=uds*(+p[m.k]||0)/1000;});
       porPais[pais].total+=uds*tot/1000;
       porPais[pais].uds+=uds;
     });
@@ -324,21 +320,20 @@ function calcular(){
       '<h3>'+info.flag+' '+info.nombre+' <span class="pill '+(d.total<100?'gn':'am')+'">'+(d.total<100?'volumen pequeño':'volumen medio')+'</span></h3>'+
       '<div class="kg">'+f(d.total,1)+' kg/año</div>'+
       '<div class="sub">'+f(d.uds,0)+' unidades vía '+info.canal+'</div>'+
-      '<div class="mat"><span>📦 Cartón/papel</span><b>'+f(d.carton,1)+' kg</b></div>'+
-      '<div class="mat"><span>🧴 Plástico</span><b>'+f(d.plastico,1)+' kg</b></div>'+
-      (d.otros>0.01?'<div class="mat"><span>♻️ Otros</span><b>'+f(d.otros,1)+' kg</b></div>':'')+
+      MATS.map(function(m){return d[m.k]>0.001?'<div class="mat"><span>'+m.ic+' '+m.n+'</span><b>'+f(d[m.k],2)+' kg</b></div>':'';}).join('')+
       '<div class="reg"><div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Tu checklist</div>'+checks+'</div>'+
       '<div class="tasa">'+info.tasa+'</div>'+
     '</div>';
   });
   document.getElementById('paises').innerHTML=h;
+  window._eprPorPais=porPais;
 
   // Resumen copiable
   var txt='INFORME EPR ENVASES — '+new Date().toLocaleDateString('es-ES')+' (últimos 12 meses aprox.)\n';
   Object.keys(porPais).forEach(function(pais){
     var d=porPais[pais];
-    txt+='\n'+PAISES[pais].nombre.toUpperCase()+' ('+PAISES[pais].canal+'): '+f(d.uds,0)+' uds · TOTAL '+f(d.total,1)+' kg'+
-      ' — cartón/papel '+f(d.carton,1)+' kg · plástico '+f(d.plastico,1)+' kg'+(d.otros>0.01?' · otros '+f(d.otros,1)+' kg':'');
+    var det=MATS.filter(function(m){return d[m.k]>0.001;}).map(function(m){return m.n.toLowerCase()+' '+f(d[m.k],2)+' kg';}).join(' · ');
+    txt+='\n'+PAISES[pais].nombre.toUpperCase()+' ('+PAISES[pais].canal+'): '+f(d.uds,0)+' uds · TOTAL '+f(d.total,2)+' kg — '+det;
   });
   if(sinPeso.length)txt+='\n\n(Pendiente de pesar envase: '+sinPeso.length+' SKUs — no incluidos)';
   window._resumenEPR=txt;
@@ -348,6 +343,30 @@ function calcular(){
 }
 
 function marcar(key,val){CHECKS[key]=val;localStorage.setItem('sb_epr_checks',JSON.stringify(CHECKS));}
+
+function descargarEPR(){
+  var d=window._eprPorPais;
+  if(!d||!Object.keys(d).length){alert('Calcula primero tu informe EPR.');return;}
+  var SEP=';'; // Excel en español usa ; como separador
+  var cab=['Pais','Marketplace','Unidades/ano'].concat(MATS.map(function(m){return m.n+' (kg)';})).concat(['Total (kg)']);
+  var lineas=[cab.join(SEP)];
+  Object.keys(d).sort(function(a,b){return d[b].total-d[a].total;}).forEach(function(pais){
+    var r=d[pais], info=PAISES[pais]||{nombre:pais,canal:''};
+    var fila=[info.nombre, info.canal, f(r.uds,0)]
+      .concat(MATS.map(function(m){return f(r[m.k]||0,3).replace('.',',');}))
+      .concat([f(r.total,3).replace('.',',')]);
+    lineas.push(fila.join(SEP));
+  });
+  lineas.push('');
+  lineas.push('Declaracion EPR de envases generada por SellerBrain el '+new Date().toLocaleDateString('es-ES')+' — kg de material puestos en el mercado por pais (segun unidades vendidas).');
+  var csv='\ufeff'+lineas.join('\r\n'); // BOM para acentos en Excel
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download='declaracion-EPR-envases_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
 
 function copiarResumen(){
   var ta=document.createElement('textarea');
