@@ -201,6 +201,24 @@ export default {
         return json(res, cors);
       }
 
+      // --- BACKFILL histórico: procesa UN tipo + UN rango de fechas por llamada.
+      //     El navegador lo orquesta mes a mes (así cada invocación del Worker
+      //     hace un solo informe y no revienta límites de subrequests/tiempo).
+      //     Uso: POST /v1/backfill?tipo=pedidos&desde=2025-01-01&hasta=2025-01-31&key=SB_API_KEY
+      //     tipo: pedidos | devoluciones | settlements
+      if (url.pathname === '/v1/backfill' && request.method === 'POST') {
+        const tipo = url.searchParams.get('tipo') || 'pedidos';
+        const desde = url.searchParams.get('desde');   // YYYY-MM-DD
+        const hasta = url.searchParams.get('hasta');   // YYYY-MM-DD
+        if (!desde || !hasta) return json({ ok: false, error: 'faltan_fechas' }, cors, 400);
+        try {
+          const r = await backfillRango(env, tipo, desde, hasta);
+          return json({ ok: true, tipo, desde, hasta, ...r }, cors);
+        } catch (e) {
+          return json({ ok: false, tipo, desde, hasta, error: e.message }, cors, 200);
+        }
+      }
+
       // --- Plan de acción redactado por IA (capa Claude sobre el motor de reglas) ---
       // Uso: POST /v1/plan  (con SB_API_KEY). Genera bajo demanda (no en cada carga).
       if (url.pathname === '/v1/plan' && request.method === 'POST') {
@@ -912,6 +930,80 @@ function agregarPedidos(filas, fecha) {
     porSku[sku].pedidos += 1;
   }
   return Object.values(porSku);
+}
+
+// Como agregarPedidos, pero para un RANGO de varios días: agrupa por (día, sku)
+// usando la fecha real de compra de cada línea, no una fecha fija.
+function agregarPedidosPorDia(filas) {
+  const porClave = {};
+  for (const r of filas) {
+    if ((r['item-status'] || '').toLowerCase() === 'cancelled') continue;
+    const fecha = aISO(r['purchase-date']);
+    if (!fecha) continue;
+    const sku = r['sku'] || 'desconocido';
+    const k = fecha + '|' + sku;
+    if (!porClave[k]) porClave[k] = { fecha, sku, marketplace: (r['sales-channel'] || '').replace('Amazon.', '').toUpperCase(), unidades: 0, ventas: 0, pedidos: 0 };
+    porClave[k].unidades += +r['quantity'] || 0;
+    porClave[k].ventas += +((r['item-price'] || '0').replace(',', '.')) || 0;
+    porClave[k].pedidos += 1;
+  }
+  return Object.values(porClave);
+}
+
+// Rellena el histórico de UN tipo en UN rango. Lo llama el navegador mes a mes.
+async function backfillRango(env, tipo, desde, hasta) {
+  const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+  if (!planCompleto) throw new Error('SP-API no configurada (faltan secretos LWA/SPAPI)');
+  const MKT = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT];
+
+  if (tipo === 'pedidos') {
+    const tsv = await pedirInforme(env, 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
+      desde + 'T00:00:00Z', hasta + 'T23:59:59Z', MKT);
+    const filas = parseTSV(tsv);
+    const rows = agregarPedidosPorDia(filas);
+    await upsertSupabase(env, 'pedidos_dia', rows);
+    return { filas: filas.length, guardados: rows.length };
+  }
+
+  if (tipo === 'devoluciones') {
+    const tsv = await pedirInforme(env, 'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA',
+      desde + 'T00:00:00Z', hasta + 'T23:59:59Z', MKT);
+    const devMap = {};
+    for (const r of parseTSV(tsv)) {
+      if (!r['sku'] && !r['return-date']) continue;
+      const d = {
+        fecha: aISO(r['return-date']), sku: r['sku'] || '', asin: r['asin'] || '',
+        cantidad: +r['quantity'] || 1, motivo: r['reason'] || '', estado: r['status'] || '',
+        disposicion: r['detailed-disposition'] || ''
+      };
+      const k = [d.fecha, d.sku, d.asin, d.motivo, d.estado, d.disposicion].join('|');
+      if (devMap[k]) devMap[k].cantidad += d.cantidad; else devMap[k] = d;
+    }
+    const rows = Object.values(devMap);
+    await upsertSupabase(env, 'devoluciones', rows);
+    return { filas: rows.length, guardados: rows.length };
+  }
+
+  if (tipo === 'settlements') {
+    // Los settlement NO se piden por rango: Amazon los genera solo y solo se
+    // pueden LISTAR (con retención limitada). Se procesan de a pocos por llamada
+    // (tope) y el navegador repite hasta que 'hayMas' sea false.
+    const reps = await listarSettlements(env, desde + 'T00:00:00Z');
+    const tope = 5;
+    let nuevos = 0, lineasT = 0;
+    for (const rep of reps) {
+      if (nuevos >= tope) break;
+      if (await existeEnSupabase(env, 'settlements', 'report_id', rep.reportId)) continue;
+      const tsv = await descargarDocumento(env, rep.reportDocumentId);
+      const lineas = mapearSettlement(parseTSV(tsv), rep.reportId);
+      await upsertSupabase(env, 'settlement_lineas', lineas);
+      await upsertSupabase(env, 'settlements', [{ report_id: rep.reportId, procesado: new Date().toISOString() }]);
+      nuevos++; lineasT += lineas.length;
+    }
+    return { informes: reps.length, nuevos, lineas: lineasT, hayMas: nuevos >= tope };
+  }
+
+  throw new Error('tipo desconocido: ' + tipo);
 }
 
 function mapearSettlement(lineas, reportId) {

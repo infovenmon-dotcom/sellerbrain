@@ -208,6 +208,13 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     <button class="chip on" onclick="lanzarIngesta()">🚀 Lanzar ingesta SP-API ahora (admin)</button>
     <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae ventas, tarifas reales y devoluciones. Puede tardar 1-2 min.</span>
     <div id="cx-ingesta-res" style="margin-top:10px;font-size:12px;line-height:1.6"></div>
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bd2)">
+      <button class="chip on" id="btn-hist" onclick="cargarHistorico()">📚 Cargar histórico completo (año pasado → hoy)</button>
+      <span style="font-size:11px;color:var(--mu);margin-left:8px">Rellena ventas, devoluciones y tarifas de todos los meses. Tarda varios minutos — <b>no cierres esta ventana</b>.</span>
+      <div id="cx-hist-bar" style="display:none;height:8px;background:#111;border-radius:6px;overflow:hidden;margin-top:10px"><div id="cx-hist-fill" style="height:100%;width:0;background:linear-gradient(90deg,var(--gn),var(--or2));transition:width .3s"></div></div>
+      <div id="cx-hist-res" style="margin-top:8px;font-size:12px;line-height:1.6;max-height:220px;overflow-y:auto"></div>
+    </div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
     <button class="chip on" onclick="probarConexion()">🔍 Probar conexión</button>
@@ -1128,6 +1135,68 @@ function activarAPI(){
   SB_CONFIG.mode='api';
   cargarDatos().then(aplicarDatos);
   toggleConexion();
+}
+
+/* Backfill histórico orquestado desde el navegador: recorre mes a mes y llama
+   al Worker una vez por (tipo, mes). Así cada invocación hace un solo informe. */
+function isoUTC(d){return d.toISOString().slice(0,10);}
+function mesesRango(desde,hasta){
+  var out=[],y=desde.getUTCFullYear(),m=desde.getUTCMonth();
+  while(true){
+    var ini=new Date(Date.UTC(y,m,1));
+    if(ini>hasta)break;
+    var fin=new Date(Date.UTC(y,m+1,0));
+    if(fin>hasta)fin=hasta;
+    out.push({desde:isoUTC(ini),hasta:isoUTC(fin)});
+    m++;if(m>11){m=0;y++;}
+  }
+  return out;
+}
+async function cargarHistorico(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-hist-res'), bar=document.getElementById('cx-hist-bar'), fill=document.getElementById('cx-hist-fill');
+  var btn=document.getElementById('btn-hist');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) en el campo de arriba.</span>';return;}
+  var hoy=new Date();
+  var ayer=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),hoy.getUTCDate()-1));
+  var ini=new Date(Date.UTC(hoy.getUTCFullYear()-1,0,1)); // 1 de enero del año pasado
+  var meses=mesesRango(ini,ayer);
+  // Plan de trabajo: pedidos+devoluciones por cada mes, y settlements al final.
+  var pasos=[];
+  meses.forEach(function(m){pasos.push({tipo:'pedidos',m:m});pasos.push({tipo:'devoluciones',m:m});});
+  var totalBarra=pasos.length+1; // +1 = settlements
+  btn.disabled=true;btn.style.opacity=.5;bar.style.display='block';
+  box.innerHTML='';
+  var log=function(html){box.insertAdjacentHTML('afterbegin',html);};
+  var okC=0,errC=0;
+  function avance(i){fill.style.width=Math.round(i/totalBarra*100)+'%';}
+  log('<div style="color:var(--mu)">⏳ '+meses.length+' meses · '+pasos.length+' informes de ventas/devoluciones + tarifas. Empezando…</div>');
+  for(var i=0;i<pasos.length;i++){
+    var p=pasos[i];
+    var etq=(p.tipo==='pedidos'?'🛒 ventas':'↩️ devoluciones')+' '+p.m.desde.slice(0,7);
+    try{
+      var r=await fetch(SB_CONFIG.apiBase+'/v1/backfill?tipo='+p.tipo+'&desde='+p.m.desde+'&hasta='+p.m.hasta+'&key='+encodeURIComponent(key),{method:'POST'});
+      var d=await r.json();
+      if(d.ok){okC++;log('<div>✓ '+etq+' — '+(d.guardados||0)+' filas</div>');}
+      else{errC++;log('<div style="color:var(--am)">⚠️ '+etq+' — '+(d.error||'error')+'</div>');}
+    }catch(e){errC++;log('<div style="color:var(--rd)">❌ '+etq+' — '+e.message+'</div>');}
+    avance(i+1);
+  }
+  // Settlements: repetir hasta drenar (hayMas=false)
+  log('<div style="color:var(--mu)">⏳ tarifas reales (settlements)…</div>');
+  var vuelta=0;
+  while(vuelta<40){
+    vuelta++;
+    try{
+      var rs=await fetch(SB_CONFIG.apiBase+'/v1/backfill?tipo=settlements&desde='+isoUTC(ini)+'&hasta='+isoUTC(ayer)+'&key='+encodeURIComponent(key),{method:'POST'});
+      var ds=await rs.json();
+      if(ds.ok){okC++;log('<div>✓ tarifas — '+(ds.nuevos||0)+' informes nuevos ('+(ds.lineas||0)+' líneas)</div>');if(!ds.hayMas)break;}
+      else{errC++;log('<div style="color:var(--am)">⚠️ tarifas — '+(ds.error||'error')+'</div>');break;}
+    }catch(e){errC++;log('<div style="color:var(--rd)">❌ tarifas — '+e.message+'</div>');break;}
+  }
+  avance(totalBarra);
+  log('<div style="margin-top:6px;padding:8px;border-radius:8px;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.3)"><b style="color:var(--or2)">Histórico cargado</b> — '+okC+' pasos ok'+(errC?', '+errC+' con aviso':'')+'. Refresca el dashboard y las herramientas (EPR, devoluciones, stock) ya tienen todo el histórico.</div>');
+  btn.disabled=false;btn.style.opacity=1;
 }
 
 /* =====================================================================
