@@ -361,8 +361,11 @@ export default {
 /* =====================================================================
  * TOKENS
  * =================================================================== */
+const _tokenCache = {}; // {scope:{token,exp}} — evita pedir token en cada llamada (menos subrequests)
 async function lwaToken(env, scope) {
   // scope 'spapi' | 'ads'
+  const c = _tokenCache[scope];
+  if (c && c.exp > Date.now() + 60000) return c.token;   // token aún válido (>1 min)
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: scope === 'ads' ? env.ADS_REFRESH_TOKEN : env.SPAPI_REFRESH_TOKEN,
@@ -375,7 +378,9 @@ async function lwaToken(env, scope) {
     body
   });
   if (!r.ok) throw new Error('LWA token ' + scope + ': ' + r.status + ' ' + await r.text());
-  return (await r.json()).access_token;
+  const j = await r.json();
+  _tokenCache[scope] = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) * 1000) };
+  return j.access_token;
 }
 
 /* =====================================================================
@@ -563,16 +568,24 @@ async function ingestaDiaria(env, origen) {
     const hace30d = new Date(Date.now() - 30 * 86400000).toISOString();
     const tsv = await pedirInforme(env, 'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA',
       hace30d, ayer + 'T23:59:59Z', [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
-    await upsertSupabase(env, 'devoluciones', parseTSV(tsv).map(r => ({
-      fecha: (r['return-date'] || '').slice(0, 10), sku: r['sku'], asin: r['asin'],
-      cantidad: +r['quantity'] || 1, motivo: r['reason'] || '', estado: r['status'] || '',
-      disposicion: r['detailed-disposition'] || ''
-    })));
-    resultado.pasos.push({ devoluciones: 'ok' });
+    const devMap = {};
+    for (const r of parseTSV(tsv)) {
+      if (!r['sku'] && !r['return-date']) continue;
+      const d = {
+        fecha: aISO(r['return-date']), sku: r['sku'] || '', asin: r['asin'] || '',
+        cantidad: +r['quantity'] || 1, motivo: r['reason'] || '', estado: r['status'] || '',
+        disposicion: r['detailed-disposition'] || ''
+      };
+      const k = [d.fecha, d.sku, d.asin, d.motivo, d.estado, d.disposicion].join('|');
+      if (devMap[k]) devMap[k].cantidad += d.cantidad; else devMap[k] = d; // agrupa duplicados
+    }
+    await upsertSupabase(env, 'devoluciones', Object.values(devMap));
+    resultado.pasos.push({ devoluciones: Object.keys(devMap).length });
   } catch (e) { resultado.pasos.push({ devoluciones_error: e.message }); }
 
   // 3b. Keywords reales de Amazon (Brand Analytics — requiere Brand Registry y rol aprobado)
-  if (planCompleto) try {
+  //     Solo lunes: gasta subrequests y suele fallar sin Brand Registry; no hace falta a diario.
+  if (planCompleto && new Date().getUTCDay() === 1) try {
     const iniSemana = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const tsv = await pedirInforme(env, 'GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT',
       iniSemana + 'T00:00:00Z', ayer + 'T23:59:59Z', [MARKETPLACES.ES]);
@@ -866,6 +879,16 @@ async function existeEnSupabase(env, tabla, campo, valor) {
 /* =====================================================================
  * PARSERS
  * =================================================================== */
+// Amazon EU manda fechas como DD.MM.YYYY (a veces ISO). Postgres necesita YYYY-MM-DD.
+function aISO(s) {
+  s = (s || '').trim();
+  let m = s.match(/^(\d{2})[.\/-](\d{2})[.\/-](\d{4})/);   // DD.MM.YYYY
+  if (m) return m[3] + '-' + m[2] + '-' + m[1];
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);                 // ya ISO
+  if (m) return m[0];
+  return (s.slice(0, 10) || null);
+}
+
 function parseTSV(texto) {
   const lineas = texto.split('\n').filter(l => l.trim());
   if (!lineas.length) return [];
@@ -896,7 +919,7 @@ function mapearSettlement(lineas, reportId) {
     .filter(l => l['transaction-type'])
     .map(l => ({
       report_id: reportId,
-      fecha: (l['posted-date'] || '').slice(0, 10),
+      fecha: aISO(l['posted-date']),
       tipo: l['transaction-type'],
       pedido: l['order-id'] || '',
       sku: l['sku'] || '',
