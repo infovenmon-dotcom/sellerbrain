@@ -877,7 +877,7 @@ function agregarPedidos(filas, fecha) {
     const sku = r['sku'] || 'desconocido';
     if (!porSku[sku]) porSku[sku] = { fecha, sku, marketplace: (r['sales-channel'] || '').replace('Amazon.', '').toUpperCase(), unidades: 0, ventas: 0, pedidos: 0 };
     porSku[sku].unidades += +r['quantity'] || 0;
-    porSku[sku].ventas += +(r['item-price'] || 0);
+    porSku[sku].ventas += +((r['item-price'] || '0').replace(',', '.')) || 0; // EU: decimales con coma
     porSku[sku].pedidos += 1;
   }
   return Object.values(porSku);
