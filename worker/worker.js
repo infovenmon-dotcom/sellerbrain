@@ -239,6 +239,14 @@ export default {
         }
       }
 
+      // --- Imágenes de catálogo: trae la miniatura de Amazon por ASIN.
+      //     De a pocos por llamada (subrequests); el navegador repite hasta
+      //     que hayMas=false. Uso: POST /v1/catalogo-imagenes?key=SB_API_KEY
+      if (url.pathname === '/v1/catalogo-imagenes' && request.method === 'POST') {
+        try { return json({ ok: true, ...(await traerImagenesCatalogo(env)) }, cors); }
+        catch (e) { return json({ ok: false, error: e.message }, cors, 200); }
+      }
+
       // --- Plan de acción redactado por IA (capa Claude sobre el motor de reglas) ---
       // Uso: POST /v1/plan  (con SB_API_KEY). Genera bajo demanda (no en cada carga).
       if (url.pathname === '/v1/plan' && request.method === 'POST') {
@@ -588,6 +596,7 @@ async function ingestaDiaria(env, origen) {
       [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
     const filas = parseTSV(tsv);
     await upsertSupabase(env, 'pedidos_dia', agregarPedidos(filas, ayer));
+    await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas)); // nombres
     resultado.pasos.push({ pedidos: filas.length });
   } catch (e) { resultado.pasos.push({ pedidos_error: e.message }); }
 
@@ -977,6 +986,20 @@ function agregarPedidos(filas, fecha) {
   return Object.values(porSku);
 }
 
+// Extrae el catálogo (nombre + ASIN por SKU) del informe de pedidos. El
+// nombre viene gratis en el flat file; la imagen se pide aparte por ASIN.
+// No incluye 'imagen' en el payload → el upsert NO pisa la imagen ya guardada.
+function catalogoDePedidos(filas) {
+  const cat = {};
+  for (const r of filas) {
+    const sku = r['sku'] || '';
+    const nombre = (r['product-name'] || '').trim();
+    if (!sku || cat[sku]) continue;
+    cat[sku] = { sku, asin: (r['asin'] || '').trim(), nombre: nombre.slice(0, 300) };
+  }
+  return Object.values(cat);
+}
+
 // Como agregarPedidos, pero para un RANGO de varios días: agrupa por (día, sku)
 // usando la fecha real de compra de cada línea, no una fecha fija.
 function agregarPedidosPorDia(filas) {
@@ -995,6 +1018,29 @@ function agregarPedidosPorDia(filas) {
   return Object.values(porClave);
 }
 
+// Trae miniaturas del catálogo de Amazon por ASIN, de a pocos por llamada.
+async function traerImagenesCatalogo(env) {
+  const pend = await selectSupabase(env, 'productos_catalogo?imagen=is.null&asin=not.is.null&limit=8');
+  let ok = 0;
+  for (const p of (pend || [])) {
+    if (!p.asin) continue;
+    try {
+      const item = await getCatalogoItem(env, p.asin, MARKETPLACES.ES);
+      const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
+      const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
+      const imagen = main ? main.link : null;
+      const nombre = (item && item.summaries && item.summaries[0] && item.summaries[0].itemName) || p.nombre || null;
+      if (imagen) { await upsertSupabase(env, 'productos_catalogo', [{ sku: p.sku, imagen, nombre }]); ok++; }
+    } catch (_) { /* si un ASIN falla, seguimos con el resto */ }
+  }
+  return { procesados: ok, pendientes: (pend || []).length, hayMas: (pend || []).length >= 8 };
+}
+
+async function getCatalogoItem(env, asin, marketplaceId) {
+  return spapiCall(env, '/catalog/2022-04-01/items/' + encodeURIComponent(asin) +
+    '?marketplaceIds=' + marketplaceId + '&includedData=images,summaries');
+}
+
 // Rellena el histórico de UN tipo en UN rango. Lo llama el navegador mes a mes.
 async function backfillRango(env, tipo, desde, hasta) {
   const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
@@ -1007,6 +1053,7 @@ async function backfillRango(env, tipo, desde, hasta) {
     const filas = parseTSV(tsv);
     const rows = agregarPedidosPorDia(filas);
     await upsertSupabase(env, 'pedidos_dia', rows);
+    await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas)); // nombres
     return { filas: filas.length, guardados: rows.length };
   }
 

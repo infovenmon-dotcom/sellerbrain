@@ -46,6 +46,20 @@ create table if not exists inventario (
 -- Worker (service key) se la salta y sigue funcionando.
 alter table inventario enable row level security;
 
+-- ---------------------------------------------------------------------
+-- 0c) CATÁLOGO — nombre e imagen por SKU. El nombre lo captura la ingesta
+--     de pedidos (viene gratis en el informe). La imagen la trae el Worker
+--     desde el catálogo de Amazon por ASIN (botón / endpoint aparte).
+-- ---------------------------------------------------------------------
+create table if not exists productos_catalogo (
+  sku         text primary key,
+  asin        text,
+  nombre      text,
+  imagen      text,                        -- URL de la miniatura principal
+  actualizado timestamptz not null default now()
+);
+alter table productos_catalogo enable row level security;
+
 
 -- ---------------------------------------------------------------------
 -- LIMPIEZA — borra las vistas si existían de un intento anterior. Hace
@@ -200,8 +214,9 @@ calc as (
   from base b left join fees f on f.sku = b.sku
 )
 select
-  sku as nom, sku, '📦' as emoji, uds, ventas, 0::numeric ppc, ben,
-  case when ventas>0 then round(ben/ventas*100,1) else 0 end mg,
+  coalesce(nullif(pc.nombre,''), c.sku) as nom,   -- nombre real; si no hay, el SKU
+  c.sku, '📦' as emoji, pc.imagen, c.uds, c.ventas, 0::numeric ppc, c.ben,
+  case when c.ventas>0 then round(c.ben/c.ventas*100,1) else 0 end mg,
   -- trend: unidades de los últimos 10 días con datos (rellena a 0 si faltan)
   coalesce((
     select array_agg(coalesce(d.u,0) order by g.dia)
@@ -209,13 +224,14 @@ select
     left join (select fecha, sum(uds) u from v_ventas_dia where sku=c.sku group by fecha) d
       on d.fecha = g.dia::date
   ), array[0,0,0,0,0,0,0,0,0,0]) as trend,
-  case when (case when ventas>0 then ben/ventas*100 else 0 end) < 0 then 'rd'
-       when (case when ventas>0 then ben/ventas*100 else 0 end) < 15 then 'am' else 'gn' end estado,
-  case when nocoste then 'Sin coste ➜ clic'
-       when (case when ventas>0 then ben/ventas*100 else 0 end) < 0 then 'Pierde'
-       when (case when ventas>0 then ben/ventas*100 else 0 end) < 15 then 'Margen bajo' else 'OK' end txt
+  case when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 0 then 'rd'
+       when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 15 then 'am' else 'gn' end estado,
+  case when c.nocoste then 'Sin coste ➜ clic'
+       when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 0 then 'Pierde'
+       when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 15 then 'Margen bajo' else 'OK' end txt
 from calc c
-order by ventas desc
+left join productos_catalogo pc on pc.sku = c.sku
+order by c.ventas desc
 limit 30;
 
 
