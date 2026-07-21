@@ -181,7 +181,8 @@ base as (
   select vd.sku,
     sum(vd.uds) uds, sum(vd.ventas) ventas,
     max(cp.coste) coste
-  from v_ventas_dia vd, mes
+  from v_ventas_dia vd
+  cross join mes
   left join costes_producto cp on cp.sku = vd.sku
   where vd.fecha >= mes.ini
   group by vd.sku
