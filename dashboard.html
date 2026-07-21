@@ -714,39 +714,36 @@ function refetchProductos(){
       if(!PRODUCTOS.length)prods.innerHTML='<tr><td colspan="8" style="color:var(--mu);padding:12px">Sin ventas en «'+lab+'».</td></tr>';})
     .catch(function(e){prods.innerHTML='<tr><td colspan="8" style="color:var(--rd);padding:12px">Error: '+e.message+'</td></tr>';});
 }
-/* Mapa de Europa: burbuja por país en su posición real, tamaño/color por ventas. */
-var EU_COORDS={
-  ES:[-3.7,40.4,'España'], PT:[-8.0,39.5,'Portugal'], FR:[2.3,46.6,'Francia'],
-  IT:[12.5,42.5,'Italia'], DE:[10.4,51.2,'Alemania'], BE:[4.5,50.6,'Bélgica'],
-  NL:[5.3,52.1,'P. Bajos'], GB:[-1.5,52.5,'Reino Unido'], IE:[-8.0,53.3,'Irlanda'],
-  AT:[14.5,47.6,'Austria'], CH:[8.2,46.8,'Suiza'], PL:[19.1,52.1,'Polonia'],
-  SE:[15.6,60.1,'Suecia'], DK:[9.5,56.0,'Dinamarca'], CZ:[15.5,49.8,'Chequia']
-};
+/* Mapa REAL de Europa (fronteras): carga assets/europa.json y colorea cada
+   país por sus ventas, con tooltip al pasar el ratón. */
+var NOMBRE_PAIS={ES:'España',FR:'Francia',IT:'Italia',DE:'Alemania',BE:'Bélgica',NL:'Países Bajos',PT:'Portugal',GB:'Reino Unido',IE:'Irlanda',PL:'Polonia',SE:'Suecia',DK:'Dinamarca',CZ:'Chequia',AT:'Austria',CH:'Suiza'};
+var _europaGeo=null, _vpPaises=[];
 function renderMapaVentas(paises){
-  var svg=document.getElementById('mapa-svg'); if(!svg)return;
-  var byP={}, max=0;
-  (paises||[]).forEach(function(p){byP[p.pais]=p; if(p.ventas>max)max=p.ventas;});
-  var W=520,H=380, lo0=-11,lo1=26,la0=35,la1=62;
+  _vpPaises=paises||[];
+  if(_europaGeo){ pintarMapa(); return; }
+  fetch('assets/europa.json').then(function(r){return r.json();}).then(function(g){_europaGeo=g;pintarMapa();}).catch(function(){});
+}
+function pintarMapa(){
+  var svg=document.getElementById('mapa-svg'); if(!svg||!_europaGeo)return;
+  var W=520,H=380, lo0=-11,lo1=30,la0=35,la1=60;
   function X(lon){return ((lon-lo0)/(lo1-lo0)*W);}
   function Y(lat){return ((la1-lat)/(la1-la0)*H);}
-  // países con datos que no estén en la lista fija → los añadimos al borde
-  // (excepto 'OTROS'/'?' que no son países y no van en el mapa)
-  Object.keys(byP).forEach(function(code){ if(code!=='OTROS'&&code!=='?'&&!EU_COORDS[code]) EU_COORDS[code]=[24,37,code]; });
-  var els='';
-  Object.keys(EU_COORDS).forEach(function(code){
-    var c=EU_COORDS[code], x=X(c[0]).toFixed(1), y=Y(c[1]).toFixed(1);
-    var d=byP[code], v=d?d.ventas:0, has=v>0;
-    var rad=has?(9+Math.sqrt(v)/Math.sqrt(max||1)*24):4.5;
+  var byP={},max=0;
+  _vpPaises.forEach(function(p){byP[p.pais]=p; if(p.pais!=='OTROS'&&p.pais!=='?'&&p.ventas>max)max=p.ventas;});
+  var paths='';
+  _europaGeo.feats.forEach(function(ft){
+    var d=byP[ft.iso], v=d?d.ventas:0, has=v>0;
     var inten=has?(0.28+v/(max||1)*0.72):0;
-    var fill=has?'rgba(46,230,160,'+inten.toFixed(2)+')':'rgba(255,255,255,.05)';
-    var stroke=has?'var(--gn)':'rgba(255,255,255,.14)';
-    var tip=(BANDERA[code]||'🏳️')+' '+c[2]+' · '+(has?f(v,2)+'€ · '+d.uds+' uds · '+d.pedidos+' pedidos':'sin ventas');
-    els+='<g class="mp" data-tip="'+tip.replace(/"/g,'&quot;')+'">'+
-      '<circle cx="'+x+'" cy="'+y+'" r="'+rad.toFixed(1)+'" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.3"/>'+
-      '<text x="'+x+'" y="'+(+y+3)+'" text-anchor="middle" font-size="9" fill="'+(has&&inten>0.5?'#052':'rgba(255,255,255,.55)')+'" font-weight="700">'+code+'</text>'+
-      '<title>'+tip+'</title></g>';
+    var fill=has?'rgba(46,230,160,'+inten.toFixed(2)+')':'rgba(255,255,255,.045)';
+    var dstr='';
+    ft.polys.forEach(function(poly){
+      dstr+='M'+poly.map(function(pt){return X(pt[0]).toFixed(1)+','+Y(pt[1]).toFixed(1);}).join('L')+'Z';
+    });
+    var nom=NOMBRE_PAIS[ft.iso]||ft.name;
+    var tip=(BANDERA[ft.iso]||'🏳️')+' '+nom+' · '+(has?f(v,2)+'€ · '+d.uds+' uds · '+d.pedidos+' pedidos':'sin ventas');
+    paths+='<path class="mp" data-tip="'+tip.replace(/"/g,'&quot;')+'" d="'+dstr+'" fill="'+fill+'" stroke="rgba(255,255,255,.16)" stroke-width="0.5"/>';
   });
-  svg.innerHTML=els;
+  svg.innerHTML=paths;
 }
 document.addEventListener('mousemove',function(e){
   var tip=document.getElementById('mapa-tip'); if(!tip)return;
