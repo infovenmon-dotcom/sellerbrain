@@ -378,8 +378,19 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   <!-- TABLA PRODUCTOS -->
   <div class="card">
     <div class="ch">
-      <h2><span class="ci">📦</span> Beneficio por producto</h2>
-      <span class="more">Ver los 53 →</span>
+      <h2><span class="ci">📦</span> Beneficio por producto <span id="prod-periodo" style="font-size:12px;color:var(--mu);font-weight:400"></span></h2>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px">
+      <button class="chip" data-pp="hoy" onclick="prodPeriodo('hoy')">Hoy</button>
+      <button class="chip" data-pp="ayer" onclick="prodPeriodo('ayer')">Ayer</button>
+      <button class="chip on" data-pp="mes" onclick="prodPeriodo('mes')">Este mes</button>
+      <button class="chip" data-pp="mespas" onclick="prodPeriodo('mespas')">Mes pasado</button>
+      <button class="chip" data-pp="anio" onclick="prodPeriodo('anio')">Este año</button>
+      <button class="chip" data-pp="aniopas" onclick="prodPeriodo('aniopas')">Año pasado</button>
+      <span style="color:var(--mu);font-size:11px">·</span>
+      <input type="date" id="prod-d1" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
+      <input type="date" id="prod-d2" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
+      <button class="chip" data-pp="custom" onclick="prodPeriodo('custom')">Aplicar</button>
     </div>
     <div style="overflow-x:auto">
     <table class="tbl">
@@ -628,6 +639,32 @@ function renderProds(){
   document.getElementById('prods').innerHTML=h;
 }
 
+/* Selector de periodo de la tabla de productos: pide /v1/productos y repinta. */
+function ymdUTC(d){return d.toISOString().slice(0,10);}
+function prodPeriodo(id){
+  var h=new Date(),Y=h.getUTCFullYear(),M=h.getUTCMonth(),D=h.getUTCDate();
+  var desde,hasta,lab;
+  if(id==='hoy'){desde=hasta=ymdUTC(new Date(Date.UTC(Y,M,D)));lab='hoy';}
+  else if(id==='ayer'){desde=hasta=ymdUTC(new Date(Date.UTC(Y,M,D-1)));lab='ayer';}
+  else if(id==='mes'){desde=ymdUTC(new Date(Date.UTC(Y,M,1)));hasta=ymdUTC(new Date(Date.UTC(Y,M,D)));lab='este mes';}
+  else if(id==='mespas'){desde=ymdUTC(new Date(Date.UTC(Y,M-1,1)));hasta=ymdUTC(new Date(Date.UTC(Y,M,0)));lab='mes pasado';}
+  else if(id==='anio'){desde=ymdUTC(new Date(Date.UTC(Y,0,1)));hasta=ymdUTC(new Date(Date.UTC(Y,M,D)));lab='este año';}
+  else if(id==='aniopas'){desde=ymdUTC(new Date(Date.UTC(Y-1,0,1)));hasta=ymdUTC(new Date(Date.UTC(Y-1,11,31)));lab='año pasado';}
+  else if(id==='custom'){desde=document.getElementById('prod-d1').value;hasta=document.getElementById('prod-d2').value;if(!desde||!hasta){alert('Elige las dos fechas.');return;}lab='personalizado';}
+  document.querySelectorAll('[data-pp]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-pp')===id);});
+  var lbl=document.getElementById('prod-periodo');
+  if(lbl)lbl.textContent='· '+lab+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
+  var prods=document.getElementById('prods');
+  prods.innerHTML='<tr><td colspan="8" style="color:var(--mu);padding:12px">Cargando '+lab+'…</td></tr>';
+  var tok=(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return null;}})();
+  var auth=SB_CONFIG.apiKey||tok||'';
+  fetch(SB_CONFIG.apiBase+'/v1/productos?desde='+desde+'&hasta='+hasta,{headers:auth?{'Authorization':'Bearer '+auth}:{}})
+    .then(function(r){return r.json();})
+    .then(function(d){PRODUCTOS=d.productos||[];renderProds();
+      if(!PRODUCTOS.length)prods.innerHTML='<tr><td colspan="8" style="color:var(--mu);padding:12px">Sin ventas en «'+lab+'».</td></tr>';})
+    .catch(function(e){prods.innerHTML='<tr><td colspan="8" style="color:var(--rd);padding:12px">Error: '+e.message+'</td></tr>';});
+}
+
 function renderCerebro(){
   var total=0, h='';
   ACCIONES.forEach(function(a){
@@ -697,6 +734,7 @@ function aplicarDatos(d){
   [renderTiles,renderPnl,renderChart,renderProds,renderCerebro,renderAlertas,renderStock].forEach(function(fn){
     try{ fn(); }catch(e){ console.warn('render', fn.name, e); }
   });
+  var lbl=document.getElementById('prod-periodo'); if(lbl && !lbl.textContent) lbl.textContent='· este mes';
   avisoDatos();
 }
 // Banner honesto: distingue "conectado sin ventas aún" de "demo" de "falló la API".

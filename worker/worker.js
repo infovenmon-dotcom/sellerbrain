@@ -73,7 +73,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa';
+        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -126,6 +126,15 @@ export default {
       // --- Comparativas (mes vs mes, año vs año) ---
       if (url.pathname === '/v1/comparativa') {
         return json({ filas: await selSafe(env, 'v_comparativa', []) }, cors);
+      }
+
+      // --- Tabla "Beneficio por producto" para CUALQUIER periodo (selector) ---
+      //     GET /v1/productos?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+      if (url.pathname === '/v1/productos') {
+        const desde = url.searchParams.get('desde');
+        const hasta = url.searchParams.get('hasta');
+        if (!desde || !hasta) return json({ error: 'faltan_fechas' }, cors, 400);
+        return json({ desde, hasta, productos: await productosPeriodo(env, desde, hasta) }, cors);
       }
 
       // --- Contrato del dashboard (lo que consume el frontend) ---
@@ -643,14 +652,16 @@ async function ingestaDiaria(env, origen) {
   const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN); // Plan 2
   const resultado = { fecha: ayer, origen: origen || 'manual', plan: planCompleto ? 'completo' : 'analisis(ads-only)', pasos: [] };
 
-  // 1. Pedidos del día (ventas + unidades por SKU) — solo Plan 2
+  // 1. Pedidos — AYER + HOY (parcial) por día real, para que el día en curso no
+  //    salga siempre vacío en el dashboard. agregarPedidosPorDia agrupa por la
+  //    fecha real de cada línea, así ayer y hoy quedan en filas separadas.
   if (planCompleto) try {
     const tsv = await pedirInforme(env,
       'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
-      ayer + 'T00:00:00Z', ayer + 'T23:59:59Z',
+      ayer + 'T00:00:00Z', new Date().toISOString(),
       [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
     const filas = parseTSV(tsv);
-    await upsertSupabase(env, 'pedidos_dia', agregarPedidos(filas, ayer));
+    await upsertSupabase(env, 'pedidos_dia', agregarPedidosPorDia(filas));
     await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas)); // nombres
     resultado.pasos.push({ pedidos: filas.length });
   } catch (e) { resultado.pasos.push({ pedidos_error: e.message }); }
@@ -808,6 +819,55 @@ async function ingestaPPC(env, opts) {
 async function selSafe(env, vista, def) {
   try { return await selectSupabase(env, vista); }
   catch (_) { return def === undefined ? [] : def; }
+}
+
+// Tabla "Beneficio por producto" para un rango cualquiera (mismo criterio que
+// v_productos_mes: reparte tarifas con el ratio de cuenta del periodo; estima
+// 15%+15% si no hay settlements; resta el coste si está puesto).
+async function productosPeriodo(env, desde, hasta) {
+  const ped = await selectSupabase(env, 'pedidos_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,fecha,uds,ventas');
+  const bySku = {};
+  let tv = 0;
+  for (const r of (ped || [])) {
+    const s = r.sku || '';
+    if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, dias: {} };
+    bySku[s].uds += +r.uds || 0;
+    bySku[s].ventas += +r.ventas || 0;
+    bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + (+r.uds || 0);
+    tv += +r.ventas || 0;
+  }
+  // ratio de tarifas de cuenta en el rango
+  let tf = 0, tc = 0;
+  try {
+    const sc = await selectSupabase(env, 'v_settle_clasificado?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=cubo,importe');
+    for (const r of (sc || [])) {
+      if (r.cubo === 'fba') tf += -(+r.importe || 0);
+      else if (r.cubo === 'com') tc += -(+r.importe || 0);
+    }
+  } catch (_) { /* sin settlements → estima abajo */ }
+  const fbaR = (tv > 0 && tf > 0 && tf / tv <= 0.6) ? tf / tv : 0.15;
+  const comR = (tv > 0 && tc > 0 && tc / tv <= 0.4) ? tc / tv : 0.15;
+  const feeR = fbaR + comR;
+  const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste'))) costes[c.sku] = +c.coste || 0; } catch (_) {}
+  const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,imagen'))) cat[c.sku] = c; } catch (_) {}
+  // trend: últimos 10 días del rango
+  const fin = new Date(hasta + 'T00:00:00Z');
+  const dias10 = [];
+  for (let i = 9; i >= 0; i--) dias10.push(new Date(fin.getTime() - i * 86400000).toISOString().slice(0, 10));
+  return Object.values(bySku).map(p => {
+    const coste = costes[p.sku];
+    const nocoste = coste === undefined;
+    const ben = +(p.ventas - p.uds * (coste || 0) - p.ventas * feeR).toFixed(2);
+    const mg = p.ventas > 0 ? +(ben / p.ventas * 100).toFixed(1) : 0;
+    const c = cat[p.sku] || {};
+    return {
+      nom: (c.nombre || p.sku), sku: p.sku, emoji: '📦', imagen: c.imagen || null,
+      uds: p.uds, ventas: +p.ventas.toFixed(2), ppc: 0, ben, mg,
+      trend: dias10.map(d => p.dias[d] || 0),
+      estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),
+      txt: nocoste ? 'Sin coste ➜ clic' : (mg < 0 ? 'Pierde' : mg < 15 ? 'Margen bajo' : 'OK')
+    };
+  }).sort((a, b) => b.ventas - a.ventas).slice(0, 50);
 }
 
 async function construirDashboard(env) {
