@@ -1004,18 +1004,28 @@ function csvConstruirPayload(){
   };
 }
 
-/* Editor de coste al hacer clic en un producto (modo CSV) */
+/* Editor de coste al hacer clic en un producto (modo CSV y API).
+   En CSV recalcula en el navegador; en API lo guarda en el servidor
+   (tabla costes_producto) y recarga el dashboard: el P&L real se recalcula. */
 document.addEventListener('click',function(ev){
-  if(SB_CONFIG.mode!=='csv')return;
+  if(SB_CONFIG.mode!=='csv'&&SB_CONFIG.mode!=='api')return;
   var tr=ev.target.closest('#prods tr'); if(!tr)return;
   var sku=tr.querySelector('.sku'); if(!sku)return;
   sku=sku.textContent;
   var actual=COSTES[sku]||'';
   var v=prompt('Coste unitario (€, DDP) de '+sku+':',actual);
   if(v===null)return;
-  COSTES[sku]=parseFloat(v.replace(',','.'))||0;
+  var coste=parseFloat(v.replace(',','.'))||0;
+  COSTES[sku]=coste;
   localStorage.setItem('sb_costes',JSON.stringify(COSTES));
-  aplicarDatos(csvConstruirPayload());
+  if(SB_CONFIG.mode==='csv'){aplicarDatos(csvConstruirPayload());return;}
+  // API: guardar en servidor y recargar
+  var tok=(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return null;}})();
+  var auth=SB_CONFIG.apiKey||tok||'';
+  fetch(SB_CONFIG.apiBase+'/v1/costes',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+auth},body:JSON.stringify({sku:sku,coste:coste})})
+    .then(function(r){return r.json();})
+    .then(function(){cargarDatos().then(aplicarDatos);})
+    .catch(function(){});
 });
 
 /* Restaurar sesión CSV previa */

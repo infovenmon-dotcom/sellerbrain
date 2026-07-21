@@ -73,7 +73,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords';
+        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -106,6 +106,26 @@ export default {
         }
         const token = await firmarJWT(env, { email, plan: m.plan || 'beta' });
         return json({ ok: true, token, plan: m.plan || 'beta', expira: m.expira || null }, cors);
+      }
+
+      // --- Costes de producto (COGS) — el margen real depende de esto ---
+      //     GET: lista {sku:coste}. POST {sku, coste}: guarda uno.
+      if (url.pathname === '/v1/costes') {
+        if (request.method === 'POST') {
+          let b; try { b = await request.json(); } catch (_) { b = {}; }
+          const sku = (b.sku || '').trim();
+          if (!sku) return json({ ok: false, error: 'falta_sku' }, cors, 400);
+          await upsertSupabase(env, 'costes_producto', [{ sku, coste: +b.coste || 0, actualizado: new Date().toISOString() }]);
+          return json({ ok: true, sku, coste: +b.coste || 0 }, cors);
+        }
+        const filas = await selSafe(env, 'costes_producto', []);
+        const mapa = {}; for (const f of filas) mapa[f.sku] = +f.coste || 0;
+        return json({ costes: mapa }, cors);
+      }
+
+      // --- Comparativas (mes vs mes, año vs año) ---
+      if (url.pathname === '/v1/comparativa') {
+        return json({ filas: await selSafe(env, 'v_comparativa', []) }, cors);
       }
 
       // --- Contrato del dashboard (lo que consume el frontend) ---
@@ -420,9 +440,14 @@ async function spapiCall(env, path, opts = {}) {
 }
 
 async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketplaceIds) {
+  // Los informes "snapshot" (p.ej. inventario) NO aceptan rango de fechas:
+  // se piden con dataStartTime/dataEndTime a null y solo se manda el tipo.
+  const body = { reportType, marketplaceIds };
+  if (dataStartTime) body.dataStartTime = dataStartTime;
+  if (dataEndTime) body.dataEndTime = dataEndTime;
   const { reportId } = await spapiCall(env, '/reports/2021-06-30/reports', {
     method: 'POST',
-    body: JSON.stringify({ reportType, dataStartTime, dataEndTime, marketplaceIds })
+    body: JSON.stringify(body)
   });
   // Poll hasta DONE (máx ~4 min; los settlement suelen estar ya generados)
   for (let i = 0; i < 24; i++) {
@@ -600,6 +625,26 @@ async function ingestaDiaria(env, origen) {
     await upsertSupabase(env, 'devoluciones', Object.values(devMap));
     resultado.pasos.push({ devoluciones: Object.keys(devMap).length });
   } catch (e) { resultado.pasos.push({ devoluciones_error: e.message }); }
+
+  // 3c. Inventario FBA (snapshot) — para días de cobertura / rotura de stock.
+  if (planCompleto) try {
+    const tsv = await pedirInforme(env, 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA',
+      null, null, [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
+    const inv = {};
+    for (const r of parseTSV(tsv)) {
+      const sku = r['sku'] || r['seller-sku'] || '';
+      if (!sku) continue;
+      inv[sku] = {
+        sku,
+        disponible: (+r['afn-fulfillable-quantity'] || 0),
+        entrante: (+r['afn-inbound-working-quantity'] || 0) + (+r['afn-inbound-shipped-quantity'] || 0) + (+r['afn-inbound-receiving-quantity'] || 0),
+        reservado: (+r['afn-reserved-quantity'] || 0),
+        snapshot: new Date().toISOString()
+      };
+    }
+    await upsertSupabase(env, 'inventario', Object.values(inv));
+    resultado.pasos.push({ inventario: Object.keys(inv).length });
+  } catch (e) { resultado.pasos.push({ inventario_error: e.message }); }
 
   // 3b. Keywords reales de Amazon (Brand Analytics — requiere Brand Registry y rol aprobado)
   //     Solo lunes: gasta subrequests y suele fallar sin Brand Registry; no hace falta a diario.
