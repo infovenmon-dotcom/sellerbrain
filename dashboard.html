@@ -413,6 +413,20 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
       <button class="chip" data-pais="ES" onclick="prodPais('ES')">🇪🇸 ES</button>
       <button class="chip" data-pais="FR" onclick="prodPais('FR')">🇫🇷 FR</button>
       <button class="chip" data-pais="IT" onclick="prodPais('IT')">🇮🇹 IT</button>
+      <span style="flex:1"></span>
+      <button class="chip on" onclick="togglecostes()">💰 Cargar costes</button>
+    </div>
+    <div id="costes-panel" style="display:none;margin:0 0 12px;padding:12px;background:#111;border:1px solid var(--bd2);border-radius:10px">
+      <div style="font-size:12px;color:var(--mu2);margin-bottom:8px;line-height:1.5">
+        Pega el <b>coste unitario (€, puesto en almacén)</b> de cada SKU, una línea por producto. Formato: <code>SKU,coste</code> (también vale con <code>;</code> o tabulador). Ejemplo:<br>
+        <code style="color:var(--mu)">CargadorBlanco,3.20<br>PanelTermomix,5.90</code>
+      </div>
+      <textarea id="costes-txt" rows="6" style="width:100%;background:#0b0b0b;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:8px;font-family:monospace" placeholder="SKU,coste&#10;SKU,coste"></textarea>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <button class="chip on" onclick="guardarCostesBulk()">Guardar todos</button>
+        <button class="chip" onclick="rellenarCostesSKUs()">Rellenar mis SKUs</button>
+        <span id="costes-res" style="font-size:12px;color:var(--mu)"></span>
+      </div>
     </div>
     <div style="overflow-x:auto">
     <table class="tbl">
@@ -1185,9 +1199,40 @@ document.addEventListener('click',function(ev){
   var auth=SB_CONFIG.apiKey||tok||'';
   fetch(SB_CONFIG.apiBase+'/v1/costes',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+auth},body:JSON.stringify({sku:sku,coste:coste})})
     .then(function(r){return r.json();})
-    .then(function(){cargarDatos().then(aplicarDatos);})
+    .then(function(){ refetchProductos(); })  // refresca la tabla del periodo actual con el margen ya real
     .catch(function(){});
 });
+
+/* Carga de costes EN BLOQUE (pega SKU,coste para todos de una vez). */
+function togglecostes(){var p=document.getElementById('costes-panel');p.style.display=p.style.display==='none'?'block':'none';}
+function rellenarCostesSKUs(){
+  // precarga la caja con tus SKUs actuales (y su coste si ya lo tienen)
+  var t=document.getElementById('costes-txt');
+  var lines=(PRODUCTOS||[]).map(function(p){return p.sku+','+(COSTES[p.sku]||'');});
+  t.value=lines.join('\n');
+}
+function guardarCostesBulk(){
+  var txt=document.getElementById('costes-txt').value||'';
+  var res=document.getElementById('costes-res');
+  var lista=[];
+  txt.split('\n').forEach(function(l){
+    l=l.trim(); if(!l)return;
+    var parts=l.split(/[,;\t]/);
+    if(parts.length<2)return;
+    var sku=parts[0].trim();
+    var coste=parseFloat((parts[1]||'').replace(',','.'));
+    if(!sku||isNaN(coste))return;
+    lista.push({sku:sku,coste:coste});
+    COSTES[sku]=coste;
+  });
+  if(!lista.length){res.textContent='No encontré líneas válidas (usa SKU,coste).';res.style.color='var(--am)';return;}
+  localStorage.setItem('sb_costes',JSON.stringify(COSTES));
+  res.textContent='Guardando '+lista.length+'…';res.style.color='var(--mu)';
+  fetch(SB_CONFIG.apiBase+'/v1/costes',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHdr()),body:JSON.stringify({lista:lista})})
+    .then(function(r){return r.json();})
+    .then(function(d){res.textContent='✅ '+(d.guardados||lista.length)+' costes guardados.';res.style.color='var(--or2)';refetchProductos();})
+    .catch(function(e){res.textContent='Error: '+e.message;res.style.color='var(--rd)';});
+}
 
 /* Restaurar sesión CSV previa */
 (function(){

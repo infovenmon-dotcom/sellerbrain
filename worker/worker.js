@@ -113,6 +113,15 @@ export default {
       if (url.pathname === '/v1/costes') {
         if (request.method === 'POST') {
           let b; try { b = await request.json(); } catch (_) { b = {}; }
+          // Carga en BLOQUE: { lista: [{sku, coste}, ...] }
+          if (Array.isArray(b.lista)) {
+            const rows = b.lista
+              .map(x => ({ sku: (x.sku || '').trim(), coste: +x.coste || 0, actualizado: new Date().toISOString() }))
+              .filter(x => x.sku);
+            if (rows.length) await upsertSupabase(env, 'costes_producto', rows);
+            return json({ ok: true, guardados: rows.length }, cors);
+          }
+          // Uno solo: { sku, coste }
           const sku = (b.sku || '').trim();
           if (!sku) return json({ ok: false, error: 'falta_sku' }, cors, 400);
           await upsertSupabase(env, 'costes_producto', [{ sku, coste: +b.coste || 0, actualizado: new Date().toISOString() }]);
