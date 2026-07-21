@@ -1193,6 +1193,8 @@ async function traerImagenes(){
 /* Backfill histórico orquestado desde el navegador: recorre mes a mes y llama
    al Worker una vez por (tipo, mes). Así cada invocación hace un solo informe. */
 function isoUTC(d){return d.toISOString().slice(0,10);}
+function pausa(ms){return new Promise(function(r){setTimeout(r,ms);});}
+function esCuota(txt){txt=String(txt||'');return txt.indexOf('429')>-1||txt.indexOf('QuotaExceeded')>-1||txt.indexOf('quota')>-1;}
 function mesesRango(desde,hasta){
   var out=[],y=desde.getUTCFullYear(),m=desde.getUTCMonth();
   while(true){
@@ -1221,22 +1223,47 @@ async function cargarHistorico(){
   btn.disabled=true;btn.style.opacity=.5;bar.style.display='block';
   box.innerHTML='';
   var log=function(html){box.insertAdjacentHTML('afterbegin',html);};
-  var okC=0,errC=0;
+  var okC=0;
   function avance(i){fill.style.width=Math.round(i/totalBarra*100)+'%';}
-  log('<div style="color:var(--mu)">⏳ '+meses.length+' meses · '+pasos.length+' informes de ventas/devoluciones + tarifas. Empezando…</div>');
-  for(var i=0;i<pasos.length;i++){
-    var p=pasos[i];
-    var etq=(p.tipo==='pedidos'?'🛒 ventas':'↩️ devoluciones')+' '+p.m.desde.slice(0,7);
+  function etqDe(p){return (p.tipo==='pedidos'?'🛒 ventas':'↩️ devoluciones')+' '+p.m.desde.slice(0,7);}
+  // Ejecuta un paso; devuelve 'ok' | 'cuota' | 'error'
+  async function correr(p){
     try{
       var r=await fetch(SB_CONFIG.apiBase+'/v1/backfill?tipo='+p.tipo+'&desde='+p.m.desde+'&hasta='+p.m.hasta+'&key='+encodeURIComponent(key),{method:'POST'});
       var d=await r.json();
-      if(d.ok){okC++;log('<div>✓ '+etq+' — '+(d.guardados||0)+' filas</div>');}
-      else{errC++;log('<div style="color:var(--am)">⚠️ '+etq+' — '+(d.error||'error')+'</div>');}
-    }catch(e){errC++;log('<div style="color:var(--rd)">❌ '+etq+' — '+e.message+'</div>');}
-    avance(i+1);
+      if(d.ok){okC++;log('<div>✓ '+etqDe(p)+' — '+(d.guardados||0)+' filas</div>');return 'ok';}
+      if(esCuota(d.error)){log('<div style="color:var(--am)">⏳ '+etqDe(p)+' — cuota, reintentaré</div>');return 'cuota';}
+      log('<div style="color:var(--am)">⚠️ '+etqDe(p)+' — '+(d.error||'error')+'</div>');return 'error';
+    }catch(e){
+      if(esCuota(e.message)){log('<div style="color:var(--am)">⏳ '+etqDe(p)+' — cuota, reintentaré</div>');return 'cuota';}
+      log('<div style="color:var(--rd)">❌ '+etqDe(p)+' — '+e.message+'</div>');return 'error';
+    }
   }
-  // Settlements: repetir hasta drenar (hayMas=false)
-  log('<div style="color:var(--mu)">⏳ tarifas reales (settlements)…</div>');
+  log('<div style="color:var(--mu)">⏳ '+meses.length+' meses · '+pasos.length+' informes de ventas/devoluciones + tarifas. Empezando…</div>');
+  var pendientes=[];
+  for(var i=0;i<pasos.length;i++){
+    var res=await correr(pasos[i]);
+    if(res==='cuota')pendientes.push(pasos[i]);
+    avance(i+1);
+    await pausa(1500); // pequeño respiro para no saturar la cuota de Amazon
+  }
+  // Reintentos de los que fallaron por cuota: hasta 4 rondas, esperando a que
+  // Amazon recupere el límite (la cuota de crear informes se repone ~1/min).
+  var ronda=0;
+  while(pendientes.length && ronda<4){
+    ronda++;
+    log('<div style="color:var(--mu)">⏳ Reintento '+ronda+'/4 de '+pendientes.length+' meses con cuota — esperando 45s…</div>');
+    await pausa(45000);
+    var quedan=[];
+    for(var j=0;j<pendientes.length;j++){
+      var res2=await correr(pendientes[j]);
+      if(res2==='cuota')quedan.push(pendientes[j]);
+      await pausa(4000);
+    }
+    pendientes=quedan;
+  }
+  // Settlements: repetir hasta drenar. Solo últimos 90 días (retención Amazon).
+  log('<div style="color:var(--mu)">⏳ tarifas reales (settlements, últimos 90 días)…</div>');
   var vuelta=0;
   while(vuelta<40){
     vuelta++;
@@ -1244,11 +1271,13 @@ async function cargarHistorico(){
       var rs=await fetch(SB_CONFIG.apiBase+'/v1/backfill?tipo=settlements&desde='+isoUTC(ini)+'&hasta='+isoUTC(ayer)+'&key='+encodeURIComponent(key),{method:'POST'});
       var ds=await rs.json();
       if(ds.ok){okC++;log('<div>✓ tarifas — '+(ds.nuevos||0)+' informes nuevos ('+(ds.lineas||0)+' líneas)</div>');if(!ds.hayMas)break;}
-      else{errC++;log('<div style="color:var(--am)">⚠️ tarifas — '+(ds.error||'error')+'</div>');break;}
-    }catch(e){errC++;log('<div style="color:var(--rd)">❌ tarifas — '+e.message+'</div>');break;}
+      else if(esCuota(ds.error)){log('<div style="color:var(--am)">⏳ tarifas — cuota, espero 45s…</div>');await pausa(45000);}
+      else{log('<div style="color:var(--am)">⚠️ tarifas — '+(ds.error||'error')+'</div>');break;}
+    }catch(e){log('<div style="color:var(--rd)">❌ tarifas — '+e.message+'</div>');break;}
   }
   avance(totalBarra);
-  log('<div style="margin-top:6px;padding:8px;border-radius:8px;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.3)"><b style="color:var(--or2)">Histórico cargado</b> — '+okC+' pasos ok'+(errC?', '+errC+' con aviso':'')+'. Refresca el dashboard y las herramientas (EPR, devoluciones, stock) ya tienen todo el histórico.</div>');
+  var pend=pendientes.length;
+  log('<div style="margin-top:6px;padding:8px;border-radius:8px;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.3)"><b style="color:var(--or2)">Histórico cargado</b> — '+okC+' pasos ok'+(pend?'. Quedan '+pend+' meses con cuota: vuelve a pulsar el botón en unos minutos y los recoge (los ya cargados se saltan solos).':'. Refresca el dashboard y las herramientas — ya tienen todo el histórico.')+'</div>');
   btn.disabled=false;btn.style.opacity=1;
 }
 

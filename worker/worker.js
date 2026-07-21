@@ -639,8 +639,8 @@ async function ingestaDiaria(env, origen) {
       const k = [d.fecha, d.sku, d.asin, d.motivo, d.estado, d.disposicion].join('|');
       if (devMap[k]) devMap[k].cantidad += d.cantidad; else devMap[k] = d; // agrupa duplicados
     }
-    await upsertSupabase(env, 'devoluciones', Object.values(devMap));
-    resultado.pasos.push({ devoluciones: Object.keys(devMap).length });
+    const nDev = await guardarDevoluciones(env, Object.values(devMap));
+    resultado.pasos.push({ devoluciones: nDev });
   } catch (e) { resultado.pasos.push({ devoluciones_error: e.message }); }
 
   // 3c. Inventario FBA (snapshot) — para días de cobertura / rotura de stock.
@@ -1020,6 +1020,34 @@ function catalogoDePedidos(filas) {
   return Object.values(cat);
 }
 
+// Guarda devoluciones tolerando el constraint real de la tabla: si choca
+// (error 21000 = dos filas del lote comparten la clave única), reagrupa por
+// una clave más gruesa y reintenta. Así funciona sea cual sea el constraint.
+async function guardarDevoluciones(env, rows) {
+  if (!rows || !rows.length) return 0;
+  const reagrupar = (arr, campos) => {
+    const m = {};
+    for (const d of arr) {
+      const k = campos.map(c => d[c]).join('|');
+      if (m[k]) m[k].cantidad += d.cantidad;
+      else m[k] = { fecha: d.fecha, sku: d.sku, asin: d.asin, motivo: d.motivo, estado: d.estado, disposicion: d.disposicion, cantidad: d.cantidad };
+    }
+    return Object.values(m);
+  };
+  const intentos = [
+    rows,
+    () => reagrupar(rows, ['fecha', 'sku', 'motivo']),
+    () => reagrupar(rows, ['fecha', 'sku'])
+  ];
+  let ultimo;
+  for (let i = 0; i < intentos.length; i++) {
+    const lote = typeof intentos[i] === 'function' ? intentos[i]() : intentos[i];
+    try { await upsertSupabase(env, 'devoluciones', lote); return lote.length; }
+    catch (e) { ultimo = e; if (!/21000/.test(e.message)) throw e; } // solo reintenta si es colisión
+  }
+  throw ultimo;
+}
+
 // Como agregarPedidos, pero para un RANGO de varios días: agrupa por (día, sku)
 // usando la fecha real de compra de cada línea, no una fecha fija.
 function agregarPedidosPorDia(filas) {
@@ -1091,16 +1119,18 @@ async function backfillRango(env, tipo, desde, hasta) {
       const k = [d.fecha, d.sku, d.asin, d.motivo, d.estado, d.disposicion].join('|');
       if (devMap[k]) devMap[k].cantidad += d.cantidad; else devMap[k] = d;
     }
-    const rows = Object.values(devMap);
-    await upsertSupabase(env, 'devoluciones', rows);
-    return { filas: rows.length, guardados: rows.length };
+    const guardados = await guardarDevoluciones(env, Object.values(devMap));
+    return { filas: Object.keys(devMap).length, guardados };
   }
 
   if (tipo === 'settlements') {
     // Los settlement NO se piden por rango: Amazon los genera solo y solo se
-    // pueden LISTAR (con retención limitada). Se procesan de a pocos por llamada
-    // (tope) y el navegador repite hasta que 'hayMas' sea false.
-    const reps = await listarSettlements(env, desde + 'T00:00:00Z');
+    // pueden LISTAR, y con RETENCIÓN de 90 DÍAS (createdSince más antiguo → 400).
+    // Se topa a 89 días; el navegador repite hasta que 'hayMas' sea false.
+    const min90 = new Date(Date.now() - 89 * 86400000).toISOString();
+    let createdSince = desde + 'T00:00:00Z';
+    if (new Date(createdSince) < new Date(min90)) createdSince = min90;
+    const reps = await listarSettlements(env, createdSince);
     const tope = 5;
     let nuevos = 0, lineasT = 0;
     for (const rep of reps) {
