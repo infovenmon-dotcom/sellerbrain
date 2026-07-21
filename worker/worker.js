@@ -471,6 +471,37 @@ async function spapiCall(env, path, opts = {}) {
   return r.json();
 }
 
+// Inventario FBA en TIEMPO REAL (FBA Inventory API) — sin generar informe, así
+// evita el FATAL del report GET_FBA_MYI_*. Trae stock + nombre + ASIN de todos
+// los SKUs de un marketplace, paginado.
+async function traerInventarioFBA(env, marketplaceId) {
+  const inv = {}, cat = {};
+  let nextToken = null, pag = 0;
+  do {
+    const qs = new URLSearchParams({ details: 'true', granularityType: 'Marketplace', granularityId: marketplaceId, marketplaceIds: marketplaceId });
+    if (nextToken) qs.set('nextToken', nextToken);
+    const j = await spapiCall(env, '/fba/inventory/v1/summaries?' + qs.toString());
+    const items = (j && j.payload && j.payload.inventorySummaries) || [];
+    for (const it of items) {
+      const sku = it.sellerSku || '';
+      if (!sku) continue;
+      const d = it.inventoryDetails || {};
+      inv[sku] = {
+        sku,
+        disponible: (+d.fulfillableQuantity || 0),
+        entrante: (+d.inboundWorkingQuantity || 0) + (+d.inboundShippedQuantity || 0) + (+d.inboundReceivingQuantity || 0),
+        reservado: (d.reservedQuantity && +d.reservedQuantity.totalReservedQuantity) || 0,
+        snapshot: new Date().toISOString()
+      };
+      const nombre = (it.productName || '').trim();
+      if (nombre) cat[sku] = { sku, asin: (it.asin || '').trim(), nombre: nombre.slice(0, 300) };
+    }
+    nextToken = (j && j.pagination && j.pagination.nextToken) || null;
+    pag++;
+  } while (nextToken && pag < 10);
+  return { inv, cat };
+}
+
 async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketplaceIds) {
   // Los informes "snapshot" (p.ej. inventario) NO aceptan rango de fechas:
   // se piden con dataStartTime/dataEndTime a null y solo se manda el tipo.
@@ -549,8 +580,8 @@ async function adsInformeDiario(env, fecha /* YYYY-MM-DD */, profileId) {
   if (!r.ok) throw new Error('Ads report: ' + r.status + ' ' + await r.text());
   const { reportId } = await r.json();
   // Poll (esperas cortas para no agotar el tiempo del Worker)
-  for (let i = 0; i < 40; i++) {
-    await sleep(3000);
+  for (let i = 0; i < 55; i++) {
+    await sleep(4000);
     const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
     const j = await st.json();
     if (j.status === 'COMPLETED') {
@@ -588,8 +619,8 @@ async function adsInformeTerminos(env, profileId, desde, hasta) {
   const r = await fetch(ADS_HOST + '/reporting/reports', { method: 'POST', headers, body: JSON.stringify(body) });
   if (!r.ok) throw new Error('Ads términos: ' + r.status + ' ' + await r.text());
   const { reportId } = await r.json();
-  for (let i = 0; i < 40; i++) {
-    await sleep(3000);
+  for (let i = 0; i < 55; i++) {
+    await sleep(4000);
     const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
     const j = await st.json();
     if (j.status === 'COMPLETED') {
@@ -668,28 +699,11 @@ async function ingestaDiaria(env, origen) {
     resultado.pasos.push({ devoluciones: nDev });
   } catch (e) { resultado.pasos.push({ devoluciones_error: e.message }); }
 
-  // 3c. Inventario FBA (snapshot) — para días de cobertura / rotura de stock.
+  // 3c. Inventario FBA (tiempo real, FBA Inventory API — sin informe → sin FATAL).
+  //     Trae stock + nombre + ASIN de TODOS los SKUs (hayan vendido o no).
   if (planCompleto) try {
-    const tsv = await pedirInforme(env, 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA',
-      null, null, [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
-    const inv = {};
-    const cat = {};
-    for (const r of parseTSV(tsv)) {
-      const sku = r['sku'] || r['seller-sku'] || '';
-      if (!sku) continue;
-      inv[sku] = {
-        sku,
-        disponible: (+r['afn-fulfillable-quantity'] || 0),
-        entrante: (+r['afn-inbound-working-quantity'] || 0) + (+r['afn-inbound-shipped-quantity'] || 0) + (+r['afn-inbound-receiving-quantity'] || 0),
-        reservado: (+r['afn-reserved-quantity'] || 0),
-        snapshot: new Date().toISOString()
-      };
-      // El inventario trae nombre y ASIN de TODOS los SKUs de FBA (hayan vendido
-      // o no) → rellena el catálogo de nombres para todos, no solo los vendidos.
-      const nombre = (r['product-name'] || '').trim();
-      if (nombre) cat[sku] = { sku, asin: (r['asin'] || '').trim(), nombre: nombre.slice(0, 300) };
-    }
-    await upsertSupabase(env, 'inventario', Object.values(inv));
+    const { inv, cat } = await traerInventarioFBA(env, MARKETPLACES.ES);
+    if (Object.keys(inv).length) await upsertSupabase(env, 'inventario', Object.values(inv));
     if (Object.keys(cat).length) await upsertSupabase(env, 'productos_catalogo', Object.values(cat));
     resultado.pasos.push({ inventario: Object.keys(inv).length });
   } catch (e) { resultado.pasos.push({ inventario_error: e.message }); }
