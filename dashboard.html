@@ -538,7 +538,7 @@ var PERIODOS=[], PNL={}, PRODUCTOS=[], ACCIONES=[], ALERTAS=[], STOCK=[], SERIE3
 var perActivo='mes';
 function renderTiles(){
   var h='';
-  PERIODOS.forEach(function(p){
+  (PERIODOS||[]).forEach(function(p){
     var mgCol=p.mg>=20?'var(--gn)':p.mg>=10?'var(--am)':'var(--rd)';
     h+='<div class="tile'+(p.id===perActivo?' on':'')+'" onclick="setPer(\''+p.id+'\')">'+
       '<div class="per"><span>'+p.nom+'</span><span>'+p.fecha+'</span></div>'+
@@ -558,7 +558,12 @@ function renderTiles(){
 function setPer(id){perActivo=id;renderTiles();renderPnl();}
 
 function renderPnl(){
-  var p=PERIODOS.find(function(x){return x.id===perActivo;});
+  var p=PERIODOS.find(function(x){return x.id===perActivo;}) || PERIODOS[0];
+  if(!p || !PNL || !PNL.ventas){
+    document.getElementById('pnl-per').textContent='';
+    document.getElementById('pnl').innerHTML='<div style="color:var(--mu);font-size:12px;padding:14px 4px">Sin datos del periodo todavía. Se llena cuando entren ventas y tarifas.</div>';
+    return;
+  }
   document.getElementById('pnl-per').textContent='· '+p.nom.toLowerCase()+' ('+p.fecha+')';
   var esc=p.ventas/PNL.ventas; // escala demo
   var rows=[
@@ -584,7 +589,8 @@ function renderPnl(){
 
 function renderChart(){
   var W=640,H=170,pad=6;
-  var maxV=Math.max.apply(null,SERIE30.map(function(d){return d.v;}));
+  if(!SERIE30 || !SERIE30.length){ document.getElementById('chart').innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin serie de 30 días todavía.</div>'; return; }
+  var maxV=Math.max.apply(null,SERIE30.map(function(d){return d.v;}))||1;
   function pts(key){return SERIE30.map(function(d,i){
     var x=pad+i*(W-2*pad)/29, y=H-pad-(d[key]/maxV)*(H-2*pad);
     return x.toFixed(1)+','+y.toFixed(1);
@@ -602,10 +608,11 @@ function renderChart(){
 
 function renderProds(){
   var h='';
-  PRODUCTOS.forEach(function(p){
-    var max=Math.max.apply(null,p.trend);
-    var spark='<svg class="spark" viewBox="0 0 64 20"><polyline fill="none" stroke="'+(p.trend[9]>=p.trend[0]?'var(--gn)':'var(--rd)')+'" stroke-width="1.6" points="'+
-      p.trend.map(function(v,i){return (i*7)+','+(19-v/max*17);}).join(' ')+'"/></svg>';
+  (PRODUCTOS||[]).forEach(function(p){
+    var tr=(p.trend&&p.trend.length)?p.trend:[0,0,0,0,0,0,0,0,0,0];
+    var max=Math.max.apply(null,tr)||1;
+    var spark='<svg class="spark" viewBox="0 0 64 20"><polyline fill="none" stroke="'+(tr[tr.length-1]>=tr[0]?'var(--gn)':'var(--rd)')+'" stroke-width="1.6" points="'+
+      tr.map(function(v,i){return (i*7)+','+(19-v/max*17);}).join(' ')+'"/></svg>';
     var img=p.imagen?('<img src="'+p.imagen+'" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:7px" onerror="this.parentNode.textContent=\'📦\'">'):(p.emoji||'📦');
     h+='<tr>'+
       '<td><div class="prod"><div class="img">'+img+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+'</div></div></div></td>'+
@@ -685,7 +692,11 @@ function aplicarDatos(d){
     if(el){var mins=Math.round((Date.now()-new Date(d.meta.actualizado))/60000);
       el.innerHTML='<span class="dot"></span> Datos: '+(SB_CONFIG.mode==='demo'?'demo':SB_CONFIG.mode==='csv'?'tus archivos':(mins<60?'hace '+mins+' min':'hace '+Math.round(mins/60)+' h'));}
   }
-  renderTiles();renderPnl();renderChart();renderProds();renderCerebro();renderAlertas();renderStock();
+  // Cada render aislado: si uno falla, no debe tumbar a los demás (antes, un
+  // periodo vacío rompía renderPnl y dejaba en blanco gráfica + productos).
+  [renderTiles,renderPnl,renderChart,renderProds,renderCerebro,renderAlertas,renderStock].forEach(function(fn){
+    try{ fn(); }catch(e){ console.warn('render', fn.name, e); }
+  });
   avisoDatos();
 }
 // Banner honesto: distingue "conectado sin ventas aún" de "demo" de "falló la API".
