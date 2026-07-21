@@ -221,10 +221,12 @@ export default {
         return json(res, cors);
       }
 
-      // --- Ingesta PPC (Ads API) en invocación separada (límite subrequests) ---
+      // --- Ingesta PPC (Ads API) en invocación separada (límite subrequests).
+      //     ?pais=ES procesa UN país (para no pasar el límite en plan gratis).
       if (url.pathname === '/v1/ingest-ppc' && request.method === 'POST') {
         const forzar = url.searchParams.get('terminos') === '1';
-        const res = await ingestaPPC(env, { terminos: forzar });
+        const pais = url.searchParams.get('pais') || null;
+        const res = await ingestaPPC(env, { terminos: forzar, pais });
         return json(res, cors);
       }
 
@@ -244,6 +246,21 @@ export default {
         } catch (e) {
           return json({ ok: false, tipo, desde, hasta, error: e.message }, cors, 200);
         }
+      }
+
+      // --- Estado del backfill: qué meses (YYYY-MM) ya tienen datos, para que
+      //     el navegador NO se los vuelva a pedir a Amazon. Uso: GET /v1/backfill-estado
+      if (url.pathname === '/v1/backfill-estado') {
+        const mesesDe = async (tabla) => {
+          try {
+            const r = await fetch(env.SUPABASE_URL + '/rest/v1/' + tabla + '?select=fecha', { headers: { apikey: env.SUPABASE_SERVICE_KEY } });
+            if (!r.ok) return [];
+            const s = new Set();
+            for (const f of (await r.json())) if (f.fecha) s.add(String(f.fecha).slice(0, 7));
+            return [...s];
+          } catch (_) { return []; }
+        };
+        return json({ pedidos: await mesesDe('pedidos_dia'), devoluciones: await mesesDe('devoluciones') }, cors);
       }
 
       // --- Imágenes de catálogo: trae la miniatura de Amazon por ASIN.
@@ -495,8 +512,8 @@ async function descargarDocumento(env, documentId) {
     const ds = new DecompressionStream('gzip');
     buf = await new Response(new Response(buf).body.pipeThrough(ds)).arrayBuffer();
   }
-  // Los flat files de Amazon EU vienen en latin-1/cp1252 con tabulador
-  return new TextDecoder('iso-8859-1').decode(buf);
+  // Los flat files de la SP-API vienen en UTF-8 (nombres con acentos, ñ, etc.).
+  return new TextDecoder('utf-8').decode(buf);
 }
 
 /* =====================================================================
@@ -608,10 +625,17 @@ async function ingestaDiaria(env, origen) {
   } catch (e) { resultado.pasos.push({ pedidos_error: e.message }); }
 
   // 2. Settlements nuevos (tarifas FBA REALES por unidad + devoluciones + ajustes) — solo Plan 2
+  //    Tope por ejecución: cada settlement gasta varias subpeticiones; procesar
+  //    muchos de golpe agota el límite del plan gratis y tumba devoluciones/
+  //    inventario. Se procesan de a pocos; el resto entra en la siguiente
+  //    ejecución (existeEnSupabase salta los ya hechos).
   if (planCompleto) try {
     const hace15d = new Date(Date.now() - 15 * 86400000).toISOString();
     const reps = await listarSettlements(env, hace15d);
+    const topeSettle = 4;
+    let procS = 0;
     for (const rep of reps) {
+      if (procS >= topeSettle) break;
       const yaProcesado = await existeEnSupabase(env, 'settlements', 'report_id', rep.reportId);
       if (yaProcesado) continue;
       const tsv = await descargarDocumento(env, rep.reportDocumentId);
@@ -619,8 +643,9 @@ async function ingestaDiaria(env, origen) {
       // La CABECERA primero (settlement_lineas tiene FK a settlements).
       await upsertSupabase(env, 'settlements', [{ report_id: rep.reportId, procesado: new Date().toISOString() }]);
       await upsertSupabase(env, 'settlement_lineas', mapearSettlement(lineas, rep.reportId));
+      procS++;
     }
-    resultado.pasos.push({ settlements: reps.length });
+    resultado.pasos.push({ settlements: procS + (procS >= topeSettle ? ' (quedan más para la próxima)' : '') });
   } catch (e) { resultado.pasos.push({ settlements_error: e.message }); }
 
   // 3. Devoluciones FBA — solo Plan 2
@@ -648,6 +673,7 @@ async function ingestaDiaria(env, origen) {
     const tsv = await pedirInforme(env, 'GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA',
       null, null, [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
     const inv = {};
+    const cat = {};
     for (const r of parseTSV(tsv)) {
       const sku = r['sku'] || r['seller-sku'] || '';
       if (!sku) continue;
@@ -658,8 +684,13 @@ async function ingestaDiaria(env, origen) {
         reservado: (+r['afn-reserved-quantity'] || 0),
         snapshot: new Date().toISOString()
       };
+      // El inventario trae nombre y ASIN de TODOS los SKUs de FBA (hayan vendido
+      // o no) → rellena el catálogo de nombres para todos, no solo los vendidos.
+      const nombre = (r['product-name'] || '').trim();
+      if (nombre) cat[sku] = { sku, asin: (r['asin'] || '').trim(), nombre: nombre.slice(0, 300) };
     }
     await upsertSupabase(env, 'inventario', Object.values(inv));
+    if (Object.keys(cat).length) await upsertSupabase(env, 'productos_catalogo', Object.values(cat));
     resultado.pasos.push({ inventario: Object.keys(inv).length });
   } catch (e) { resultado.pasos.push({ inventario_error: e.message }); }
 
@@ -707,10 +738,12 @@ async function ingestaDiaria(env, origen) {
 async function ingestaPPC(env, opts) {
   const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const forzarTerminos = !!(opts && opts.terminos);
+  const soloPais = opts && opts.pais;   // si viene, procesa SOLO ese país
+  const perfiles = soloPais ? (ADS_PROFILES[soloPais] ? { [soloPais]: ADS_PROFILES[soloPais] } : {}) : ADS_PROFILES;
   const resultado = { fecha: ayer, pasos: [] };
 
   // 1. PPC del día por país
-  for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
+  for (const [pais, profileId] of Object.entries(perfiles)) {
     try {
       const ads = await adsInformeDiario(env, ayer, profileId);
       const tot = (ads || []).reduce((a, c) => ({
@@ -736,7 +769,7 @@ async function ingestaPPC(env, opts) {
   if (forzarTerminos || new Date().getUTCDay() === 1) {
     const hastaT = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
-    for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
+    for (const [pais, profileId] of Object.entries(perfiles)) {
       try {
         const filas = await adsInformeTerminos(env, profileId, desdeT, hastaT);
         await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({

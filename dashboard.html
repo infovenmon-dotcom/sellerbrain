@@ -611,7 +611,7 @@ function renderProds(){
       '<td><div class="prod"><div class="img">'+img+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+'</div></div></div></td>'+
       '<td>'+p.uds+'</td>'+
       '<td>'+f(p.ventas,2)+'€</td>'+
-      '<td style="color:#B983D6">-'+f(p.ppc,2)+'€</td>'+
+      '<td style="color:'+(p.ppc>0?'#B983D6':'var(--mu)')+'">'+(p.ppc>0?'-'+f(p.ppc,2)+'€':'—')+'</td>'+
       '<td style="font-weight:700;color:'+(p.ben>=0?'var(--gn)':'var(--rd)')+'">'+(p.ben>=0?'+':'')+f(p.ben,2)+'€</td>'+
       '<td>'+f(p.mg,1)+'%</td>'+
       '<td>'+spark+'</td>'+
@@ -1146,16 +1146,22 @@ function lanzarIngesta(){
         ';border:1px solid '+(ok?'rgba(46,204,113,.3)':'rgba(245,166,35,.3)')+'">'+
         '<b style="color:'+(ok?'var(--gn)':'var(--am)')+'">plan: '+plan+'</b> '+(ok?'🎉 SP-API encendida':'— aún en modo ads-only (faltan secretos SP-API)')+
         '<div style="margin-top:8px;color:var(--mu2)">'+(pasosHTML(d.pasos)||'(sin pasos)')+'</div></div>';
-      box.innerHTML=htmlSp+'<div style="margin-top:8px;color:var(--mu)">⏳ 2/2 Ingesta PPC (Ads API)…</div>';
-      // Segunda invocación: PPC (así no se junta con SP-API y no revienta el límite gratis)
-      return fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?key='+encodeURIComponent(key),{method:'POST'})
-        .then(function(r){return r.json();})
-        .then(function(dp){
+      box.innerHTML=htmlSp+'<div style="margin-top:8px;color:var(--mu)">⏳ 2/2 Ingesta PPC (Ads API), país por país…</div>';
+      // PPC país por país (cada país en su propia invocación → no revienta el
+      // límite de subrequests del plan gratis).
+      return (async function(){
+        var paises=['ES','FR','IT','BE'], pasos=[];
+        for(var i=0;i<paises.length;i++){
+          try{
+            var rp=await fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?pais='+paises[i]+'&key='+encodeURIComponent(key),{method:'POST'});
+            var dp=await rp.json();
+            (dp.pasos||[]).forEach(function(x){pasos.push(x);});
+          }catch(e){pasos.push({['ppc_'+paises[i]+'_error']:e.message});}
           var htmlPpc='<div style="margin-top:8px;padding:11px;border-radius:10px;background:rgba(74,158,222,.08);border:1px solid rgba(74,158,222,.25)">'+
-            '<b style="color:var(--bl)">PPC (Ads API)</b><div style="margin-top:6px;color:var(--mu2)">'+(pasosHTML(dp.pasos)||'(sin pasos)')+'</div></div>';
-          box.innerHTML=htmlSp+htmlPpc+'<div style="margin-top:8px;font-size:11px;color:var(--mu)">Refresca el dashboard: los datos reales empezarán a aparecer.</div>';
-        })
-        .catch(function(e){box.innerHTML=htmlSp+'<div style="margin-top:8px;color:var(--am)">PPC no terminó: '+e.message+'</div>';});
+            '<b style="color:var(--bl)">PPC (Ads API)</b><div style="margin-top:6px;color:var(--mu2)">'+(pasosHTML(pasos)||'…')+'</div></div>';
+          box.innerHTML=htmlSp+htmlPpc+'<div style="margin-top:8px;font-size:11px;color:var(--mu)">'+(i<paises.length-1?'⏳ siguiente país…':'Refresca el dashboard: los datos reales empezarán a aparecer.')+'</div>';
+        }
+      })();
     })
     .catch(function(e){box.innerHTML='<span style="color:var(--rd)">Error o tardó demasiado: '+e.message+'. Si es timeout, el cron de las 03:00 lo hará solo — revisa mañana.</span>';});
 }
@@ -1216,13 +1222,30 @@ async function cargarHistorico(){
   var ayer=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),hoy.getUTCDate()-1));
   var ini=new Date(Date.UTC(hoy.getUTCFullYear()-1,0,1)); // 1 de enero del año pasado
   var meses=mesesRango(ini,ayer);
-  // Plan de trabajo: pedidos+devoluciones por cada mes, y settlements al final.
-  var pasos=[];
-  meses.forEach(function(m){pasos.push({tipo:'pedidos',m:m});pasos.push({tipo:'devoluciones',m:m});});
-  var totalBarra=pasos.length+1; // +1 = settlements
   btn.disabled=true;btn.style.opacity=.5;bar.style.display='block';
   box.innerHTML='';
   var log=function(html){box.insertAdjacentHTML('afterbegin',html);};
+  // Saltar los meses YA cargados (no se los volvemos a pedir a Amazon). El mes
+  // en curso siempre se re-pide (sigue creciendo día a día).
+  var mesActual=isoUTC(new Date()).slice(0,7);
+  var cargados={pedidos:new Set(),devoluciones:new Set()};
+  try{
+    var re=await fetch(SB_CONFIG.apiBase+'/v1/backfill-estado?key='+encodeURIComponent(key));
+    var est=await re.json();
+    cargados.pedidos=new Set(est.pedidos||[]);
+    cargados.devoluciones=new Set(est.devoluciones||[]);
+  }catch(e){}
+  // Plan de trabajo: pedidos+devoluciones por cada mes NO cargado, settlements al final.
+  var pasos=[], saltados=0;
+  meses.forEach(function(m){
+    var mes=m.desde.slice(0,7);
+    ['pedidos','devoluciones'].forEach(function(t){
+      if(mes<mesActual && cargados[t].has(mes)) saltados++;
+      else pasos.push({tipo:t,m:m});
+    });
+  });
+  if(saltados) log('<div style="color:var(--mu)">↩︎ '+saltados+' informes ya cargados — me los salto (no re-pido a Amazon).</div>');
+  var totalBarra=pasos.length+1; // +1 = settlements
   var okC=0;
   function avance(i){fill.style.width=Math.round(i/totalBarra*100)+'%';}
   function etqDe(p){return (p.tipo==='pedidos'?'🛒 ventas':'↩️ devoluciones')+' '+p.m.desde.slice(0,7);}
