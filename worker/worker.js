@@ -221,6 +221,13 @@ export default {
         return json(res, cors);
       }
 
+      // --- Ingesta PPC (Ads API) en invocación separada (límite subrequests) ---
+      if (url.pathname === '/v1/ingest-ppc' && request.method === 'POST') {
+        const forzar = url.searchParams.get('terminos') === '1';
+        const res = await ingestaPPC(env, { terminos: forzar });
+        return json(res, cors);
+      }
+
       // --- BACKFILL histórico: procesa UN tipo + UN rango de fechas por llamada.
       //     El navegador lo orquesta mes a mes (así cada invocación del Worker
       //     hace un solo informe y no revienta límites de subrequests/tiempo).
@@ -609,8 +616,9 @@ async function ingestaDiaria(env, origen) {
       if (yaProcesado) continue;
       const tsv = await descargarDocumento(env, rep.reportDocumentId);
       const lineas = parseTSV(tsv);
-      await upsertSupabase(env, 'settlement_lineas', mapearSettlement(lineas, rep.reportId));
+      // La CABECERA primero (settlement_lineas tiene FK a settlements).
       await upsertSupabase(env, 'settlements', [{ report_id: rep.reportId, procesado: new Date().toISOString() }]);
+      await upsertSupabase(env, 'settlement_lineas', mapearSettlement(lineas, rep.reportId));
     }
     resultado.pasos.push({ settlements: reps.length });
   } catch (e) { resultado.pasos.push({ settlements_error: e.message }); }
@@ -674,11 +682,37 @@ async function ingestaDiaria(env, origen) {
     resultado.pasos.push({ brand_analytics: filas.length });
   } catch (e) { resultado.pasos.push({ brand_analytics_error: e.message }); }
 
-  // 4. PPC del día (Ads API) — recorre los países con perfil configurado
+  // PPC (Ads API) va en SU PROPIA invocación (/v1/ingest-ppc) para no pasar
+  // el límite de 50 subpeticiones del plan gratis de Cloudflare al juntarlo
+  // con SP-API. El botón admin lo llama después, en una segunda petición.
+
+  // Acta de la ejecución: queda registrada aunque haya fallos parciales
+  try {
+    await upsertSupabase(env, 'ingestas', [{
+      ejecutada: new Date().toISOString(),
+      origen: resultado.origen,
+      plan: resultado.plan,
+      resumen: JSON.stringify(resultado.pasos).slice(0, 2000)
+    }]);
+  } catch (e) { /* si falla el log, no rompe la ingesta */ }
+
+  return resultado;
+}
+
+/* =====================================================================
+ * INGESTA PPC (Ads API) — invocación separada para respetar el límite de
+ * 50 subpeticiones del plan gratis. Trae ppc_dia + ppc_campanas (+ términos).
+ * Uso: POST /v1/ingest-ppc  (opcional ?terminos=1 para forzar los términos).
+ * =================================================================== */
+async function ingestaPPC(env, opts) {
+  const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const forzarTerminos = !!(opts && opts.terminos);
+  const resultado = { fecha: ayer, pasos: [] };
+
+  // 1. PPC del día por país
   for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
     try {
       const ads = await adsInformeDiario(env, ayer, profileId);
-      // Suma todas las campañas del día en un total por país
       const tot = (ads || []).reduce((a, c) => ({
         gasto: a.gasto + (c.cost || 0), clics: a.clics + (c.clicks || 0),
         impresiones: a.impresiones + (c.impressions || 0),
@@ -689,7 +723,6 @@ async function ingestaDiaria(env, origen) {
         gasto: +tot.gasto.toFixed(2), clics: tot.clics, impresiones: tot.impresiones,
         ventas_ppc: +tot.ventas.toFixed(2), pedidos_ppc: tot.pedidos
       }]);
-      // Detalle por campaña (para saber cuál gasta y cuál convierte)
       await upsertSupabase(env, 'ppc_campanas', (ads || []).map(c => ({
         fecha: ayer, pais, campania_id: String(c.campaignId || ''), nombre: c.campaignName || '',
         gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
@@ -699,10 +732,8 @@ async function ingestaDiaria(env, origen) {
     } catch (e) { resultado.pasos.push({ ['ppc_' + pais + '_error']: e.message }); }
   }
 
-  // 5. Términos de búsqueda → ppc_terminos (para el motor de acciones).
-  //    Semanal (solo lunes UTC): el informe es un resumen de 30 días, no hace
-  //    falta a diario y así no saturamos la Ads API.
-  if (new Date().getUTCDay() === 1) {
+  // 2. Términos de búsqueda (resumen 30 días) — solo lunes UTC o si se fuerza.
+  if (forzarTerminos || new Date().getUTCDay() === 1) {
     const hastaT = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
     for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
@@ -719,17 +750,6 @@ async function ingestaDiaria(env, origen) {
       } catch (e) { resultado.pasos.push({ ['terminos_' + pais + '_error']: e.message }); }
     }
   }
-
-  // Acta de la ejecución: queda registrada aunque haya fallos parciales
-  try {
-    await upsertSupabase(env, 'ingestas', [{
-      ejecutada: new Date().toISOString(),
-      origen: resultado.origen,
-      plan: resultado.plan,
-      resumen: JSON.stringify(resultado.pasos).slice(0, 2000)
-    }]);
-  } catch (e) { /* si falla el log, no rompe la ingesta */ }
-
   return resultado;
 }
 
@@ -1088,8 +1108,9 @@ async function backfillRango(env, tipo, desde, hasta) {
       if (await existeEnSupabase(env, 'settlements', 'report_id', rep.reportId)) continue;
       const tsv = await descargarDocumento(env, rep.reportDocumentId);
       const lineas = mapearSettlement(parseTSV(tsv), rep.reportId);
-      await upsertSupabase(env, 'settlement_lineas', lineas);
+      // La CABECERA primero (settlement_lineas tiene FK a settlements).
       await upsertSupabase(env, 'settlements', [{ report_id: rep.reportId, procesado: new Date().toISOString() }]);
+      await upsertSupabase(env, 'settlement_lineas', lineas);
       nuevos++; lineasT += lineas.length;
     }
     return { informes: reps.length, nuevos, lineas: lineasT, hayMas: nuevos >= tope };
