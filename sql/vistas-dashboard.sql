@@ -27,6 +27,9 @@ create table if not exists costes_producto (
   coste       numeric not null default 0,   -- coste unitario de compra (€)
   actualizado timestamptz not null default now()
 );
+-- RLS activada: invisible desde el navegador (claves anon/authenticated).
+-- El Worker usa la service key, que SIEMPRE se salta la RLS → sigue leyendo/escribiendo.
+alter table costes_producto enable row level security;
 
 -- ---------------------------------------------------------------------
 -- 0b) INVENTARIO FBA (snapshot) — lo rellena la ingesta del Worker.
@@ -39,6 +42,9 @@ create table if not exists inventario (
   reservado  integer not null default 0,
   snapshot   timestamptz not null default now()
 );
+-- RLS activada (igual que costes_producto): invisible desde el navegador; el
+-- Worker (service key) se la salta y sigue funcionando.
+alter table inventario enable row level security;
 
 
 -- ---------------------------------------------------------------------
