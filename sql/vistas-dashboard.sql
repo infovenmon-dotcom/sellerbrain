@@ -48,6 +48,23 @@ alter table inventario enable row level security;
 
 
 -- ---------------------------------------------------------------------
+-- LIMPIEZA — borra las vistas si existían de un intento anterior. Hace
+-- falta porque CREATE OR REPLACE VIEW no permite cambiar el TIPO de una
+-- columna (p.ej. uds de numeric a integer). CASCADE quita las dependientes.
+-- Es seguro: las vistas no guardan datos, solo se recalculan al recrearse.
+-- ---------------------------------------------------------------------
+drop view if exists v_calidad_datos   cascade;
+drop view if exists v_comparativa     cascade;
+drop view if exists v_stock_riesgo    cascade;
+drop view if exists v_serie_30d       cascade;
+drop view if exists v_productos_mes   cascade;
+drop view if exists v_periodos        cascade;
+drop view if exists v_pnl_mes         cascade;
+drop view if exists v_settle_clasificado cascade;
+drop view if exists v_ventas_dia      cascade;
+
+
+-- ---------------------------------------------------------------------
 -- 1) CLASIFICADOR DE LÍNEAS DE SETTLEMENT → cubos de coste
 --    (fba, com=comisión, alm=almacenaje, dev=devoluciones, otros).
 --    Las tarifas llegan con importe NEGATIVO; el coste = -sum(importe).
