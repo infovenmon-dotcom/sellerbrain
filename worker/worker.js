@@ -73,7 +73,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -941,14 +941,24 @@ const REGLAS_PPC = {
 async function generarAcciones(env, productos) {
   const acciones = [];
 
-  // --- 1) Acciones a nivel de PRODUCTO (P&L), como hasta ahora ---
+  // --- 1) Acciones a nivel de PRODUCTO (P&L) ---
   for (const p of (productos || [])) {
-    if (p.mg < 0 && p.ppc > 0) acciones.push({
-      _v: p.ppc,
-      ic: '⏸️', bg: 'rgba(245,166,35,.15)', c: 'var(--am)',
-      t: 'Pausa PPC de «' + p.nom + '»',
-      v: '+' + p.ppc.toFixed(2).replace('.', ',') + '€/mes',
-      p: 'Margen ' + p.mg + '%: cada venta con clic pierde dinero'
+    // Producto que PIERDE dinero (margen negativo) — la de PPC ya no exige ppc>0
+    // porque el PPC no se atribuye por SKU; basta con que el margen sea negativo.
+    if (p.mg < 0 && p.ventas > 30) acciones.push({
+      _v: Math.abs(p.ben) || p.ventas,
+      ic: '🔴', bg: 'rgba(232,64,64,.15)', c: 'var(--rd)',
+      t: 'Revisa «' + p.nom + '»: margen ' + p.mg + '%',
+      v: p.ben < 0 ? p.ben.toFixed(2).replace('.', ',') + '€' : 'margen ' + p.mg + '%',
+      p: 'Pierde dinero por venta: sube precio, baja coste o revisa tarifas/PPC.'
+    });
+    // Producto SIN coste cargado → margen no es real (recordatorio de acción)
+    else if (p.txt === 'Sin coste ➜ clic' && p.ventas > 100) acciones.push({
+      _v: p.ventas * 0.001,
+      ic: '✏️', bg: 'rgba(74,158,222,.15)', c: 'var(--bl)',
+      t: 'Añade el coste de «' + p.nom + '»',
+      v: 'margen exacto',
+      p: 'Sin coste, su margen es estimado. Clic en el producto para ponerlo.'
     });
   }
 

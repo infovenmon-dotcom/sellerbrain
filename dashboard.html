@@ -1349,7 +1349,7 @@ function lanzarIngesta(){
         var paises=['ES','FR','IT','BE'], pasos=[];
         for(var i=0;i<paises.length;i++){
           try{
-            var rp=await fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?pais='+paises[i]+'&key='+encodeURIComponent(key),{method:'POST'});
+            var rp=await fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?pais='+paises[i]+'&terminos=1&key='+encodeURIComponent(key),{method:'POST'});
             var dp=await rp.json();
             (dp.pasos||[]).forEach(function(x){pasos.push(x);});
           }catch(e){pasos.push({['ppc_'+paises[i]+'_error']:e.message});}
