@@ -189,14 +189,19 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   <div class="ch"><h2><span class="ci">🔌</span> Conexión con Amazon — estado del sistema</h2>
   <span class="more" onclick="toggleConexion()">Cerrar ✕</span></div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+  <div id="cx-auto" style="display:none;padding:11px 14px;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.3);border-radius:10px;margin-bottom:14px;font-size:12.5px;color:var(--mu2);line-height:1.5">
+    ✅ <b style="color:var(--or2)">Conectado automáticamente con tu sesión</b> <span id="cx-auto-email"></span>. No necesitas pegar ninguna clave — SellerBrain usa el acceso de tu login para traer tus datos.
+    <a href="#" onclick="document.getElementById('cx-admin').style.display='block';this.style.display='none';return false" style="color:var(--mu);margin-left:6px">Opciones avanzadas (admin)</a>
+  </div>
+
+  <div id="cx-admin" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
     <div>
       <label style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px">URL de tu backend (Worker)</label>
       <input type="text" id="cx-url" style="width:100%;padding:9px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" placeholder="https://...workers.dev">
     </div>
     <div>
-      <label style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px">Clave privada (SB_API_KEY)</label>
-      <input type="password" id="cx-key" style="width:100%;padding:9px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" placeholder="Pega aquí tu clave — se guarda solo en este navegador">
+      <label style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px">Clave privada (SB_API_KEY) — solo admin, opcional</label>
+      <input type="password" id="cx-key" style="width:100%;padding:9px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" placeholder="Solo si eres admin — normalmente NO hace falta">
     </div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
@@ -207,7 +212,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px" id="cx-semaforos">
     <div class="cx-luz" id="luz-backend"><span class="cx-dot" style="background:#555"></span><div><b>Backend</b><div class="cx-sub">sin probar</div></div></div>
-    <div class="cx-luz" id="luz-auth"><span class="cx-dot" style="background:#555"></span><div><b>Clave privada</b><div class="cx-sub">sin probar</div></div></div>
+    <div class="cx-luz" id="luz-auth"><span class="cx-dot" style="background:#555"></span><div><b>Tu sesión</b><div class="cx-sub">sin probar</div></div></div>
     <div class="cx-luz" id="luz-ppc"><span class="cx-dot" style="background:#555"></span><div><b>Datos de Amazon Ads</b><div class="cx-sub">sin probar</div></div></div>
   </div>
 
@@ -1016,7 +1021,20 @@ function toggleConexion(){
   p.style.display = abrir ? 'block' : 'none';
   if(abrir){
     document.getElementById('cx-url').value = SB_CONFIG.apiBase;
-    document.getElementById('cx-key').value = SB_CONFIG.apiKey;
+    // El miembro NO ve la clave de admin; si hay sesión, se conecta con su token.
+    var tok=(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return null;}})();
+    var email=(function(){try{return sessionStorage.getItem('fba_email')||'';}catch(e){return '';}})();
+    if(tok){
+      document.getElementById('cx-auto').style.display='block';
+      document.getElementById('cx-auto-email').textContent=email?('('+email+')'):'';
+      document.getElementById('cx-admin').style.display='none';   // oculto salvo "avanzado"
+      document.getElementById('cx-key').value='';
+    } else {
+      document.getElementById('cx-auto').style.display='none';
+      document.getElementById('cx-admin').style.display='grid';
+      document.getElementById('cx-key').value = SB_CONFIG.apiKey;
+    }
+    probarConexion();  // prueba automática al abrir
   }
 }
 
@@ -1027,10 +1045,13 @@ function luz(id, color, texto){
 }
 
 function probarConexion(){
-  SB_CONFIG.apiBase=(document.getElementById('cx-url').value||'').trim().replace(/\/$/,'');
-  SB_CONFIG.apiKey=(document.getElementById('cx-key').value||'').trim();
+  SB_CONFIG.apiBase=(document.getElementById('cx-url').value||SB_CONFIG.apiBase||'').trim().replace(/\/$/,'');
+  SB_CONFIG.apiKey=(document.getElementById('cx-key').value||'').trim();     // solo admin
   localStorage.setItem('sb_api_base',SB_CONFIG.apiBase);
   localStorage.setItem('sb_api_key',SB_CONFIG.apiKey);
+  var tokenSesion=(function(){try{return sessionStorage.getItem('fba_token')||'';}catch(e){return '';}})();
+  var CLAVE = SB_CONFIG.apiKey || tokenSesion;   // admin usa su clave; miembro usa su token de login
+  var usandoSesion = !SB_CONFIG.apiKey;
   var VERDE='var(--gn)', ROJO='var(--rd)', AMBAR='var(--am)';
   luz('backend','#555','probando...');luz('auth','#555','probando...');luz('ppc','#555','probando...');
   document.getElementById('cx-ppc-datos').style.display='none';
@@ -1041,10 +1062,10 @@ function probarConexion(){
     if(!d.ok) throw new Error();
     luz('backend',VERDE,'en línea ✓');
     // 2. Clave privada
-    return fetch(SB_CONFIG.apiBase+'/v1/ppc',{headers:{'Authorization':'Bearer '+SB_CONFIG.apiKey}});
+    return fetch(SB_CONFIG.apiBase+'/v1/ppc',{headers:{'Authorization':'Bearer '+CLAVE}});
   }).then(function(r){
-    if(r.status===401){luz('auth',ROJO,'clave incorrecta');throw new Error('auth');}
-    luz('auth',VERDE,'válida ✓');
+    if(r.status===401){luz('auth',ROJO, usandoSesion?'sesión caducada — vuelve a entrar':'clave incorrecta');throw new Error('auth');}
+    luz('auth',VERDE, usandoSesion?'tu sesión ✓':'clave admin ✓');
     return r.json();
   }).then(function(d){
     // 3. Datos PPC
