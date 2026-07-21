@@ -1202,6 +1202,21 @@ function agregarPedidosPorDia(filas) {
   return Object.values(porClave);
 }
 
+// Normaliza el canal de venta de Amazon a un código de país ISO limpio.
+// Amazon usa dominios: Amazon.es, Amazon.com.be (Bélgica), Amazon.co.uk (UK)…
+function paisDeCanal(sc) {
+  sc = (sc || '').toLowerCase().trim();
+  if (!sc || sc.indexOf('non-amazon') > -1) return 'OTROS';
+  const s = sc.replace('amazon.', '');
+  const MAP = {
+    'es': 'ES', 'fr': 'FR', 'it': 'IT', 'de': 'DE', 'nl': 'NL', 'se': 'SE',
+    'pl': 'PL', 'com.be': 'BE', 'co.uk': 'GB', 'ie': 'IE', 'com.tr': 'TR',
+    'com': 'US', 'ca': 'CA', 'com.mx': 'MX', 'com.br': 'BR', 'com.au': 'AU',
+    'in': 'IN', 'co.jp': 'JP', 'sg': 'SG', 'ae': 'AE', 'sa': 'SA', 'eg': 'EG'
+  };
+  return MAP[s] || s.toUpperCase();
+}
+
 // Ventas granulares por (día · sku · país) — fuente fiable para totales y país.
 function agregarVentasSkuPais(filas) {
   const m = {};
@@ -1210,7 +1225,7 @@ function agregarVentasSkuPais(filas) {
     const fecha = aISO(r['purchase-date']);
     if (!fecha) continue;
     const sku = r['sku'] || 'desconocido';
-    const pais = ((r['sales-channel'] || '').replace('Amazon.', '').toUpperCase()) || '?';
+    const pais = paisDeCanal(r['sales-channel']);
     const k = fecha + '|' + sku + '|' + pais;
     if (!m[k]) m[k] = { fecha, sku, pais, uds: 0, ventas: 0, pedidos: 0 };
     m[k].uds += +r['quantity'] || 0;

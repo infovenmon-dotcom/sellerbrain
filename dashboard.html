@@ -715,8 +715,9 @@ function renderMapaVentas(paises){
   var W=520,H=380, lo0=-11,lo1=26,la0=35,la1=62;
   function X(lon){return ((lon-lo0)/(lo1-lo0)*W);}
   function Y(lat){return ((la1-lat)/(la1-la0)*H);}
-  // países con datos que no estén en la lista fija → los añadimos al centro-borde
-  Object.keys(byP).forEach(function(code){ if(!EU_COORDS[code]) EU_COORDS[code]=[24,37,code]; });
+  // países con datos que no estén en la lista fija → los añadimos al borde
+  // (excepto 'OTROS'/'?' que no son países y no van en el mapa)
+  Object.keys(byP).forEach(function(code){ if(code!=='OTROS'&&code!=='?'&&!EU_COORDS[code]) EU_COORDS[code]=[24,37,code]; });
   var els='';
   Object.keys(EU_COORDS).forEach(function(code){
     var c=EU_COORDS[code], x=X(c[0]).toFixed(1), y=Y(c[1]).toFixed(1);
