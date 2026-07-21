@@ -651,14 +651,22 @@ async function ingestaDiaria(env, origen) {
 /* =====================================================================
  * CONSTRUIR EL PAYLOAD DEL DASHBOARD (contrato SB_DEMO)
  * =================================================================== */
+// Lectura tolerante: si la vista no existe o está vacía, devuelve el defecto
+// en vez de tumbar todo el endpoint (evita el "no pude leer tus datos").
+async function selSafe(env, vista, def) {
+  try { return await selectSupabase(env, vista); }
+  catch (_) { return def === undefined ? [] : def; }
+}
+
 async function construirDashboard(env) {
   // Lee agregados de Supabase y los transforma al contrato del frontend.
-  // Las vistas SQL (ver schema.sql) hacen el trabajo pesado.
-  const [periodos, pnl, productos, serie30] = await Promise.all([
-    selectSupabase(env, 'v_periodos'),
-    selectSupabase(env, 'v_pnl_mes'),
-    selectSupabase(env, 'v_productos_mes'),
-    selectSupabase(env, 'v_serie_30d')
+  // Cada vista es tolerante a fallos: si falta, sale vacía (dashboard "sin datos aún").
+  const [periodos, pnl, productos, serie30, stock] = await Promise.all([
+    selSafe(env, 'v_periodos'),
+    selSafe(env, 'v_pnl_mes'),
+    selSafe(env, 'v_productos_mes'),
+    selSafe(env, 'v_serie_30d'),
+    selSafe(env, 'v_stock_riesgo')
   ]);
   return {
     meta: { actualizado: new Date().toISOString(), monedas: 'EUR', marketplaces: ['ES','FR','IT'], skus: productos.length },
@@ -667,7 +675,7 @@ async function construirDashboard(env) {
     // El motor de acciones corre sobre los mismos datos (fase siguiente):
     acciones: await generarAcciones(env, productos),
     alertas: [],
-    stock: await selectSupabase(env, 'v_stock_riesgo'),
+    stock: stock,
     serie30
   };
 }
