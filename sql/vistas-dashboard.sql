@@ -189,6 +189,11 @@ from agg order by orden;
 --    (ppc por producto = 0: Amazon Ads no se atribuye por SKU de forma
 --    fiable; el motor de PPC trabaja aparte con ppc_terminos.)
 -- ---------------------------------------------------------------------
+-- Nota sobre tarifas por producto: NO se usan las líneas de settlement crudas
+-- por SKU, porque llegan desfasadas (las tarifas de este mes corresponden a
+-- ventas de semanas anteriores) y provocaban falsas pérdidas / falsos 100%.
+-- En su lugar se reparte con el RATIO de tarifa a nivel de cuenta del mes
+-- (tarifas totales ÷ ventas totales); si aún no hay settlements, estima 15%+15%.
 create or replace view v_productos_mes as
 with mes as (select date_trunc('month', current_date)::date ini),
 base as (
@@ -201,17 +206,23 @@ base as (
   where vd.fecha >= mes.ini
   group by vd.sku
 ),
-fees as (  -- tarifas fba+com atribuibles al SKU este mes
-  select sku, -sum(importe) tarifa
-  from v_settle_clasificado s, mes
-  where cubo in ('fba','com') and s.fecha >= mes.ini and sku is not null and sku <> ''
-  group by sku
+tot as (  -- totales de cuenta del mes en curso
+  select
+    coalesce((select sum(ventas) from v_ventas_dia vd, mes where vd.fecha >= mes.ini),0) tv,
+    coalesce((select -sum(importe) from v_settle_clasificado s, mes where cubo='fba' and s.fecha >= mes.ini),0) tf,
+    coalesce((select -sum(importe) from v_settle_clasificado s, mes where cubo='com' and s.fecha >= mes.ini),0) tc
+),
+r as (  -- ratio de tarifas; si no hay settlements (o sale absurdo), estima 15%+15%
+  select
+    (case when tv>0 and tf>0 and tf/tv <= 0.6 then tf/tv else 0.15 end
+     + case when tv>0 and tc>0 and tc/tv <= 0.4 then tc/tv else 0.15 end) as feeR
+  from tot
 ),
 calc as (
   select b.sku,
     b.uds, round(b.ventas,2) ventas, coalesce(b.coste,0) coste, b.coste is null nocoste,
-    round(b.ventas - b.uds*coalesce(b.coste,0) - coalesce(f.tarifa,0), 2) ben
-  from base b left join fees f on f.sku = b.sku
+    round(b.ventas - b.uds*coalesce(b.coste,0) - b.ventas*r.feeR, 2) ben
+  from base b cross join r
 )
 select
   coalesce(nullif(pc.nombre,''), c.sku) as nom,   -- nombre real; si no hay, el SKU
@@ -224,7 +235,8 @@ select
     left join (select fecha, sum(uds) u from v_ventas_dia where sku=c.sku group by fecha) d
       on d.fecha = g.dia::date
   ), array[0,0,0,0,0,0,0,0,0,0]) as trend,
-  case when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 0 then 'rd'
+  case when c.nocoste then 'am'   -- sin coste = margen incompleto → ámbar, no verde
+       when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 0 then 'rd'
        when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 15 then 'am' else 'gn' end estado,
   case when c.nocoste then 'Sin coste ➜ clic'
        when (case when c.ventas>0 then c.ben/c.ventas*100 else 0 end) < 0 then 'Pierde'
