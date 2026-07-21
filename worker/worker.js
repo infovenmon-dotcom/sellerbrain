@@ -73,7 +73,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos';
+        const MIEMBRO_OK = url.pathname === '/v1/dashboard' || url.pathname === '/v1/ppc' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -133,8 +133,28 @@ export default {
       if (url.pathname === '/v1/productos') {
         const desde = url.searchParams.get('desde');
         const hasta = url.searchParams.get('hasta');
+        const pais = url.searchParams.get('pais') || null;   // ES/FR/IT o vacío = todos
         if (!desde || !hasta) return json({ error: 'faltan_fechas' }, cors, 400);
-        return json({ desde, hasta, productos: await productosPeriodo(env, desde, hasta) }, cors);
+        return json({ desde, hasta, pais, productos: await productosPeriodo(env, desde, hasta, pais) }, cors);
+      }
+
+      // --- Ventas por país (total + desglose) para un rango ---
+      //     GET /v1/ventas-pais?desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+      if (url.pathname === '/v1/ventas-pais') {
+        const desde = url.searchParams.get('desde');
+        const hasta = url.searchParams.get('hasta');
+        if (!desde || !hasta) return json({ error: 'faltan_fechas' }, cors, 400);
+        const rows = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,uds,ventas,pedidos', []);
+        const byP = {}; const tot = { uds: 0, ventas: 0, pedidos: 0 };
+        for (const r of (rows || [])) {
+          const p = r.pais || '?';
+          if (!byP[p]) byP[p] = { pais: p, uds: 0, ventas: 0, pedidos: 0 };
+          byP[p].uds += +r.uds || 0; byP[p].ventas += +r.ventas || 0; byP[p].pedidos += +r.pedidos || 0;
+          tot.uds += +r.uds || 0; tot.ventas += +r.ventas || 0; tot.pedidos += +r.pedidos || 0;
+        }
+        tot.ventas = +tot.ventas.toFixed(2);
+        const paises = Object.values(byP).map(x => ({ ...x, ventas: +x.ventas.toFixed(2) })).sort((a, b) => b.ventas - a.ventas);
+        return json({ desde, hasta, total: tot, paises }, cors);
       }
 
       // --- Contrato del dashboard (lo que consume el frontend) ---
@@ -269,7 +289,9 @@ export default {
             return [...s];
           } catch (_) { return []; }
         };
-        return json({ pedidos: await mesesDe('pedidos_dia'), devoluciones: await mesesDe('devoluciones') }, cors);
+        // 'pedidos' se mira sobre ventas_sku_pais_dia (tabla por país): así, al
+        // re-lanzar el backfill, rellena el histórico por país donde falte.
+        return json({ pedidos: await mesesDe('ventas_sku_pais_dia'), devoluciones: await mesesDe('devoluciones') }, cors);
       }
 
       // --- Imágenes de catálogo: trae la miniatura de Amazon por ASIN.
@@ -662,6 +684,7 @@ async function ingestaDiaria(env, origen) {
       [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
     const filas = parseTSV(tsv);
     await upsertSupabase(env, 'pedidos_dia', agregarPedidosPorDia(filas));
+    await upsertSupabase(env, 'ventas_sku_pais_dia', agregarVentasSkuPais(filas)); // total y por país
     await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas)); // nombres
     resultado.pasos.push({ pedidos: filas.length });
   } catch (e) { resultado.pasos.push({ pedidos_error: e.message }); }
@@ -824,8 +847,14 @@ async function selSafe(env, vista, def) {
 // Tabla "Beneficio por producto" para un rango cualquiera (mismo criterio que
 // v_productos_mes: reparte tarifas con el ratio de cuenta del periodo; estima
 // 15%+15% si no hay settlements; resta el coste si está puesto).
-async function productosPeriodo(env, desde, hasta) {
-  const ped = await selectSupabase(env, 'pedidos_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,fecha,uds,ventas');
+async function productosPeriodo(env, desde, hasta, pais) {
+  // Lee de la tabla granular por país (permite filtrar por país). Si aún no
+  // está poblada (histórico sin re-backfill), cae a pedidos_dia (sin país).
+  const filtroPais = pais ? '&pais=eq.' + encodeURIComponent(pais) : '';
+  let ped = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + filtroPais + '&select=sku,fecha,uds,ventas', []);
+  if (!ped || !ped.length) {
+    ped = await selSafe(env, 'pedidos_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,fecha,uds,ventas', []);
+  }
   const bySku = {};
   let tv = 0;
   for (const r of (ped || [])) {
@@ -1173,6 +1202,24 @@ function agregarPedidosPorDia(filas) {
   return Object.values(porClave);
 }
 
+// Ventas granulares por (día · sku · país) — fuente fiable para totales y país.
+function agregarVentasSkuPais(filas) {
+  const m = {};
+  for (const r of filas) {
+    if ((r['item-status'] || '').toLowerCase() === 'cancelled') continue;
+    const fecha = aISO(r['purchase-date']);
+    if (!fecha) continue;
+    const sku = r['sku'] || 'desconocido';
+    const pais = ((r['sales-channel'] || '').replace('Amazon.', '').toUpperCase()) || '?';
+    const k = fecha + '|' + sku + '|' + pais;
+    if (!m[k]) m[k] = { fecha, sku, pais, uds: 0, ventas: 0, pedidos: 0 };
+    m[k].uds += +r['quantity'] || 0;
+    m[k].ventas += +((r['item-price'] || '0').replace(',', '.')) || 0;
+    m[k].pedidos += 1;
+  }
+  return Object.values(m);
+}
+
 // Trae miniaturas del catálogo de Amazon por ASIN, de a pocos por llamada.
 async function traerImagenesCatalogo(env) {
   const pend = await selectSupabase(env, 'productos_catalogo?imagen=is.null&asin=not.is.null&limit=8');
@@ -1208,6 +1255,7 @@ async function backfillRango(env, tipo, desde, hasta) {
     const filas = parseTSV(tsv);
     const rows = agregarPedidosPorDia(filas);
     await upsertSupabase(env, 'pedidos_dia', rows);
+    await upsertSupabase(env, 'ventas_sku_pais_dia', agregarVentasSkuPais(filas)); // total y por país
     await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas)); // nombres
     return { filas: filas.length, guardados: rows.length };
   }

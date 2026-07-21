@@ -60,6 +60,23 @@ create table if not exists productos_catalogo (
 );
 alter table productos_catalogo enable row level security;
 
+-- ---------------------------------------------------------------------
+-- 0d) VENTAS GRANULARES por (día · SKU · país) — fuente fiable para el
+--     total y el desglose por país (pedidos_dia colapsa el marketplace y
+--     no sirve para separar países). Lo llena la ingesta/backfill de pedidos.
+-- ---------------------------------------------------------------------
+create table if not exists ventas_sku_pais_dia (
+  fecha   date    not null,
+  sku     text    not null,
+  pais    text    not null,
+  uds     integer not null default 0,
+  ventas  numeric not null default 0,
+  pedidos integer not null default 0,
+  primary key (fecha, sku, pais)
+);
+alter table ventas_sku_pais_dia enable row level security;
+create index if not exists idx_vspd_fecha on ventas_sku_pais_dia (fecha);
+
 
 -- ---------------------------------------------------------------------
 -- LIMPIEZA — borra las vistas si existían de un intento anterior. Hace
