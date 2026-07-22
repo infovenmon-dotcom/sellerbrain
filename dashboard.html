@@ -480,6 +480,11 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     <div id="stock"></div>
   </div>
 
+  <div class="card">
+    <div class="ch"><h2><span class="ci">⭐</span> Satisfacción del cliente <span style="font-size:11px;color:var(--mu);font-weight:400">· según motivos de devolución (Amazon no da las reseñas por API)</span></h2></div>
+    <div id="satisfaccion"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+  </div>
+
 </div>
 </div>
 </div><!-- /vista-dash -->
@@ -851,6 +856,62 @@ function renderStock(){
   document.getElementById('stock').innerHTML=h;
 }
 
+/* ===== SATISFACCIÓN DEL CLIENTE (a partir de motivos de devolución) ===== */
+// Amazon NO da reseñas por API; el motivo de devolución es el único feedback
+// real que sí manda. Traducimos los códigos de motivo a lenguaje claro.
+var MOTIVO_ES={
+  DEFECTIVE:'Producto defectuoso', QUALITY_UNACCEPTABLE:'Calidad no aceptable',
+  NOT_AS_DESCRIBED:'No es como se describe', DID_NOT_MATCH:'No coincide con el anuncio',
+  MISSING_PARTS:'Faltan piezas', PART_NOT_COMPATIBLE:'No compatible',
+  WRONG_ITEM_SENT:'Enviaron otro producto', SWITCHEROO:'Producto cambiado',
+  DAMAGED_BY_CARRIER:'Dañado en el transporte', DAMAGED_BY_FC:'Dañado en el almacén',
+  UNWANTED_ITEM:'Ya no lo quería', NO_LONGER_NEEDED:'Ya no lo necesitaba',
+  FOUND_BETTER_PRICE:'Encontró mejor precio', ORDERED_WRONG_ITEM:'Se equivocó al pedir',
+  MISSED_ESTIMATED_DELIVERY:'Llegó tarde', ACCIDENTAL_ORDER:'Pedido por error',
+  NO_REASON_GIVEN:'Sin motivo indicado', UNDELIVERABLE_UNKNOWN:'No se pudo entregar'
+};
+function motivoBonito(m){ if(!m)return '—'; return MOTIVO_ES[String(m).toUpperCase()]||(''+m).replace(/_/g,' ').toLowerCase(); }
+function estrellasHTML(n){ n=Math.round((+n||0)); var s=''; for(var i=1;i<=5;i++)s+= (i<=n?'★':'☆'); return s; }
+
+function renderSatisfaccion(datos){
+  var box=document.getElementById('satisfaccion'); if(!box)return;
+  datos=datos||[];
+  if(!datos.length){
+    box.innerHTML='<div style="color:var(--mu);font-size:13px">Sin devoluciones con problemas registrados en el periodo. 🎉 Buena señal: no hay quejas de calidad que atender.</div>';
+    return;
+  }
+  var col={rojo:'#ff5c5c',ambar:'#f5b23e',verde:'#2ee6a0'};
+  var eti={rojo:'Atención',ambar:'Vigilar',verde:'OK'};
+  var h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
+    '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">Estrellas (est.)</th>'+
+    '<th style="padding:6px 8px">Devol.</th><th style="padding:6px 8px">De calidad</th>'+
+    '<th style="padding:6px 8px">Motivo principal</th><th style="padding:6px 8px">Señal</th></tr></thead><tbody>';
+  datos.forEach(function(d){
+    var c=col[d.senal]||'#888';
+    var img=d.imagen?'<img src="'+d.imagen+'" style="width:26px;height:26px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:7px">':'';
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+      '<td style="padding:7px 8px">'+img+'<span style="font-weight:600">'+(d.nombre||d.sku)+'</span></td>'+
+      '<td style="padding:7px 8px;color:#f5b23e;letter-spacing:1px">'+estrellasHTML(d.estrellas_est)+' <span style="color:var(--mu);font-size:11px">'+(d.estrellas_est||'')+'</span></td>'+
+      '<td style="padding:7px 8px">'+(d.devoluciones||0)+'</td>'+
+      '<td style="padding:7px 8px;color:'+(d.criticas>0?'#ff8a8a':'var(--mu)')+'">'+(d.criticas||0)+'</td>'+
+      '<td style="padding:7px 8px;color:var(--mu2)">'+motivoBonito(d.motivo_top)+'</td>'+
+      '<td style="padding:7px 8px"><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:'+c+';background:'+c+'22">'+(eti[d.senal]||'')+'</span></td></tr>';
+  });
+  h+='</tbody></table></div>'+
+    '<div style="margin-top:9px;font-size:11px;color:var(--mu)">Las "estrellas" son una <b>estimación</b> a partir de las devoluciones por calidad/defecto (Amazon no expone las reseñas por API). '+
+    'Los productos en <b style="color:#ff5c5c">Atención</b> son los que más se devuelven por problemas del producto — revisa listing, precinto o proveedor.</div>';
+  box.innerHTML=h;
+}
+
+function cargarSatisfaccion(){
+  var box=document.getElementById('satisfaccion');
+  fetch(SB_CONFIG.apiBase+'/v1/satisfaccion',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ renderSatisfaccion(d&&d.datos); })
+    .catch(function(){ if(box)box.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar la satisfacción ahora mismo.</div>'; });
+}
+
 /* Arranque: carga del proveedor activo (demo/api) y render */
 function aplicarDatos(d){
   PERIODOS=d.periodos; PNL=d.pnl; PRODUCTOS=d.productos;
@@ -868,6 +929,14 @@ function aplicarDatos(d){
   var lbl=document.getElementById('prod-periodo'); if(lbl && !lbl.textContent) lbl.textContent='· este mes';
   // En modo API, carga (una vez) la tabla por periodo y el panel "Ventas por país".
   if(SB_CONFIG.mode==='api' && !window._prodInit){ window._prodInit=true; try{ prodPeriodo('mes'); }catch(e){} }
+  // Satisfacción del cliente (motivos de devolución). En demo, ejemplo ilustrativo.
+  try{
+    if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); }
+    else{ renderSatisfaccion([
+      {sku:'DEMO-1',nombre:'Set de botellas (ejemplo)',estrellas_est:2.6,devoluciones:5,criticas:3,motivo_top:'DEFECTIVE',senal:'rojo'},
+      {sku:'DEMO-2',nombre:'Jabón natural (ejemplo)',estrellas_est:4.3,devoluciones:2,criticas:0,motivo_top:'FOUND_BETTER_PRICE',senal:'verde'}
+    ]); }
+  }catch(e){}
   avisoDatos();
 }
 // Banner honesto: distingue "conectado sin ventas aún" de "demo" de "falló la API".
@@ -1441,7 +1510,23 @@ function lanzarIngesta(){
             }catch(e){pasos.push({['ppc_'+paises[i]+'_error']:e.message});}
           }
         }
-        pinta('Refresca el dashboard: PPC, acciones y palabras ya tienen datos.');
+        // Recogida: Amazon puede tardar >4 min en generar los informes. Los que
+        // quedaron "pendiente" se recogen aquí en varias pasadas espaciadas (y,
+        // si aún no, el cron los recoge más tarde — no se pierde nada).
+        var hayPend=pasos.some(function(p){var v=Object.values(p)[0];return typeof v==='string'&&v.indexOf('pendiente')>-1;});
+        if(hayPend){
+          for(var k=0;k<5;k++){
+            pinta('⏳ Amazon está generando los informes de PPC… recogiendo ('+(k+1)+'/5)');
+            await pausa(60000);
+            try{
+              var rr=await fetch(SB_CONFIG.apiBase+'/v1/ppc/recoger?key='+encodeURIComponent(key));
+              var dr=await rr.json();
+              if(dr&&dr.recogidos)pasos.push({recogidos:dr.recogidos});
+              if(dr&&dr.pendientes===0)break;
+            }catch(e){}
+          }
+        }
+        pinta('Refresca el dashboard: PPC, acciones y palabras ya tienen datos. (Si algo quedó pendiente, el cron lo recoge solo.)');
       })();
     })
     .catch(function(e){box.innerHTML='<span style="color:var(--rd)">Error o tardó demasiado: '+e.message+'. Si es timeout, el cron de las 03:00 lo hará solo — revisa mañana.</span>';});

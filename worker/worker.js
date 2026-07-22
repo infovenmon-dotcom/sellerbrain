@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v9-ppc-425-polls'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v10-ppc-desacoplado-satisfaccion'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -214,6 +214,30 @@ export default {
         const filtro = pais ? 'pais=eq.' + pais + '&' : '';
         const filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=gasto.desc&limit=500');
         return json({ datos: filas }, cors);
+      }
+
+      // --- Recoger informes de PPC pendientes que ya estén listos en Amazon ---
+      //     El frontend lo llama unas veces tras la ingesta; el cron también.
+      if (url.pathname === '/v1/ppc/recoger') {
+        const rec = await recogerPendientesPPC(env);
+        return json({ ok: true, ...rec }, cors);
+      }
+
+      // --- Satisfacción del cliente (a partir de los MOTIVOS DE DEVOLUCIÓN,
+      //     único feedback real que Amazon sí da por API). Media de "estrellas"
+      //     estimada por producto + alertas de motivos de calidad/defecto. ---
+      if (url.pathname === '/v1/satisfaccion') {
+        const filas = await selSafe(env, 'v_satisfaccion_producto?order=devoluciones.desc', []);
+        const cat = await selSafe(env, 'productos_catalogo?select=sku,nombre,asin,imagen', []);
+        const nombres = {};
+        for (const c of (cat || [])) nombres[c.sku] = c;
+        const datos = (filas || []).map(f => ({
+          ...f,
+          nombre: (nombres[f.sku] && nombres[f.sku].nombre) || f.sku,
+          asin: (nombres[f.sku] && nombres[f.sku].asin) || '',
+          imagen: (nombres[f.sku] && nombres[f.sku].imagen) || ''
+        }));
+        return json({ datos }, cors);
       }
 
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
@@ -484,7 +508,13 @@ export default {
 
   // ============ CRON: ingesta diaria ============
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(ingestaDiaria(env, 'cron'));
+    // Con el plan de pago (1000 subpeticiones) el cron ya puede hacer todo:
+    // SP-API + PPC del día + recoger informes PPC pendientes de días anteriores.
+    ctx.waitUntil((async () => {
+      await ingestaDiaria(env, 'cron');
+      try { await ingestaPPC(env, {}); } catch (_) {}
+      try { await recogerPendientesPPC(env); } catch (_) {}
+    })());
   }
 };
 
@@ -706,6 +736,137 @@ async function adsInformeTerminos(env, profileId, desde, hasta) {
 }
 
 /* =====================================================================
+ * PPC DESACOPLADO — los informes de Ads pueden tardar >4 min en generarse.
+ * En vez de esperar bloqueados (y agotar el tiempo del Worker), CREAMOS el
+ * informe, guardamos su reportId como "pendiente", sondeamos un poco y, si aún
+ * no está, lo dejamos para recogerlo en la siguiente pasada (botón o cron).
+ * Así el PPC entra SIEMPRE, tarde lo que tarde Amazon.
+ * =================================================================== */
+async function deleteSupabase(env, filtro) {
+  const r = await fetch(env.SUPABASE_URL + '/rest/v1/' + filtro, {
+    method: 'DELETE',
+    headers: { apikey: env.SUPABASE_SERVICE_KEY, Prefer: 'return=minimal' }
+  });
+  if (!r.ok && r.status !== 404) throw new Error('Supabase DELETE ' + filtro + ': ' + r.status);
+}
+
+async function cabecerasAds(env, profileId) {
+  const token = await lwaToken(env, 'ads');
+  return {
+    'Authorization': 'Bearer ' + token,
+    'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+    'Amazon-Advertising-API-Scope': profileId,
+    'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+  };
+}
+
+function cuerpoAdsDia(fecha) {
+  return {
+    name: 'sb-sp-daily-' + fecha,
+    startDate: fecha, endDate: fecha,
+    configuration: {
+      adProduct: 'SPONSORED_PRODUCTS', groupBy: ['campaign'],
+      columns: ['date', 'campaignId', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spCampaigns', timeUnit: 'DAILY', format: 'GZIP_JSON'
+    }
+  };
+}
+
+function cuerpoAdsTerminos(desde, hasta) {
+  return {
+    name: 'sb-terminos-' + desde + '-' + hasta,
+    startDate: desde, endDate: hasta,
+    configuration: {
+      adProduct: 'SPONSORED_PRODUCTS', groupBy: ['searchTerm'],
+      columns: ['searchTerm', 'keyword', 'matchType', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spSearchTerm', timeUnit: 'SUMMARY', format: 'GZIP_JSON'
+    }
+  };
+}
+
+async function descargarInformeAds(urlInforme) {
+  const gz = await fetch(urlInforme);
+  const ds = new DecompressionStream('gzip');
+  const txt = await new Response(new Response(await gz.arrayBuffer()).body.pipeThrough(ds)).text();
+  return JSON.parse(txt);
+}
+
+// Sondea un informe unas pocas veces. Devuelve los datos si COMPLETED; null si
+// aún no está listo (para dejarlo pendiente). Lanza si Amazon marca FAILURE.
+async function sondearInformeAds(headers, reportId, veces, ms) {
+  for (let i = 0; i < veces; i++) {
+    await sleep(ms);
+    const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
+    const j = await st.json();
+    if (j.status === 'COMPLETED') return await descargarInformeAds(j.url);
+    if (j.status === 'FAILURE') throw new Error('Ads report FAILURE');
+  }
+  return null;
+}
+
+async function guardarPPCdia(env, ads, pais, fecha) {
+  const tot = (ads || []).reduce((a, c) => ({
+    gasto: a.gasto + (c.cost || 0), clics: a.clics + (c.clicks || 0),
+    impresiones: a.impresiones + (c.impressions || 0),
+    ventas: a.ventas + (c.sales14d || 0), pedidos: a.pedidos + (c.purchases14d || 0)
+  }), { gasto: 0, clics: 0, impresiones: 0, ventas: 0, pedidos: 0 });
+  await upsertSupabase(env, 'ppc_dia', [{
+    fecha, pais, gasto: +tot.gasto.toFixed(2), clics: tot.clics,
+    impresiones: tot.impresiones, ventas_ppc: +tot.ventas.toFixed(2), pedidos_ppc: tot.pedidos
+  }]);
+  await upsertSupabase(env, 'ppc_campanas', (ads || []).map(c => ({
+    fecha, pais, campania_id: String(c.campaignId || ''), nombre: c.campaignName || '',
+    gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
+    ventas_ppc: +(c.sales14d || 0).toFixed(2), pedidos_ppc: c.purchases14d || 0
+  })));
+  return (ads || []).length;
+}
+
+async function guardarPPCterminos(env, filas, pais, desde, hasta) {
+  await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({
+    pais, desde, hasta,
+    termino: t.searchTerm || '', keyword: t.keyword || '', tipo: t.matchType || '',
+    campania: t.campaignName || '',
+    gasto: +(t.cost || 0).toFixed(2), clics: t.clicks || 0, impresiones: t.impressions || 0,
+    ventas_ppc: +(t.sales14d || 0).toFixed(2), pedidos_ppc: t.purchases14d || 0
+  })));
+  return (filas || []).length;
+}
+
+async function guardarPendientePPC(env, row) {
+  try { await upsertSupabase(env, 'ppc_pendientes', [{ ...row, creado: new Date().toISOString() }]); }
+  catch (_) { /* si no existe la tabla aún, no rompe la ingesta */ }
+}
+async function borrarPendientePPC(env, reportId) {
+  try { await deleteSupabase(env, 'ppc_pendientes?report_id=eq.' + encodeURIComponent(reportId)); } catch (_) {}
+}
+
+// Recorre los informes pendientes; los que ya estén listos, los ingesta y borra.
+// Los que Amazon marque como fallidos, se descartan. El resto sigue esperando.
+async function recogerPendientesPPC(env) {
+  const pend = await selSafe(env, 'ppc_pendientes?order=creado.asc', []);
+  let recogidos = 0, fallidos = 0;
+  for (const p of (pend || [])) {
+    const profileId = ADS_PROFILES[p.pais];
+    if (!profileId) continue;
+    try {
+      const headers = await cabecerasAds(env, profileId);
+      const st = await fetch(ADS_HOST + '/reporting/reports/' + p.report_id, { headers });
+      const j = await st.json();
+      if (j.status === 'COMPLETED') {
+        const data = await descargarInformeAds(j.url);
+        if (p.tipo === 'dia') await guardarPPCdia(env, data, p.pais, p.fecha);
+        else await guardarPPCterminos(env, data, p.pais, p.desde, p.hasta);
+        await borrarPendientePPC(env, p.report_id); recogidos++;
+      } else if (j.status === 'FAILURE') {
+        await borrarPendientePPC(env, p.report_id); fallidos++;
+      }
+    } catch (_) { /* transitorio: se reintenta en la próxima pasada */ }
+  }
+  return { recogidos, fallidos, pendientes: (pend || []).length - recogidos - fallidos };
+}
+
+/* =====================================================================
  * INGESTA DIARIA → Supabase
  * =================================================================== */
 async function ingestaDiaria(env, origen) {
@@ -835,26 +996,21 @@ async function ingestaPPC(env, opts) {
   const perfiles = soloPais ? (ADS_PROFILES[soloPais] ? { [soloPais]: ADS_PROFILES[soloPais] } : {}) : ADS_PROFILES;
   const resultado = { fecha: ayer, pasos: [] };
 
-  // 1. PPC del día por país
+  // 1. PPC del día por país (DESACOPLADO: crea informe → guarda pendiente →
+  //    sondea corto → si listo ingesta; si no, se recoge en la próxima pasada).
   if (solo !== 'terminos') for (const [pais, profileId] of Object.entries(perfiles)) {
     try {
-      const ads = await adsInformeDiario(env, ayer, profileId);
-      const tot = (ads || []).reduce((a, c) => ({
-        gasto: a.gasto + (c.cost || 0), clics: a.clics + (c.clicks || 0),
-        impresiones: a.impresiones + (c.impressions || 0),
-        ventas: a.ventas + (c.sales14d || 0), pedidos: a.pedidos + (c.purchases14d || 0)
-      }), { gasto: 0, clics: 0, impresiones: 0, ventas: 0, pedidos: 0 });
-      await upsertSupabase(env, 'ppc_dia', [{
-        fecha: ayer, pais,
-        gasto: +tot.gasto.toFixed(2), clics: tot.clics, impresiones: tot.impresiones,
-        ventas_ppc: +tot.ventas.toFixed(2), pedidos_ppc: tot.pedidos
-      }]);
-      await upsertSupabase(env, 'ppc_campanas', (ads || []).map(c => ({
-        fecha: ayer, pais, campania_id: String(c.campaignId || ''), nombre: c.campaignName || '',
-        gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
-        ventas_ppc: +(c.sales14d || 0).toFixed(2), pedidos_ppc: c.purchases14d || 0
-      })));
-      resultado.pasos.push({ ['ppc_' + pais]: 'ok · ' + (ads ? ads.length : 0) + ' campañas' });
+      const headers = await cabecerasAds(env, profileId);
+      const reportId = await crearReporteAds(headers, cuerpoAdsDia(ayer));
+      await guardarPendientePPC(env, { report_id: reportId, pais, tipo: 'dia', fecha: ayer });
+      const data = await sondearInformeAds(headers, reportId, 6, 12000);   // ~72s
+      if (data) {
+        const n = await guardarPPCdia(env, data, pais, ayer);
+        await borrarPendientePPC(env, reportId);
+        resultado.pasos.push({ ['ppc_' + pais]: 'ok · ' + n + ' campañas' });
+      } else {
+        resultado.pasos.push({ ['ppc_' + pais]: 'pendiente · Amazon aún genera el informe; se recogerá solo' });
+      }
     } catch (e) { resultado.pasos.push({ ['ppc_' + pais + '_error']: e.message }); }
   }
 
@@ -864,18 +1020,27 @@ async function ingestaPPC(env, opts) {
     const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
     for (const [pais, profileId] of Object.entries(perfiles)) {
       try {
-        const filas = await adsInformeTerminos(env, profileId, desdeT, hastaT);
-        await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({
-          pais, desde: desdeT, hasta: hastaT,
-          termino: t.searchTerm || '', keyword: t.keyword || '', tipo: t.matchType || '',
-          campania: t.campaignName || '',
-          gasto: +(t.cost || 0).toFixed(2), clics: t.clicks || 0, impresiones: t.impressions || 0,
-          ventas_ppc: +(t.sales14d || 0).toFixed(2), pedidos_ppc: t.purchases14d || 0
-        })));
-        resultado.pasos.push({ ['terminos_' + pais]: filas ? filas.length : 0 });
+        const headers = await cabecerasAds(env, profileId);
+        const reportId = await crearReporteAds(headers, cuerpoAdsTerminos(desdeT, hastaT));
+        await guardarPendientePPC(env, { report_id: reportId, pais, tipo: 'terminos', desde: desdeT, hasta: hastaT });
+        const data = await sondearInformeAds(headers, reportId, 6, 12000);
+        if (data) {
+          const n = await guardarPPCterminos(env, data, pais, desdeT, hastaT);
+          await borrarPendientePPC(env, reportId);
+          resultado.pasos.push({ ['terminos_' + pais]: n });
+        } else {
+          resultado.pasos.push({ ['terminos_' + pais]: 'pendiente · se recogerá solo' });
+        }
       } catch (e) { resultado.pasos.push({ ['terminos_' + pais + '_error']: e.message }); }
     }
   }
+
+  // 3. De paso, intenta recoger pendientes de pasadas anteriores que ya estén listos.
+  try {
+    const rec = await recogerPendientesPPC(env);
+    if (rec.recogidos) resultado.pasos.push({ recogidos_pendientes: rec.recogidos });
+  } catch (_) {}
+
   return resultado;
 }
 
