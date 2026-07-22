@@ -882,19 +882,21 @@ async function productosPeriodo(env, desde, hasta, pais) {
     tv += +r.ventas || 0;
   }
   // TARIFAS REALES por SKU (lo que Amazon cobró de verdad a cada producto en el
-  // periodo). Así el número CUADRA: Ventas − Coste − Comisión − FBA − Devol = Beneficio.
-  const feeSku = {};    // {sku: {fba, com, dev}}
+  // periodo, con SKU en cada línea). CUADRA: Ventas − Coste − Amazon = Beneficio.
+  // 'Amazon' = FBA + comisión + servicios digitales + promociones + devoluciones.
+  const feeSku = {};    // {sku: {fba, com, dev}}  (com incluye digital; dev incluye promo)
   let tf = 0, tc = 0;   // totales de cuenta (para estimar los SKUs aún sin liquidar)
   try {
     const sc = await selectSupabase(env, 'v_settle_clasificado?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cubo,importe');
     for (const r of (sc || [])) {
       const cu = r.cubo, im = -(+r.importe || 0);
-      if (cu !== 'fba' && cu !== 'com' && cu !== 'dev') continue;
-      if (cu === 'fba') tf += im; else if (cu === 'com') tc += im;
+      if (cu === 'ignorar' || cu === 'ppc') continue;   // ppc va aparte; ignorar = ingreso/reserva
       const s = r.sku || '';
-      if (!s) continue;
+      if (!s) continue;                                  // líneas sin sku (suscripción, EPR) → no por producto
       if (!feeSku[s]) feeSku[s] = { fba: 0, com: 0, dev: 0 };
-      feeSku[s][cu] += im;
+      if (cu === 'fba') { feeSku[s].fba += im; tf += im; }
+      else if (cu === 'dev') { feeSku[s].dev += im; }
+      else { feeSku[s].com += im; if (cu === 'com') tc += im; }  // com + otros(promo/digital) con sku
     }
   } catch (_) { /* sin settlements → se estima abajo */ }
   const fbaR = (tv > 0 && tf > 0 && tf / tv <= 0.6) ? tf / tv : 0.15;  // fallback estimado
