@@ -104,6 +104,12 @@ create or replace view v_settle_clasificado as
 select
   fecha, sku, importe,
   case
+    -- NO son coste: retenciones/reservas de Amazon y transferencias a tu banco.
+    -- (Antes caían en 'otros' e inflaban el P&L, dejando el mes en negativo.)
+    when tipo ilike '%transfer%'                                            then 'ignorar'
+    when concepto ilike '%reserve%' or concepto ilike '%balance%'
+         or concepto ilike '%transfer%' or concepto ilike '%successful charge%'
+         or concepto ilike '%account level reserve%'                        then 'ignorar'
     when tipo ilike '%refund%'                                              then 'dev'
     when concepto ilike '%storage%'                                         then 'alm'
     when concepto ilike '%commission%' or concepto ilike '%referral%'       then 'com'
