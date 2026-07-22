@@ -91,6 +91,7 @@ drop view if exists v_serie_30d       cascade;
 drop view if exists v_productos_mes   cascade;
 drop view if exists v_periodos        cascade;
 drop view if exists v_pnl_mes         cascade;
+drop view if exists v_fee_sku         cascade;
 drop view if exists v_settle_clasificado cascade;
 drop view if exists v_ventas_dia      cascade;
 
@@ -136,6 +137,27 @@ select
   end as cubo
 from settlement_lineas
 where fecha is not null;
+
+
+-- ---------------------------------------------------------------------
+-- 1b) TARIFA REAL POR UNIDAD y SKU (de TODO el histórico de settlements).
+--     Resuelve el desfase: Amazon liquida con retraso, así que en vez de sumar
+--     lo liquidado en el periodo (incompleto), calculamos €/unidad de cada
+--     producto y lo aplicamos a las unidades vendidas.
+--     fba, com = magnitudes positivas (coste); uds_liq = unidades liquidadas.
+-- ---------------------------------------------------------------------
+create or replace view v_fee_sku as
+select sku,
+  sum(case when concepto ilike 'ItemPrice/Principal' then cantidad else 0 end) as uds_liq,
+  -sum(importe) filter (where concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
+        or concepto ilike '%inboundtransportation%' or concepto ilike '%partnered carrier%'
+        or concepto ilike '%removal%' or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%') as fba,
+  -sum(importe) filter (where concepto ilike '%commission%' or concepto ilike '%referral%'
+        or (concepto ilike 'ItemFees/%'
+            and concepto not ilike '%fulfillment%' and concepto not ilike '%fbaperunit%')) as com
+from settlement_lineas
+where sku is not null and sku <> '' and sku not ilike 'amzn.gr.%'
+group by sku;
 
 
 -- ---------------------------------------------------------------------
@@ -325,7 +347,8 @@ select
        else 'OK · '||i.disponible||' uds' end nota
 from inventario i
 left join vel v on v.sku = i.sku
-where i.disponible > 0 or coalesce(v.vd,0) > 0
+where (i.disponible > 0 or coalesce(v.vd,0) > 0)
+  and i.sku not ilike 'amzn.gr.%'   -- excluye reacondicionados que revende Amazon
 order by dias asc
 limit 20;
 

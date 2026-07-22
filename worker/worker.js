@@ -875,32 +875,23 @@ async function productosPeriodo(env, desde, hasta, pais) {
   let tv = 0;
   for (const r of (ped || [])) {
     const s = r.sku || '';
+    if (!s || /^amzn\.gr\./i.test(s)) continue;   // ignora reacondicionados de Amazon
     if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, dias: {} };
     bySku[s].uds += +r.uds || 0;
     bySku[s].ventas += +r.ventas || 0;
     bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + (+r.uds || 0);
     tv += +r.ventas || 0;
   }
-  // TARIFAS REALES por SKU (lo que Amazon cobró de verdad a cada producto en el
-  // periodo, con SKU en cada línea). CUADRA: Ventas − Coste − Amazon = Beneficio.
-  // 'Amazon' = FBA + comisión + servicios digitales + promociones + devoluciones.
-  const feeSku = {};    // {sku: {fba, com, dev}}  (com incluye digital; dev incluye promo)
-  let tf = 0, tc = 0;   // totales de cuenta (para estimar los SKUs aún sin liquidar)
+  // TARIFA REAL POR UNIDAD (de v_fee_sku, todo el histórico) → se aplica a las
+  // unidades vendidas. Resuelve el desfase de liquidación de Amazon: aunque este
+  // mes no estén liquidadas todas las unidades, el €/ud es el real y CUADRA.
+  const feeUnit = {};   // {sku: {perUnit, fbaU, comU}}
   try {
-    const sc = await selectSupabase(env, 'v_settle_clasificado?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cubo,importe');
-    for (const r of (sc || [])) {
-      const cu = r.cubo, im = -(+r.importe || 0);
-      if (cu === 'ignorar' || cu === 'ppc') continue;   // ppc va aparte; ignorar = ingreso/reserva
-      const s = r.sku || '';
-      if (!s) continue;                                  // líneas sin sku (suscripción, EPR) → no por producto
-      if (!feeSku[s]) feeSku[s] = { fba: 0, com: 0, dev: 0 };
-      if (cu === 'fba') { feeSku[s].fba += im; tf += im; }
-      else if (cu === 'dev') { feeSku[s].dev += im; }
-      else { feeSku[s].com += im; if (cu === 'com') tc += im; }  // com + otros(promo/digital) con sku
+    for (const r of (await selectSupabase(env, 'v_fee_sku?select=sku,uds_liq,fba,com'))) {
+      const u = +r.uds_liq || 0;
+      if (u > 0) feeUnit[r.sku] = { fbaU: (+r.fba || 0) / u, comU: (+r.com || 0) / u, perUnit: ((+r.fba || 0) + (+r.com || 0)) / u };
     }
-  } catch (_) { /* sin settlements → se estima abajo */ }
-  const fbaR = (tv > 0 && tf > 0 && tf / tv <= 0.6) ? tf / tv : 0.15;  // fallback estimado
-  const comR = (tv > 0 && tc > 0 && tc / tv <= 0.4) ? tc / tv : 0.15;
+  } catch (_) { /* sin v_fee_sku → se estima con % abajo */ }
   const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste'))) costes[c.sku] = +c.coste || 0; } catch (_) {}
   const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,imagen'))) cat[c.sku] = c; } catch (_) {}
   const fin = new Date(hasta + 'T00:00:00Z');
@@ -910,11 +901,12 @@ async function productosPeriodo(env, desde, hasta, pais) {
     const coste = costes[p.sku];
     const nocoste = coste === undefined;
     const costeTot = +(p.uds * (coste || 0)).toFixed(2);
-    const fr = feeSku[p.sku];
-    const real = !!(fr && (fr.fba > 0 || fr.com > 0));   // ¿hay tarifas liquidadas?
-    const com = +((real ? fr.com : p.ventas * comR)).toFixed(2);
-    const fba = +((real ? fr.fba : p.ventas * fbaR)).toFixed(2);
-    const dev = +((real && fr.dev ? fr.dev : 0)).toFixed(2);
+    const fu = feeUnit[p.sku];
+    const real = !!fu;                                    // ¿tenemos tarifa/ud real?
+    const precioMed = p.uds > 0 ? p.ventas / p.uds : 0;
+    const fba = +((real ? fu.fbaU * p.uds : p.ventas * 0.15)).toFixed(2);
+    const com = +((real ? fu.comU * p.uds : p.ventas * 0.15)).toFixed(2);
+    const dev = 0;
     const amazon = +(com + fba + dev).toFixed(2);        // lo que se queda Amazon
     const ben = +(p.ventas - costeTot - amazon).toFixed(2);
     const mg = p.ventas > 0 ? +(ben / p.ventas * 100).toFixed(1) : 0;
