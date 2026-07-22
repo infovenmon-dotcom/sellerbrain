@@ -210,7 +210,10 @@ p as (  -- gasto PPC del mes: el mayor entre Ads API y el 'Cost of Advertising'
 )
 select round(v.ventas,2) ventas, round(cogs.prod,2) prod, round(s.fba,2) fba,
        round(s.com,2) com, round(p.ppc,2) ppc, round(s.dev,2) dev,
-       round(s.alm,2) alm, 0::numeric iva, round(s.otros,2) otros
+       round(s.alm,2) alm, 0::numeric iva, round(s.otros,2) otros,
+       -- IVA soportado recuperable: el 21% de las tarifas (base neta × 0.21).
+       -- NO resta al beneficio (Hacienda te lo devuelve); es informativo.
+       round((s.fba + s.com + s.alm + s.dev + abs(s.otros)) * 0.21, 2) as iva_sop
 from v, cogs, s, p;
 
 

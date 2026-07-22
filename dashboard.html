@@ -642,6 +642,11 @@ function renderPnl(){
        '<div class="p">'+f(Math.abs(r.v)/(PNL.ventas*esc)*100,1)+'%</div></div>';
   });
   h+='<div class="row total"><div class="n">Beneficio neto</div><div class="v" style="color:'+(ben>=0?'var(--gn)':'var(--rd)')+'">'+(ben>=0?'+':'')+f(ben,2)+'€</div><div class="p">'+f(ben/(PNL.ventas*esc)*100,1)+'%</div></div>';
+  // IVA soportado recuperable (informativo, NO resta al beneficio: lo devuelve Hacienda)
+  if(PNL.iva_sop){
+    h+='<div class="row" style="margin-top:6px;opacity:.85"><div class="n"><span class="dot" style="background:#4A9EDE"></span>IVA soportado (recuperable) <span style="color:var(--mu);font-size:10px">· no afecta al beneficio</span></div>'+
+       '<div class="v" style="color:#4A9EDE">+'+f(PNL.iva_sop*esc,2)+'€</div><div class="p"></div></div>';
+  }
   document.getElementById('pnl').innerHTML=h;
 }
 
@@ -1245,10 +1250,12 @@ function pintarDetalle(p,d){
   var body=document.getElementById('det-body');
   var fee=d.fee, perU=fee&&fee.uds_liq>0?((+fee.fba+ +fee.com)/fee.uds_liq):null;
   // Resumen del periodo (lo que muestra la tabla)
-  var resumenP='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:14px">'+
-    tileMini('Uds',p.uds)+tileMini('Ventas',f(p.ventas,2)+'€')+tileMini('Coste',p.coste?('-'+f(p.coste,2)+'€'):'—')+
-    tileMini('Amazon','-'+f(p.amazon||0,2)+'€')+tileMini('Beneficio',(p.ben>=0?'+':'')+f(p.ben||0,2)+'€')+tileMini('Margen',f(p.mg||0,1)+'%')+
-    '</div>';
+  var ivaRec=(p.amazon||0)*0.21;  // IVA soportado recuperable de las tarifas de este producto
+  var resumenP='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin-bottom:6px">'+
+    tileMini('Uds',p.uds)+tileMini('Ventas (sin IVA)',f(p.ventas,2)+'€')+tileMini('Coste',p.coste?('-'+f(p.coste,2)+'€'):'—')+
+    tileMini('Amazon (sin IVA)','-'+f(p.amazon||0,2)+'€')+tileMini('Beneficio',(p.ben>=0?'+':'')+f(p.ben||0,2)+'€')+tileMini('Margen',f(p.mg||0,1)+'%')+
+    '</div>'+
+    '<div style="font-size:11.5px;color:#4A9EDE;margin-bottom:12px">🧾 IVA soportado recuperable (tarifas): +'+f(ivaRec,2)+'€ · <span style="color:var(--mu)">no resta al beneficio, lo devuelve Hacienda</span></div>';
   var explica='<div style="font-size:12px;color:var(--mu2);background:rgba(46,230,160,.06);border:1px solid rgba(46,230,160,.25);border-radius:10px;padding:10px 12px;margin-bottom:14px">'+
     (perU!=null?('Tarifa real de Amazon por unidad <b>(sin IVA, ya lo desgravas)</b>: <b style="color:var(--or2)">'+f(perU,2)+'€/ud</b> — FBA '+f((+fee.fba/fee.uds_liq),2)+'€ + comisión '+f((+fee.com/fee.uds_liq),2)+'€. Se aplica a las '+p.uds+' uds del periodo. <span style="color:var(--mu)">(Las operaciones de abajo son los importes de Amazon CON IVA.)</span>'):
     'Aún no hay tarifas liquidadas de Amazon para este SKU → se estima al 30%. Cuando Amazon liquide, saldrá la real.')+
