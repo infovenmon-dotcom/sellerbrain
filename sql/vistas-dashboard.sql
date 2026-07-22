@@ -100,24 +100,37 @@ drop view if exists v_ventas_dia      cascade;
 --    (fba, com=comisión, alm=almacenaje, dev=devoluciones, otros).
 --    Las tarifas llegan con importe NEGATIVO; el coste = -sum(importe).
 -- ---------------------------------------------------------------------
+-- Clasificación basada en los nombres REALES de la cuenta (amount-type/description).
+-- 'ppc' = publicidad (Cost of Advertising) para no mezclarla ni doblarla.
 create or replace view v_settle_clasificado as
 select
   fecha, sku, importe,
   case
-    -- NO son coste: retenciones/reservas de Amazon y transferencias a tu banco.
-    -- (Antes caían en 'otros' e inflaban el P&L, dejando el mes en negativo.)
-    when tipo ilike '%transfer%'                                            then 'ignorar'
-    when concepto ilike '%reserve%' or concepto ilike '%balance%'
-         or concepto ilike '%transfer%' or concepto ilike '%successful charge%'
-         or concepto ilike '%account level reserve%'                        then 'ignorar'
+    -- NO son coste: reservas y transferencias (dinero retenido/movido, no gasto).
+    when concepto ilike '%reserve%' or tipo ilike '%transfer%'
+         or concepto ilike '%balance%'                                      then 'ignorar'
+    -- Ingresos / pass-through: precio de venta, IVA del producto, envío cobrado.
+    when concepto ilike 'ItemPrice/%'                                       then 'ignorar'
+    -- Reembolsos de Amazon a tu favor (pérdida/daño de inventario): crédito.
+    when concepto ilike '%Reimbursement%'                                   then 'ignorar'
+    -- Publicidad: se cuenta aparte (Ads API); cubo propio para no doblar.
+    when concepto ilike '%Cost of Advertising%' or concepto ilike '%advertising%' then 'ppc'
+    -- Devoluciones
     when tipo ilike '%refund%'                                              then 'dev'
+    -- Almacenaje (storage, incl. su IVA "Tax on fee")
     when concepto ilike '%storage%'                                         then 'alm'
+    -- Comisión (referral) — incluye RefundCommission
     when concepto ilike '%commission%' or concepto ilike '%referral%'       then 'com'
+    -- FBA: cumplimiento por unidad, logística de entrada, retirada
     when concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
-         or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%' then 'fba'
-    -- Ingresos (no son coste): principal, impuestos, envío, promociones.
-    when concepto ilike '%principal%' or concepto ilike '%tax%'
-         or concepto ilike '%shipping%' or concepto ilike '%promotion%'     then 'ignorar'
+         or concepto ilike '%inboundtransportation%' or concepto ilike '%partnered carrier%'
+         or concepto ilike '%removal%' or concepto ilike '%pick%pack%'
+         or concepto ilike '%weight%handl%'                                 then 'fba'
+    -- Resto de ItemFees (servicios digitales, shipping chargeback…) = coste
+    when concepto ilike 'ItemFees/%'                                        then 'com'
+    -- Promociones / cupones = coste de marketing
+    when concepto ilike 'Promotion/%' or concepto ilike '%coupon%'          then 'otros'
+    -- Suscripción, EPR y cualquier otro cargo negativo → 'otros' (coste)
     when importe < 0                                                        then 'otros'
     else 'ignorar'
   end as cubo
@@ -164,8 +177,12 @@ s as (  -- tarifas del mes por cubo
     coalesce(sum(importe) filter (where cubo='otros'),0)  otros
   from v_settle_clasificado, mes where fecha >= mes.ini
 ),
-p as (  -- gasto PPC del mes
-  select coalesce(sum(gasto),0) ppc from ppc_dia, mes where fecha >= mes.ini
+p as (  -- gasto PPC del mes: el mayor entre Ads API y el 'Cost of Advertising'
+        -- del settlement (este último suele ser el total real facturado).
+  select greatest(
+    coalesce((select sum(gasto) from ppc_dia, mes m2 where ppc_dia.fecha >= m2.ini),0),
+    coalesce((select -sum(importe) from v_settle_clasificado sc, mes m3 where sc.cubo='ppc' and sc.fecha >= m3.ini),0)
+  ) ppc
 )
 select round(v.ventas,2) ventas, round(cogs.prod,2) prod, round(s.fba,2) fba,
        round(s.com,2) com, round(p.ppc,2) ppc, round(s.dev,2) dev,
