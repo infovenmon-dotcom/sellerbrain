@@ -147,14 +147,16 @@ where fecha is not null;
 --     fba, com = magnitudes positivas (coste); uds_liq = unidades liquidadas.
 -- ---------------------------------------------------------------------
 create or replace view v_fee_sku as
+-- IVA_TARIFAS = 1.21: el settlement guarda las tarifas CON IVA (21% ES) y el
+-- vendedor lo desgrava → dividimos por 1.21 para dejar el coste real (base).
 select sku,
   sum(case when concepto ilike 'ItemPrice/Principal' then cantidad else 0 end) as uds_liq,
-  -sum(importe) filter (where concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
+  round(-sum(importe) filter (where concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
         or concepto ilike '%inboundtransportation%' or concepto ilike '%partnered carrier%'
-        or concepto ilike '%removal%' or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%') as fba,
-  -sum(importe) filter (where concepto ilike '%commission%' or concepto ilike '%referral%'
+        or concepto ilike '%removal%' or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%') / 1.21, 2) as fba,
+  round(-sum(importe) filter (where concepto ilike '%commission%' or concepto ilike '%referral%'
         or (concepto ilike 'ItemFees/%'
-            and concepto not ilike '%fulfillment%' and concepto not ilike '%fbaperunit%')) as com
+            and concepto not ilike '%fulfillment%' and concepto not ilike '%fbaperunit%')) / 1.21, 2) as com
 from settlement_lineas
 where sku is not null and sku <> '' and sku not ilike 'amzn.gr.%'
 group by sku;
@@ -188,22 +190,22 @@ cogs as (  -- coste de compra = uds vendidas * coste unitario
   from v_ventas_dia vd join mes on vd.fecha >= mes.ini
   left join costes_producto cp on cp.sku = vd.sku
 ),
-s as (  -- tarifas del mes por cubo
+s as (  -- tarifas del mes por cubo, SIN IVA (÷1.21, el IVA se desgrava)
   select
-    coalesce(-sum(importe) filter (where cubo='fba'),0)   fba,
-    coalesce(-sum(importe) filter (where cubo='com'),0)   com,
-    coalesce(-sum(importe) filter (where cubo='alm'),0)   alm,
-    coalesce(-sum(importe) filter (where cubo='dev'),0)   dev,
+    coalesce(-sum(importe) filter (where cubo='fba'),0)/1.21   fba,
+    coalesce(-sum(importe) filter (where cubo='com'),0)/1.21   com,
+    coalesce(-sum(importe) filter (where cubo='alm'),0)/1.21   alm,
+    coalesce(-sum(importe) filter (where cubo='dev'),0)/1.21   dev,
     -- 'otros' va CON SIGNO (el frontend lo pinta tal cual): negativo = coste,
     -- positivo = crédito/ajuste a favor. Las demás son magnitudes positivas.
-    coalesce(sum(importe) filter (where cubo='otros'),0)  otros
+    coalesce(sum(importe) filter (where cubo='otros'),0)/1.21  otros
   from v_settle_clasificado, mes where fecha >= mes.ini
 ),
 p as (  -- gasto PPC del mes: el mayor entre Ads API y el 'Cost of Advertising'
         -- del settlement (este último suele ser el total real facturado).
   select greatest(
     coalesce((select sum(gasto) from ppc_dia, mes m2 where ppc_dia.fecha >= m2.ini),0),
-    coalesce((select -sum(importe) from v_settle_clasificado sc, mes m3 where sc.cubo='ppc' and sc.fecha >= m3.ini),0)
+    coalesce((select -sum(importe)/1.21 from v_settle_clasificado sc, mes m3 where sc.cubo='ppc' and sc.fecha >= m3.ini),0)
   ) ppc
 )
 select round(v.ventas,2) ventas, round(cogs.prod,2) prod, round(s.fba,2) fba,
@@ -232,10 +234,14 @@ agg as (
     coalesce((select sum(ventas)  from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) ventas,
     coalesce((select sum(uds)     from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) uds,
     coalesce((select sum(pedidos) from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) pedidos,
-    coalesce((select sum(gasto)   from ppc_dia p     where p.fecha >= r.ini and p.fecha < r.fin),0) ppc,
+    greatest(
+      coalesce((select sum(gasto) from ppc_dia p where p.fecha >= r.ini and p.fecha < r.fin),0),
+      coalesce((select -sum(importe)/1.21 from v_settle_clasificado s where s.cubo='ppc' and s.fecha >= r.ini and s.fecha < r.fin),0)
+    ) ppc,
     coalesce((select sum(vd.uds*cp.coste) from v_ventas_dia vd left join costes_producto cp on cp.sku=vd.sku
               where vd.fecha >= r.ini and vd.fecha < r.fin),0) cogs,
-    coalesce((select -sum(importe) from v_settle_clasificado s where s.cubo<>'ignorar' and s.fecha >= r.ini and s.fecha < r.fin),0) tarifas
+    -- tarifas (fba+com+alm+dev+otros) SIN IVA y SIN publicidad (va en ppc aparte)
+    coalesce((select -sum(importe)/1.21 from v_settle_clasificado s where s.cubo not in ('ignorar','ppc') and s.fecha >= r.ini and s.fecha < r.fin),0) tarifas
   from rangos r
 )
 select id, nom, etiqueta as fecha, round(ventas,2) ventas, uds::int, pedidos::int,
@@ -321,7 +327,7 @@ select
 from generate_series(current_date-29, current_date, interval '1 day') g(dia)
 left join (select fecha, sum(ventas) v from v_ventas_dia group by fecha) vt on vt.fecha = g.dia::date
 left join (select fecha, sum(gasto) p from ppc_dia group by fecha) pp on pp.fecha = g.dia::date
-left join (select fecha, -sum(importe) t from v_settle_clasificado where cubo<>'ignorar' group by fecha) sc on sc.fecha = g.dia::date
+left join (select fecha, -sum(importe)/1.21 t from v_settle_clasificado where cubo not in ('ignorar','ppc') group by fecha) sc on sc.fecha = g.dia::date
 left join (select vd.fecha, sum(vd.uds*cp.coste) c from v_ventas_dia vd left join costes_producto cp on cp.sku=vd.sku group by vd.fecha) cg on cg.fecha = g.dia::date
 order by g.dia;
 

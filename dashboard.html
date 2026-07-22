@@ -1250,7 +1250,7 @@ function pintarDetalle(p,d){
     tileMini('Amazon','-'+f(p.amazon||0,2)+'€')+tileMini('Beneficio',(p.ben>=0?'+':'')+f(p.ben||0,2)+'€')+tileMini('Margen',f(p.mg||0,1)+'%')+
     '</div>';
   var explica='<div style="font-size:12px;color:var(--mu2);background:rgba(46,230,160,.06);border:1px solid rgba(46,230,160,.25);border-radius:10px;padding:10px 12px;margin-bottom:14px">'+
-    (perU!=null?('Tarifa real de Amazon por unidad (de tu histórico): <b style="color:var(--or2)">'+f(perU,2)+'€/ud</b> — FBA '+f((+fee.fba/fee.uds_liq),2)+'€ + comisión '+f((+fee.com/fee.uds_liq),2)+'€. Se aplica a las '+p.uds+' uds del periodo.'):
+    (perU!=null?('Tarifa real de Amazon por unidad <b>(sin IVA, ya lo desgravas)</b>: <b style="color:var(--or2)">'+f(perU,2)+'€/ud</b> — FBA '+f((+fee.fba/fee.uds_liq),2)+'€ + comisión '+f((+fee.com/fee.uds_liq),2)+'€. Se aplica a las '+p.uds+' uds del periodo. <span style="color:var(--mu)">(Las operaciones de abajo son los importes de Amazon CON IVA.)</span>'):
     'Aún no hay tarifas liquidadas de Amazon para este SKU → se estima al 30%. Cuando Amazon liquide, saldrá la real.')+
     '<div style="margin-top:6px"><button class="chip on" onclick="editarCoste(\''+p.sku.replace(/'/g,"")+'\')">✏️ Editar coste de compra</button></div></div>';
   // Resumen por tipo de operación (todas las líneas del settlement)
