@@ -881,33 +881,47 @@ async function productosPeriodo(env, desde, hasta, pais) {
     bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + (+r.uds || 0);
     tv += +r.ventas || 0;
   }
-  // ratio de tarifas de cuenta en el rango
-  let tf = 0, tc = 0;
+  // TARIFAS REALES por SKU (lo que Amazon cobró de verdad a cada producto en el
+  // periodo). Así el número CUADRA: Ventas − Coste − Comisión − FBA − Devol = Beneficio.
+  const feeSku = {};    // {sku: {fba, com, dev}}
+  let tf = 0, tc = 0;   // totales de cuenta (para estimar los SKUs aún sin liquidar)
   try {
-    const sc = await selectSupabase(env, 'v_settle_clasificado?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=cubo,importe');
+    const sc = await selectSupabase(env, 'v_settle_clasificado?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cubo,importe');
     for (const r of (sc || [])) {
-      if (r.cubo === 'fba') tf += -(+r.importe || 0);
-      else if (r.cubo === 'com') tc += -(+r.importe || 0);
+      const cu = r.cubo, im = -(+r.importe || 0);
+      if (cu !== 'fba' && cu !== 'com' && cu !== 'dev') continue;
+      if (cu === 'fba') tf += im; else if (cu === 'com') tc += im;
+      const s = r.sku || '';
+      if (!s) continue;
+      if (!feeSku[s]) feeSku[s] = { fba: 0, com: 0, dev: 0 };
+      feeSku[s][cu] += im;
     }
-  } catch (_) { /* sin settlements → estima abajo */ }
-  const fbaR = (tv > 0 && tf > 0 && tf / tv <= 0.6) ? tf / tv : 0.15;
+  } catch (_) { /* sin settlements → se estima abajo */ }
+  const fbaR = (tv > 0 && tf > 0 && tf / tv <= 0.6) ? tf / tv : 0.15;  // fallback estimado
   const comR = (tv > 0 && tc > 0 && tc / tv <= 0.4) ? tc / tv : 0.15;
-  const feeR = fbaR + comR;
   const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste'))) costes[c.sku] = +c.coste || 0; } catch (_) {}
   const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,imagen'))) cat[c.sku] = c; } catch (_) {}
-  // trend: últimos 10 días del rango
   const fin = new Date(hasta + 'T00:00:00Z');
   const dias10 = [];
   for (let i = 9; i >= 0; i--) dias10.push(new Date(fin.getTime() - i * 86400000).toISOString().slice(0, 10));
   return Object.values(bySku).map(p => {
     const coste = costes[p.sku];
     const nocoste = coste === undefined;
-    const ben = +(p.ventas - p.uds * (coste || 0) - p.ventas * feeR).toFixed(2);
+    const costeTot = +(p.uds * (coste || 0)).toFixed(2);
+    const fr = feeSku[p.sku];
+    const real = !!(fr && (fr.fba > 0 || fr.com > 0));   // ¿hay tarifas liquidadas?
+    const com = +((real ? fr.com : p.ventas * comR)).toFixed(2);
+    const fba = +((real ? fr.fba : p.ventas * fbaR)).toFixed(2);
+    const dev = +((real && fr.dev ? fr.dev : 0)).toFixed(2);
+    const amazon = +(com + fba + dev).toFixed(2);        // lo que se queda Amazon
+    const ben = +(p.ventas - costeTot - amazon).toFixed(2);
     const mg = p.ventas > 0 ? +(ben / p.ventas * 100).toFixed(1) : 0;
     const c = cat[p.sku] || {};
     return {
       nom: (c.nombre || p.sku), sku: p.sku, emoji: '📦', imagen: c.imagen || null,
-      uds: p.uds, ventas: +p.ventas.toFixed(2), ppc: 0, ben, mg,
+      uds: p.uds, ventas: +p.ventas.toFixed(2),
+      coste: costeTot, comision: com, fba, devol: dev, amazon,
+      real, ppc: 0, ben, mg,
       trend: dias10.map(d => p.dias[d] || 0),
       estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),
       txt: nocoste ? 'Sin coste ➜ clic' : (mg < 0 ? 'Pierde' : mg < 15 ? 'Margen bajo' : 'OK')
