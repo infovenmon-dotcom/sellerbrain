@@ -36,6 +36,7 @@
  * =====================================================================
  */
 
+const SB_VERSION = 'v7-detalle-fee-sku'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -56,9 +57,10 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
     try {
-      // --- Salud (público, no expone datos) ---
-      if (url.pathname === '/health') {
-        return json({ ok: true, ts: new Date().toISOString() }, cors);
+      // --- Salud + VERSIÓN (público). Sirve para comprobar si el Worker está
+      //     actualizado: abre la URL/health y mira 'version'. ---
+      if (url.pathname === '/health' || url.pathname === '/' || url.pathname === '/version') {
+        return json({ ok: true, version: SB_VERSION, ts: new Date().toISOString() }, cors);
       }
 
       // ============ SEGURIDAD ============
