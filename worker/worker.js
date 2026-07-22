@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v8-tarifas-sin-iva'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v9-ppc-425-polls'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -616,6 +616,20 @@ const ADS_PROFILES = {
   IT: '1402821377609437', BE: '1737778900266529'
 };
 
+// Crea un informe de Ads y devuelve su reportId. Si Amazon responde 425
+// (ya existe uno igual hoy), reutiliza ese informe en vez de fallar.
+async function crearReporteAds(headers, body) {
+  const r = await fetch(ADS_HOST + '/reporting/reports', { method: 'POST', headers, body: JSON.stringify(body) });
+  if (r.status === 425) {
+    const t = await r.text();
+    const m = t.match(/duplicate of\s*:?\s*([0-9a-fA-F-]{20,})/);
+    if (m) return m[1];                              // reutiliza el informe existente
+    throw new Error('Ads report: 425 ' + t);
+  }
+  if (!r.ok) throw new Error('Ads report: ' + r.status + ' ' + await r.text());
+  return (await r.json()).reportId;
+}
+
 async function adsInformeDiario(env, fecha /* YYYY-MM-DD */, profileId) {
   const token = await lwaToken(env, 'ads');
   const headers = {
@@ -636,12 +650,10 @@ async function adsInformeDiario(env, fecha /* YYYY-MM-DD */, profileId) {
       format: 'GZIP_JSON'
     }
   };
-  const r = await fetch(ADS_HOST + '/reporting/reports', { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error('Ads report: ' + r.status + ' ' + await r.text());
-  const { reportId } = await r.json();
-  // Poll (esperas cortas para no agotar el tiempo del Worker)
-  for (let i = 0; i < 55; i++) {
-    await sleep(4000);
+  const reportId = await crearReporteAds(headers, body);
+  // Poll: pocas consultas pero espaciadas (menos subpeticiones en plan gratis)
+  for (let i = 0; i < 16; i++) {
+    await sleep(15000);
     const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
     const j = await st.json();
     if (j.status === 'COMPLETED') {
@@ -676,11 +688,9 @@ async function adsInformeTerminos(env, profileId, desde, hasta) {
       format: 'GZIP_JSON'
     }
   };
-  const r = await fetch(ADS_HOST + '/reporting/reports', { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error('Ads términos: ' + r.status + ' ' + await r.text());
-  const { reportId } = await r.json();
-  for (let i = 0; i < 55; i++) {
-    await sleep(4000);
+  const reportId = await crearReporteAds(headers, body);
+  for (let i = 0; i < 16; i++) {
+    await sleep(15000);
     const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
     const j = await st.json();
     if (j.status === 'COMPLETED') {
