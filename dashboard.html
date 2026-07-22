@@ -1346,17 +1346,26 @@ function lanzarIngesta(){
       // PPC país por país (cada país en su propia invocación → no revienta el
       // límite de subrequests del plan gratis).
       return (async function(){
+        // 2 pasadas separadas: PPC del día y términos, cada una en su invocación
+        // (así cada país hace 1 solo informe de Ads y no revienta el límite gratis).
         var paises=['ES','FR','IT','BE'], pasos=[];
-        for(var i=0;i<paises.length;i++){
-          try{
-            var rp=await fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?pais='+paises[i]+'&terminos=1&key='+encodeURIComponent(key),{method:'POST'});
-            var dp=await rp.json();
-            (dp.pasos||[]).forEach(function(x){pasos.push(x);});
-          }catch(e){pasos.push({['ppc_'+paises[i]+'_error']:e.message});}
+        function pinta(estado){
           var htmlPpc='<div style="margin-top:8px;padding:11px;border-radius:10px;background:rgba(74,158,222,.08);border:1px solid rgba(74,158,222,.25)">'+
             '<b style="color:var(--bl)">PPC (Ads API)</b><div style="margin-top:6px;color:var(--mu2)">'+(pasosHTML(pasos)||'…')+'</div></div>';
-          box.innerHTML=htmlSp+htmlPpc+'<div style="margin-top:8px;font-size:11px;color:var(--mu)">'+(i<paises.length-1?'⏳ siguiente país…':'Refresca el dashboard: los datos reales empezarán a aparecer.')+'</div>';
+          box.innerHTML=htmlSp+htmlPpc+'<div style="margin-top:8px;font-size:11px;color:var(--mu)">'+estado+'</div>';
         }
+        var pasadas=[{solo:'dia',t:'gasto/campañas'},{solo:'terminos',t:'palabras de búsqueda'}];
+        for(var j=0;j<pasadas.length;j++){
+          for(var i=0;i<paises.length;i++){
+            pinta('⏳ '+pasadas[j].t+' · '+paises[i]+'…');
+            try{
+              var rp=await fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?pais='+paises[i]+'&solo='+pasadas[j].solo+'&key='+encodeURIComponent(key),{method:'POST'});
+              var dp=await rp.json();
+              (dp.pasos||[]).forEach(function(x){pasos.push(x);});
+            }catch(e){pasos.push({['ppc_'+paises[i]+'_error']:e.message});}
+          }
+        }
+        pinta('Refresca el dashboard: PPC, acciones y palabras ya tienen datos.');
       })();
     })
     .catch(function(e){box.innerHTML='<span style="color:var(--rd)">Error o tardó demasiado: '+e.message+'. Si es timeout, el cron de las 03:00 lo hará solo — revisa mañana.</span>';});

@@ -264,7 +264,8 @@ export default {
       if (url.pathname === '/v1/ingest-ppc' && request.method === 'POST') {
         const forzar = url.searchParams.get('terminos') === '1';
         const pais = url.searchParams.get('pais') || null;
-        const res = await ingestaPPC(env, { terminos: forzar, pais });
+        const solo = url.searchParams.get('solo') || null;   // 'dia' | 'terminos'
+        const res = await ingestaPPC(env, { terminos: forzar, pais, solo });
         return json(res, cors);
       }
 
@@ -796,11 +797,17 @@ async function ingestaPPC(env, opts) {
   const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const forzarTerminos = !!(opts && opts.terminos);
   const soloPais = opts && opts.pais;   // si viene, procesa SOLO ese país
+  // 'solo' separa los DOS informes de Ads en invocaciones distintas (cada uno
+  // es 1 informe → no se pasa del límite de subpeticiones del plan gratis):
+  //   solo='dia'      → solo PPC del día
+  //   solo='terminos' → solo términos de búsqueda
+  //   (sin 'solo')    → ambos (cron / plan de pago)
+  const solo = opts && opts.solo;
   const perfiles = soloPais ? (ADS_PROFILES[soloPais] ? { [soloPais]: ADS_PROFILES[soloPais] } : {}) : ADS_PROFILES;
   const resultado = { fecha: ayer, pasos: [] };
 
   // 1. PPC del día por país
-  for (const [pais, profileId] of Object.entries(perfiles)) {
+  if (solo !== 'terminos') for (const [pais, profileId] of Object.entries(perfiles)) {
     try {
       const ads = await adsInformeDiario(env, ayer, profileId);
       const tot = (ads || []).reduce((a, c) => ({
@@ -823,7 +830,7 @@ async function ingestaPPC(env, opts) {
   }
 
   // 2. Términos de búsqueda (resumen 30 días) — solo lunes UTC o si se fuerza.
-  if (forzarTerminos || new Date().getUTCDay() === 1) {
+  if (solo !== 'dia' && (forzarTerminos || solo === 'terminos' || new Date().getUTCDay() === 1)) {
     const hastaT = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
     for (const [pais, profileId] of Object.entries(perfiles)) {
