@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v10-ppc-desacoplado-satisfaccion'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v11-inventario-backoff'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -570,7 +570,17 @@ async function traerInventarioFBA(env, marketplaceId) {
   do {
     const qs = new URLSearchParams({ details: 'true', granularityType: 'Marketplace', granularityId: marketplaceId, marketplaceIds: marketplaceId });
     if (nextToken) qs.set('nextToken', nextToken);
-    const j = await spapiCall(env, '/fba/inventory/v1/summaries?' + qs.toString());
+    // La API de inventario tiene una cuota baja: espaciamos las páginas y
+    // reintentamos con backoff si Amazon devuelve 429 (QuotaExceeded).
+    if (pag > 0) await sleep(2000);
+    let j = null;
+    for (let intento = 0; intento < 4; intento++) {
+      try { j = await spapiCall(env, '/fba/inventory/v1/summaries?' + qs.toString()); break; }
+      catch (e) {
+        if (String(e.message || '').indexOf('429') > -1 && intento < 3) { await sleep(3000 * (intento + 1)); continue; }
+        throw e;
+      }
+    }
     const items = (j && j.payload && j.payload.inventorySummaries) || [];
     for (const it of items) {
       const sku = it.sellerSku || '';
