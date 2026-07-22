@@ -73,7 +73,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -135,6 +135,23 @@ export default {
       // --- Comparativas (mes vs mes, año vs año) ---
       if (url.pathname === '/v1/comparativa') {
         return json({ filas: await selSafe(env, 'v_comparativa', []) }, cors);
+      }
+
+      // --- Detalle de un producto: operaciones REALES de Amazon (trazabilidad).
+      //     GET /v1/producto-detalle?sku=XXX  → líneas de settlement + tarifa/ud.
+      if (url.pathname === '/v1/producto-detalle') {
+        const sku = url.searchParams.get('sku');
+        if (!sku) return json({ error: 'falta_sku' }, cors, 400);
+        const q = 'settlement_lineas?sku=eq.' + encodeURIComponent(sku) + '&order=fecha.desc&limit=150&select=fecha,tipo,concepto,importe,cantidad,pedido';
+        const lineas = await selSafe(env, q, []);
+        const fee = await selSafe(env, 'v_fee_sku?sku=eq.' + encodeURIComponent(sku) + '&select=sku,uds_liq,fba,com', []);
+        const porConcepto = {};
+        for (const l of (lineas || [])) {
+          if (!porConcepto[l.concepto]) porConcepto[l.concepto] = { concepto: l.concepto, n: 0, total: 0 };
+          porConcepto[l.concepto].n++; porConcepto[l.concepto].total += +l.importe || 0;
+        }
+        const resumen = Object.values(porConcepto).map(x => ({ ...x, total: +x.total.toFixed(2) })).sort((a, b) => a.total - b.total);
+        return json({ sku, fee: (fee || [])[0] || null, resumen, lineas }, cors);
       }
 
       // --- Tabla "Beneficio por producto" para CUALQUIER periodo (selector) ---
