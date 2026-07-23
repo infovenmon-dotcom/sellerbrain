@@ -131,8 +131,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 .burger:hover{background:rgba(255,255,255,.05)}
 /* Escritorio: barra lateral PLEGABLE → plegada, los datos ocupan todo */
 @media(min-width:901px){
-  .app{transition:grid-template-columns .18s ease}
-  .app.collapsed{grid-template-columns:0 1fr}
+  .app.collapsed{grid-template-columns:1fr}
   .app.collapsed .side{display:none}
 }
 @media(max-width:900px){
@@ -371,8 +370,8 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   <!-- GRÁFICO -->
   <div class="card">
     <div class="ch">
-      <h2><span class="ci">📈</span> Beneficio vs Ventas · últimos 30 días</h2>
-      <span class="more" onclick="alert('Vista detallada próximamente')">Ampliar →</span>
+      <h2><span class="ci">📈</span> Beneficio vs Ventas <span id="chart-per" style="font-size:11px;color:var(--mu);font-weight:400">· últimos 30 días</span></h2>
+      <span class="more" style="font-size:10.5px;color:var(--mu)">pasa el ratón para ver cada día</span>
     </div>
     <div class="chart-wrap" id="chart"></div>
     <div class="chart-legend">
@@ -670,23 +669,68 @@ function renderPnl(){
   document.getElementById('pnl').innerHTML=h;
 }
 
+var CHART_SERIE=null;
+function fechaCorta(s){ // 'YYYY-MM-DD' -> 'D MMM'
+  if(!s)return '';
+  var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var p=String(s).slice(0,10).split('-'); if(p.length<3)return s;
+  return (+p[2])+' '+(M[(+p[1])-1]||'')+(''); }
 function renderChart(){
   var W=640,H=170,pad=6;
-  if(!SERIE30 || !SERIE30.length){ document.getElementById('chart').innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin serie de 30 días todavía.</div>'; return; }
-  var maxV=Math.max.apply(null,SERIE30.map(function(d){return d.v;}))||1;
-  function pts(key){return SERIE30.map(function(d,i){
-    var x=pad+i*(W-2*pad)/29, y=H-pad-(d[key]/maxV)*(H-2*pad);
-    return x.toFixed(1)+','+y.toFixed(1);
-  }).join(' ');}
+  var el=document.getElementById('chart');
+  var S=(CHART_SERIE&&CHART_SERIE.length)?CHART_SERIE:SERIE30;
+  if(!S || !S.length){ el.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin serie todavía.</div>'; return; }
+  var n=S.length;
+  var maxV=Math.max.apply(null,S.map(function(d){return Math.max(+d.v||0,+d.b||0);}))||1;
+  function X(i){return pad+i*(W-2*pad)/Math.max(1,n-1);}
+  function Y(val){return H-pad-((+val||0)/maxV)*(H-2*pad);}
+  function pts(key){return S.map(function(d,i){return X(i).toFixed(1)+','+Y(d[key]).toFixed(1);}).join(' ');}
   var areaV='M'+pts('v').split(' ').join(' L')+' L'+(W-pad)+','+(H-pad)+' L'+pad+','+(H-pad)+' Z';
-  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto" preserveAspectRatio="none">'+
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
     '<defs><linearGradient id="gv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(46,230,160,.25)"/><stop offset="1" stop-color="rgba(46,230,160,0)"/></linearGradient></defs>'+
     '<path d="'+areaV+'" fill="url(#gv)"/>'+
+    '<line id="chart-guide" x1="0" y1="0" x2="0" y2="'+H+'" stroke="rgba(255,255,255,.35)" stroke-width="1" style="display:none"/>'+
     '<polyline points="'+pts('v')+'" fill="none" stroke="var(--or)" stroke-width="2"/>'+
     '<polyline points="'+pts('b')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
     '<polyline points="'+pts('p')+'" fill="none" stroke="#9B59B6" stroke-width="1.5" stroke-dasharray="4 3"/>'+
+    '<circle id="chart-dot-v" r="3" fill="var(--or)" style="display:none"/>'+
+    '<circle id="chart-dot-b" r="3" fill="var(--gn)" style="display:none"/>'+
     '</svg>';
-  document.getElementById('chart').innerHTML=svg;
+  el.style.position='relative';
+  el.innerHTML=svg+'<div id="chart-tip" style="position:absolute;display:none;pointer-events:none;background:#0b0b0b;border:1px solid var(--bd2);border-radius:8px;padding:7px 9px;font-size:11px;color:var(--tx);white-space:nowrap;transform:translate(-50%,-115%);z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.5)"></div>';
+  el.onmousemove=function(ev){
+    var rect=el.getBoundingClientRect(); if(!rect.width)return;
+    var rx=(ev.clientX-rect.left)/rect.width; if(rx<0)rx=0; if(rx>1)rx=1;
+    var i=Math.round(rx*(n-1)); if(i<0)i=0; if(i>n-1)i=n-1;
+    var d=S[i], tip=document.getElementById('chart-tip'), g=document.getElementById('chart-guide');
+    var dotV=document.getElementById('chart-dot-v'), dotB=document.getElementById('chart-dot-b');
+    if(g){g.setAttribute('x1',X(i));g.setAttribute('x2',X(i));g.style.display='';}
+    if(dotV){dotV.setAttribute('cx',X(i));dotV.setAttribute('cy',Y(d.v));dotV.style.display='';}
+    if(dotB){dotB.setAttribute('cx',X(i));dotB.setAttribute('cy',Y(d.b));dotB.style.display='';}
+    tip.style.display='block';
+    tip.style.left=(X(i)/W*rect.width).toFixed(0)+'px';
+    tip.style.top=(Math.min(Y(d.v),Y(d.b))/H*rect.height).toFixed(0)+'px';
+    tip.innerHTML='<b>'+(d.fecha?fechaCorta(d.fecha):('día '+(i+1)))+'</b>'+
+      '<div style="color:var(--or)">Ventas '+f(+d.v||0,2)+'€</div>'+
+      '<div style="color:var(--gn)">Beneficio '+f(+d.b||0,2)+'€</div>'+
+      '<div style="color:#b07cd6">PPC '+f(+d.p||0,2)+'€</div>';
+  };
+  el.onmouseleave=function(){
+    ['chart-tip','chart-guide','chart-dot-v','chart-dot-b'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
+  };
+}
+
+// Carga la serie diaria de un periodo y actualiza el gráfico (sigue al selector).
+function cargarSerie(desde,hasta,lab){
+  if(SB_CONFIG.mode!=='api'){ CHART_SERIE=null; renderChart(); return; }
+  fetch(SB_CONFIG.apiBase+'/v1/serie?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      CHART_SERIE=(d.serie||[]).map(function(x){return {fecha:x.fecha,v:+x.v,b:+x.b,p:+x.p};});
+      var t=document.getElementById('chart-per'); if(t)t.textContent='· '+(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
+      renderChart();
+    })
+    .catch(function(){});
 }
 
 function renderProds(){
@@ -736,6 +780,7 @@ function prodPeriodo(id){
   document.querySelectorAll('[data-pp]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-pp')===id);});
   refetchProductos();
   cargarVentasPais();
+  cargarSerie(desde,hasta,lab);   // el gráfico sigue al selector de fechas
 }
 function prodPais(p){
   PROD_PAIS=p||'';

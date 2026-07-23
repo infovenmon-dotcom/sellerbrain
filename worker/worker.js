@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v17-imagenes-diagnostico'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v18-serie-periodo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -231,6 +231,24 @@ export default {
         const patron = await selSafe(env, 'v_ppc_mejores_horas?' + f + 'order=pais.asc,hora.asc', []);
         const reciente = await selSafe(env, 'v_ppc_hora?' + f + 'order=fecha.desc,hora.desc&limit=240', []);
         return json({ patron, reciente }, cors);
+      }
+
+      // --- Serie diaria (ventas/beneficio/PPC) para el gráfico, por periodo ---
+      //     Sin fechas → últimos 30 días (v_serie_30d). Con desde/hasta → función.
+      if (url.pathname === '/v1/serie') {
+        const desde = url.searchParams.get('desde');
+        const hasta = url.searchParams.get('hasta');
+        let datos = [];
+        try {
+          if (desde && hasta) {
+            const r = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/serie_periodo?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta),
+              { headers: { apikey: env.SUPABASE_SERVICE_KEY } });
+            if (r.ok) datos = await r.json();
+          } else {
+            datos = await selSafe(env, 'v_serie_30d', []);
+          }
+        } catch (_) {}
+        return json({ serie: datos }, cors);
       }
 
       // --- Satisfacción del cliente (a partir de los MOTIVOS DE DEVOLUCIÓN,
