@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v23-ppc-horas-campana'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v24-fugas-tarifa'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1539,6 +1539,28 @@ async function generarAcciones(env, productos) {
       }
     }
   } catch (e) { /* si aún no hay términos, el motor sigue con las de producto */ }
+
+  // --- 3) Acciones por FUGA DE TARIFA (envío transfronterizo) ---
+  // Si parte de las unidades se sirven desde otro país, pagas gestión más cara
+  // que la local. v_fuga_tarifa cuantifica el sobrecoste; acción con €/mes real.
+  try {
+    const nombres = {};
+    try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre'))) nombres[c.sku] = c.nombre; } catch (_) {}
+    const fugas = await selectSupabase(env, 'v_fuga_tarifa?order=sobrecoste_mes.desc&limit=15');
+    for (const g of (fugas || [])) {
+      const mes = +g.sobrecoste_mes || 0;
+      if (mes < 3) continue;                              // fugas mínimas: no molestar
+      const nom = (nombres[g.sku] || g.sku).slice(0, 42);
+      acciones.push({
+        _v: mes * 12,                                     // peso alto: es dinero recurrente y recuperable
+        ic: '📦', bg: 'rgba(245,166,35,.15)', c: 'var(--am)',
+        t: 'Mete stock en ' + g.pais + ' para «' + nom + '»',
+        v: '+' + mes.toFixed(2).replace('.', ',') + '€/mes',
+        p: g.pct_caras + '% de las ventas se sirven cross-border (tarifa ' + (+g.fee_medio).toFixed(2).replace('.', ',') +
+           '€ vs ' + (+g.fee_local).toFixed(2).replace('.', ',') + '€ local). Manda inventario a ' + g.pais + ' o activa PAN-EU.'
+      });
+    }
+  } catch (e) { /* aún sin v_fuga_tarifa o sin settlements → el motor sigue */ }
 
   // Ordenar por impacto (€/ventas reales) y limitar; quitar el campo interno _v
   acciones.sort((a, b) => (b._v || 0) - (a._v || 0));
