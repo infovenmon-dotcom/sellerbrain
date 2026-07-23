@@ -366,11 +366,14 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 <!-- ===== 2 GRÁFICOS COMPARATIVA (llenan el hueco bajo las tarjetas) ===== -->
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px" id="grid-comp">
   <div class="card">
-    <div class="ch"><h2><span class="ci">📅</span> Este mes vs año pasado <span id="yoy-per" style="font-size:11px;color:var(--mu);font-weight:400">· por día</span></h2></div>
+    <div class="ch" style="justify-content:space-between;align-items:flex-start">
+      <h2><span class="ci">📅</span> Este mes vs año pasado <span id="yoy-per" style="font-size:11px;color:var(--mu);font-weight:400">· por día</span></h2>
+      <span id="yoy-pct" style="font-size:14px;font-weight:800;white-space:nowrap"></span>
+    </div>
     <div id="yoy-chart" style="position:relative"></div>
     <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--mu)">
       <span><i style="display:inline-block;width:10px;height:3px;background:var(--or2);vertical-align:middle;margin-right:4px"></i><span id="yoy-lbl-a">Este mes</span></span>
-      <span><i style="display:inline-block;width:10px;height:0;border-top:2px dashed #8a8a8a;vertical-align:middle;margin-right:4px"></i><span id="yoy-lbl-b">Año pasado</span></span>
+      <span><i style="display:inline-block;width:10px;height:0;border-top:2px dashed #F5A623;vertical-align:middle;margin-right:4px"></i><span id="yoy-lbl-b">Año pasado</span></span>
     </div>
   </div>
   <div class="card">
@@ -783,7 +786,19 @@ function cargarYoY(){
     fetch(SB_CONFIG.apiBase+'/v1/serie?desde='+a1+'&hasta='+a2,{headers:authHdr()}).then(function(r){return r.json();}),
     fetch(SB_CONFIG.apiBase+'/v1/serie?desde='+b1+'&hasta='+b2,{headers:authHdr()}).then(function(r){return r.json();})
   ]).then(function(res){
-    renderYoY((res[0].serie||[]).map(function(x){return +x.v||0;}),(res[1].serie||[]).map(function(x){return +x.v||0;}));
+    var A=(res[0].serie||[]).map(function(x){return +x.v||0;});
+    var B=(res[1].serie||[]).map(function(x){return +x.v||0;});
+    // % "cómo va el mes": ventas de este mes hasta hoy vs los MISMOS días del año pasado
+    var sumA=A.reduce(function(a,b){return a+b;},0);
+    var sumB=B.slice(0,A.length).reduce(function(a,b){return a+b;},0);
+    var badge=document.getElementById('yoy-pct');
+    if(badge){
+      if(sumB>0){ var pct=(sumA/sumB-1)*100; var up=pct>=0;
+        badge.style.color=up?'var(--gn)':'var(--rd)';
+        badge.textContent=(up?'▲ +':'▼ ')+f(pct,1)+'% vs año pasado';
+      } else { badge.textContent=''; }
+    }
+    renderYoY(A,B);
   }).catch(function(){ box.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">No se pudo cargar.</div>'; });
 }
 function renderYoY(A,B){
@@ -794,8 +809,8 @@ function renderYoY(A,B){
   function Y(v){return H-pad-((+v||0)/maxV)*(H-2*pad);}
   function pts(arr){return arr.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ');}
   el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
-    '<polyline points="'+pts(B)+'" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4 3"/>'+
-    '<polyline points="'+pts(A)+'" fill="none" stroke="var(--or2)" stroke-width="2"/>'+
+    '<polyline points="'+pts(B)+'" fill="none" stroke="#F5A623" stroke-width="1.8" stroke-dasharray="5 3" opacity="0.9"/>'+
+    '<polyline points="'+pts(A)+'" fill="none" stroke="var(--or2)" stroke-width="2.4"/>'+
     '<line id="yoy-guide" x1="0" y1="0" x2="0" y2="'+H+'" stroke="rgba(255,255,255,.3)" style="display:none"/>'+
     '</svg><div id="yoy-tip" style="position:absolute;display:none;pointer-events:none;background:#0b0b0b;border:1px solid var(--bd2);border-radius:8px;padding:6px 8px;font-size:11px;white-space:nowrap;transform:translate(-50%,-115%);z-index:6"></div>';
   el.onmousemove=function(ev){
@@ -805,7 +820,7 @@ function renderYoY(A,B){
     if(g){g.setAttribute('x1',X(i));g.setAttribute('x2',X(i));g.style.display='';}
     var dif=(A[i]||0)-(B[i]||0);
     tip.style.display='block';tip.style.left=(X(i)/W*rect.width)+'px';tip.style.top='2px';
-    tip.innerHTML='<b>día '+(i+1)+'</b><div style="color:var(--or2)">'+f(A[i]||0,0)+'€</div><div style="color:#aaa">'+f(B[i]||0,0)+'€</div><div style="color:'+(dif>=0?'var(--gn)':'var(--rd)')+'">'+(dif>=0?'+':'')+f(dif,0)+'€</div>';
+    tip.innerHTML='<b>día '+(i+1)+'</b><div style="color:var(--or2)">este año '+f(A[i]||0,0)+'€</div><div style="color:#F5A623">año pasado '+f(B[i]||0,0)+'€</div><div style="color:'+(dif>=0?'var(--gn)':'var(--rd)')+'">'+(dif>=0?'+':'')+f(dif,0)+'€</div>';
   };
   el.onmouseleave=function(){['yoy-tip','yoy-guide'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});};
 }
