@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v13-ppc-por-horas'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v14-breakeven-acos'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1185,14 +1185,20 @@ async function productosPeriodo(env, desde, hasta, pais) {
     }
     const dev = 0;
     const amazon = +(com + fba + dev).toFixed(2);        // lo que se queda Amazon
-    const ben = +(p.ventas - costeTot - amazon).toFixed(2);
+    const ben = +(p.ventas - costeTot - amazon).toFixed(2);   // beneficio ANTES de PPC
     const mg = p.ventas > 0 ? +(ben / p.ventas * 100).toFixed(1) : 0;
+    // BREAK-EVEN ACoS: % máximo que puedes gastar en publicidad de una venta sin
+    // perder dinero = el margen ANTES de ads (beneficio/ventas). Si el ACoS real
+    // de la campaña es menor → ganas; si es mayor → pierdes en esas ventas.
+    // acos_obj = ACoS objetivo dejando ~10 puntos de margen neto de colchón.
+    const breakeven = (nocoste || p.ventas <= 0 || ben <= 0) ? null : mg;
+    const acos_obj = breakeven === null ? null : Math.max(0, +(breakeven - 10).toFixed(1));
     const c = cat[p.sku] || {};
     return {
       nom: (c.nombre || p.sku), sku: p.sku, emoji: '📦', imagen: c.imagen || null,
       uds: p.uds, ventas: +p.ventas.toFixed(2),
       coste: costeTot, comision: com, fba, devol: dev, amazon,
-      real, ppc: 0, ben, mg,
+      real, ppc: 0, ben, mg, breakeven, acos_obj,
       trend: dias10.map(d => p.dias[d] || 0),
       estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),
       txt: nocoste ? 'Sin coste ➜ clic' : (mg < 0 ? 'Pierde' : mg < 15 ? 'Margen bajo' : 'OK')
