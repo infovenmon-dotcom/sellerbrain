@@ -678,8 +678,10 @@ function fechaCorta(s){ // 'YYYY-MM-DD' -> 'D MMM'
 function renderChart(){
   var W=640,H=170,pad=6;
   var el=document.getElementById('chart');
-  var S=(CHART_SERIE&&CHART_SERIE.length)?CHART_SERIE:SERIE30;
-  if(!S || !S.length){ el.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin serie todavía.</div>'; return; }
+  // CHART_SERIE===null → aún no se pidió periodo (usa 30 días por defecto).
+  // CHART_SERIE=[] → se pidió un periodo pero el backend no dio datos (no engañar).
+  var S = (CHART_SERIE===null) ? SERIE30 : CHART_SERIE;
+  if(!S || !S.length){ el.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin datos para este periodo. (Revisa que el Worker esté en v18 y que hayas ejecutado sql/serie-periodo.sql.)</div>'; return; }
   var n=S.length;
   var maxV=Math.max.apply(null,S.map(function(d){return Math.max(+d.v||0,+d.b||0);}))||1;
   function X(i){return pad+i*(W-2*pad)/Math.max(1,n-1);}
