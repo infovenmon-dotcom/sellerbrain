@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v15-acos-real-por-producto'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v16-multicuenta-spapi-oauth'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -300,9 +300,55 @@ export default {
         if (!r.ok) return json({ error: 'token exchange: ' + await r.text() }, cors, 500);
         const tok = await r.json();
         await upsertSupabase(env, 'cuentas_ads', [{
-          email, refresh_token: tok.refresh_token, creado: new Date().toISOString()
+          seller: email, email, refresh_token: await cifrar(env, tok.refresh_token),
+          estado: 'activa', creado: new Date().toISOString()
         }]);
         return new Response('<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;background:#0D0D0D;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1 style="color:#FF7A00">&#10003; Amazon Ads conectado</h1><p>Ya puedes cerrar esta pesta&ntilde;a y volver a SellerBrain.</p></div></body></html>',
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      }
+
+      // --- OAuth SP-API para CLIENTES (multicuenta): inicio ---
+      //     El vendedor pulsa "Conectar Amazon" → consiente en Seller Central →
+      //     Amazon redirige a /auth/spapi/callback con spapi_oauth_code.
+      //     Requiere env.SPAPI_APP_ID (Application ID de tu app SP-API) y registrar
+      //     la Redirect URI …/auth/spapi/callback en la app.
+      if (url.pathname === '/auth/spapi/start') {
+        const email = (url.searchParams.get('email') || '').trim().toLowerCase();
+        if (!email || !env.SPAPI_APP_ID) return json({ error: 'falta email o SPAPI_APP_ID' }, cors, 400);
+        const consentBase = env.SPAPI_CONSENT_URL || 'https://sellercentral.amazon.es/apps/authorize/consent';
+        const params = new URLSearchParams({
+          application_id: env.SPAPI_APP_ID,
+          state: btoa(email),
+          redirect_uri: url.origin + '/auth/spapi/callback'
+        });
+        // Mientras la app esté en BORRADOR/beta (sin publicar), Amazon exige version=beta.
+        if (env.SPAPI_APP_BETA !== 'false') params.set('version', 'beta');
+        return Response.redirect(consentBase + '?' + params.toString(), 302);
+      }
+
+      // --- OAuth SP-API: callback → intercambia el code por refresh token (cifrado) ---
+      if (url.pathname === '/auth/spapi/callback') {
+        const code = url.searchParams.get('spapi_oauth_code');
+        const sellingPartnerId = url.searchParams.get('selling_partner_id') || '';
+        const email = (atob(url.searchParams.get('state') || '') || 'desconocido').trim().toLowerCase();
+        if (!code) return json({ error: 'sin spapi_oauth_code' }, cors, 400);
+        const r = await fetch(LWA_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code', code,
+            redirect_uri: url.origin + '/auth/spapi/callback',
+            client_id: env.LWA_CLIENT_ID, client_secret: env.LWA_CLIENT_SECRET
+          })
+        });
+        if (!r.ok) return json({ error: 'token exchange: ' + await r.text() }, cors, 500);
+        const tok = await r.json();
+        await upsertSupabase(env, 'cuentas_spapi', [{
+          seller: email, email, selling_partner_id: sellingPartnerId,
+          refresh_token: await cifrar(env, tok.refresh_token),
+          estado: 'activa', creado: new Date().toISOString()
+        }]);
+        return new Response('<html><head><meta charset="UTF-8"></head><body style="font-family:sans-serif;background:#0D0D0D;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1 style="color:#FF7A00">&#10003; Amazon conectado</h1><p>Tu cuenta de Amazon ya est&aacute; enlazada con SellerBrain. Puedes cerrar esta pesta&ntilde;a.</p></div></body></html>',
           { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
 
@@ -532,6 +578,35 @@ export default {
     })());
   }
 };
+
+/* =====================================================================
+ * CIFRADO DE TOKENS (AES-GCM) — los refresh_token de cada cliente se guardan
+ * CIFRADOS en Supabase; nunca en claro. La clave (TOKEN_ENC_KEY, 32 bytes en
+ * base64) es un secreto de Cloudflare y jamás sale del Worker.
+ * Requisito de la Data Protection Policy de Amazon y del RGPD.
+ * =================================================================== */
+async function _claveAES(env) {
+  const raw = Uint8Array.from(atob(env.TOKEN_ENC_KEY), c => c.charCodeAt(0));
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+async function cifrar(env, texto) {
+  if (!texto || !env.TOKEN_ENC_KEY) return texto;      // sin clave (dev) → se guarda tal cual
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await _claveAES(env);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(texto)));
+  const buf = new Uint8Array(iv.length + ct.length); buf.set(iv); buf.set(ct, iv.length);
+  let bin = ''; for (const b of buf) bin += String.fromCharCode(b);
+  return 'enc:' + btoa(bin);
+}
+async function descifrar(env, dato) {
+  if (!dato || !String(dato).startsWith('enc:')) return dato;   // compat: no cifrado
+  if (!env.TOKEN_ENC_KEY) throw new Error('falta TOKEN_ENC_KEY para descifrar');
+  const buf = Uint8Array.from(atob(String(dato).slice(4)), c => c.charCodeAt(0));
+  const iv = buf.slice(0, 12), ct = buf.slice(12);
+  const key = await _claveAES(env);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
 
 /* =====================================================================
  * TOKENS
