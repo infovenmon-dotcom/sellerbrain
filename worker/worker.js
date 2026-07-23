@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v16-multicuenta-spapi-oauth'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v17-imagenes-diagnostico'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1710,19 +1710,41 @@ function agregarVentasSkuPais(filas) {
 // Trae miniaturas del catálogo de Amazon por ASIN, de a pocos por llamada.
 async function traerImagenesCatalogo(env) {
   const pend = await selectSupabase(env, 'productos_catalogo?imagen=is.null&asin=not.is.null&limit=8');
-  let ok = 0;
+  // Diagnóstico: cuántos productos hay con/sin ASIN (para saber si el problema
+  // es que faltan ASIN o que el Catalog API falla).
+  let sinAsin = 0;
+  try {
+    const r = await fetch(env.SUPABASE_URL + '/rest/v1/productos_catalogo?imagen=is.null&or=(asin.is.null,asin.eq.)&select=sku',
+      { headers: { apikey: env.SUPABASE_SERVICE_KEY, Prefer: 'count=exact' } });
+    sinAsin = +(r.headers.get('content-range') || '').split('/')[1] || 0;
+  } catch (_) {}
+  let ok = 0; const errores = [];
+  const markets = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT];
   for (const p of (pend || [])) {
-    if (!p.asin) continue;
-    try {
-      const item = await getCatalogoItem(env, p.asin, MARKETPLACES.ES);
-      const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
-      const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
-      const imagen = main ? main.link : null;
-      const nombre = (item && item.summaries && item.summaries[0] && item.summaries[0].itemName) || p.nombre || null;
-      if (imagen) { await upsertSupabase(env, 'productos_catalogo', [{ sku: p.sku, imagen, nombre }]); ok++; }
-    } catch (_) { /* si un ASIN falla, seguimos con el resto */ }
+    const asin = (p.asin || '').trim();
+    if (!asin) continue;
+    let imagen = null, nombre = p.nombre || null, err = null;
+    for (const mk of markets) {                      // el ASIN puede tener imagen en otro marketplace
+      try {
+        const item = await getCatalogoItem(env, asin, mk);
+        const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
+        const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
+        if (main && main.link) {
+          imagen = main.link;
+          nombre = (item.summaries && item.summaries[0] && item.summaries[0].itemName) || nombre;
+          break;
+        }
+      } catch (e) { err = String(e.message || e).slice(0, 140); }
+    }
+    if (imagen) { await upsertSupabase(env, 'productos_catalogo', [{ sku: p.sku, imagen, nombre }]); ok++; }
+    else if (err) errores.push({ asin, err });
   }
-  return { procesados: ok, pendientes: (pend || []).length, hayMas: (pend || []).length >= 8 };
+  // hayMas solo si esta tanda trajo algo (evita bucle infinito si todo falla).
+  return {
+    procesados: ok, pendientes: (pend || []).length, sin_asin: sinAsin,
+    hayMas: ok > 0 && (pend || []).length >= 8,
+    errores: errores.slice(0, 3)
+  };
 }
 
 async function getCatalogoItem(env, asin, marketplaceId) {

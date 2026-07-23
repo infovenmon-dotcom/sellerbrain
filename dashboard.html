@@ -1564,11 +1564,19 @@ async function traerImagenes(){
       var d=await r.json();
       if(!d.ok){box.innerHTML='<span style="color:var(--rd)">❌ '+(d.error||'error')+'</span>';break;}
       total+=d.procesados||0;
+      window._imgDiag=d;   // guarda el último diagnóstico
       box.innerHTML='<span style="color:var(--mu)">🖼️ '+total+' imágenes traídas…</span>';
       if(!d.hayMas)break;
     }catch(e){box.innerHTML='<span style="color:var(--rd)">❌ '+e.message+'</span>';break;}
   }
-  box.innerHTML='<span style="color:var(--or2)">✅ '+total+' imágenes listas.</span> Refresca el dashboard para verlas.';
+  var dg=window._imgDiag||{};
+  var diag='';
+  if(total===0){
+    if((dg.sin_asin||0)>0 && !(dg.pendientes>0)) diag=' <span style="color:var(--am)">— '+dg.sin_asin+' productos sin ASIN guardado (por eso no se pueden pedir). Relanza la ingesta para capturar ASIN y reintenta.</span>';
+    else if(dg.errores && dg.errores.length) diag=' <span style="color:var(--rd)">— Amazon rechazó la petición: '+dg.errores[0].err+' (probable falta de rol «Catalog» en la app SP-API).</span>';
+    else diag=' <span style="color:var(--mu)">— sin candidatos (ni ASIN pendiente ni error).</span>';
+  }
+  box.innerHTML='<span style="color:var(--or2)">✅ '+total+' imágenes listas.</span>'+diag+' Refresca el dashboard para verlas.';
   btn.disabled=false;btn.style.opacity=1;
   if(SB_CONFIG.mode==='api')cargarDatos().then(aplicarDatos);
 }
