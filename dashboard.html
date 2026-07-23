@@ -35,8 +35,8 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 .main{padding:0 22px 40px;min-width:0}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--bd);margin-bottom:18px;flex-wrap:wrap}
 .topbar h1{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
-.top-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.chip{padding:7px 13px;background:var(--card);border:1px solid var(--bd2);border-radius:9px;font-size:12px;color:var(--mu2);cursor:pointer}
+.top-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1 1 auto;justify-content:flex-end;min-width:0}
+.chip{padding:7px 13px;background:var(--card);border:1px solid var(--bd2);border-radius:9px;font-size:12px;color:var(--mu2);cursor:pointer;white-space:nowrap}
 .chip.on{background:rgba(46,230,160,.12);border-color:rgba(46,230,160,.4);color:var(--or2);font-weight:700}
 .sync{font-size:11px;color:var(--mu);display:flex;align-items:center;gap:6px}
 .sync .dot{width:7px;height:7px;border-radius:50%;background:var(--gn);animation:pulse 2s infinite}
@@ -496,8 +496,8 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   </div>
 
   <div class="card">
-    <div class="ch"><h2><span class="ci">⭐</span> Satisfacción del cliente <span style="font-size:11px;color:var(--mu);font-weight:400">· según motivos de devolución (Amazon no da las reseñas por API)</span></h2></div>
-    <div id="satisfaccion"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleSat()"><h2><span class="ci">⭐</span> Satisfacción del cliente <span style="font-size:11px;color:var(--mu);font-weight:400">· según motivos de devolución</span> <span id="sat-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
+    <div id="satisfaccion" style="display:none"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
   </div>
 
 </div>
@@ -699,7 +699,7 @@ function renderProds(){
     var det='Comisión '+f(p.comision||0,2)+'€ · FBA '+f(p.fba||0,2)+'€'+((p.devol)?' · Devol '+f(p.devol,2)+'€':'')+(p.real?'':' (estimado, aún sin liquidar)');
     var pmed=p.uds>0?(p.ventas/p.uds):0;
     h+='<tr title="Precio medio '+f(pmed,2)+'€/ud · '+det+'">'+
-      '<td><div class="prod"><div class="img">'+img+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+(coste?'':' · sin coste')+'</div></div></div></td>'+
+      '<td><div class="prod"><div class="img">'+img+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+(coste?'':' · sin coste')+' <a href="https://sellercentral.amazon.es/skucentral?mSku='+encodeURIComponent(p.sku)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir este producto en Seller Central" style="color:#4A9EDE;text-decoration:none">↗ Amazon</a></div></div></div></td>'+
       '<td>'+p.uds+'</td>'+
       '<td>'+f(p.ventas,2)+'€</td>'+
       '<td style="color:'+(coste>0?'#2EE6A0':'var(--mu)')+'">'+(coste>0?'-'+f(coste,2)+'€':'—')+'</td>'+
@@ -909,7 +909,7 @@ function renderSatisfaccion(datos){
     var c=col[d.senal]||'#888';
     var img=d.imagen?'<img src="'+d.imagen+'" style="width:26px;height:26px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:7px">':'';
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
-      '<td style="padding:7px 8px">'+img+'<span style="font-weight:600">'+(d.nombre||d.sku)+'</span></td>'+
+      '<td style="padding:7px 8px">'+img+'<span style="font-weight:600">'+(d.nombre||d.sku)+'</span> <a href="https://sellercentral.amazon.es/skucentral?mSku='+encodeURIComponent(d.sku||'')+'" target="_blank" rel="noopener" title="Abrir en Seller Central" style="color:#4A9EDE;text-decoration:none">↗</a></td>'+
       '<td style="padding:7px 8px;color:#f5b23e;letter-spacing:1px">'+estrellasHTML(d.estrellas_est)+' <span style="color:var(--mu);font-size:11px">'+(d.estrellas_est||'')+'</span></td>'+
       '<td style="padding:7px 8px">'+(d.devoluciones||0)+'</td>'+
       '<td style="padding:7px 8px;color:'+(d.criticas>0?'#ff8a8a':'var(--mu)')+'">'+(d.criticas||0)+'</td>'+
@@ -920,6 +920,20 @@ function renderSatisfaccion(datos){
     '<div style="margin-top:9px;font-size:11px;color:var(--mu)">Las "estrellas" son una <b>estimación</b> a partir de las devoluciones por calidad/defecto (Amazon no expone las reseñas por API). '+
     'Los productos en <b style="color:#ff5c5c">Atención</b> son los que más se devuelven por problemas del producto — revisa listing, precinto o proveedor.</div>';
   box.innerHTML=h;
+  // Resumen en la cabecera (visible aunque esté plegada)
+  var nAt=datos.filter(function(x){return x.senal==='rojo';}).length;
+  window._satResumen=datos.length+' productos · '+nAt+' en atención';
+  var caret=document.getElementById('sat-caret');
+  if(caret){ var abierto=box.style.display!=='none'; caret.textContent=window._satResumen+(abierto?'  ▾ ocultar':'  ▸ ver'); }
+}
+
+// Plegar/desplegar la sección de satisfacción del cliente
+function toggleSat(){
+  var box=document.getElementById('satisfaccion'); if(!box)return;
+  var caret=document.getElementById('sat-caret');
+  var abrir=box.style.display==='none';
+  box.style.display=abrir?'block':'none';
+  if(caret) caret.textContent=(window._satResumen||'')+(abrir?'  ▾ ocultar':'  ▸ ver');
 }
 
 function cargarSatisfaccion(){
