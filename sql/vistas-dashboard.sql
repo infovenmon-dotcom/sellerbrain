@@ -117,16 +117,20 @@ select
     when concepto ilike '%Reimbursement%'                                   then 'ignorar'
     -- Publicidad: se cuenta aparte (Ads API); cubo propio para no doblar.
     when concepto ilike '%Cost of Advertising%' or concepto ilike '%advertising%' then 'ppc'
-    -- Devoluciones
-    when tipo ilike '%refund%'                                              then 'dev'
+    -- Devoluciones: SOLO los cargos reales (tasa de gestión del reembolso /
+    -- logística de devolución). El crédito de comisión (positivo) se ignora:
+    -- la venta bruta no se revierte, así que no es un ingreso.
+    when tipo ilike '%refund%' and importe < 0                              then 'dev'
+    when tipo ilike '%refund%'                                              then 'ignorar'
     -- Almacenaje (storage, incl. su IVA "Tax on fee")
     when concepto ilike '%storage%'                                         then 'alm'
     -- Comisión (referral) — incluye RefundCommission
     when concepto ilike '%commission%' or concepto ilike '%referral%'       then 'com'
-    -- FBA: cumplimiento por unidad, logística de entrada, retirada
+    -- FBA: cumplimiento por unidad, logística de entrada, retirada, devolución
     when concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
          or concepto ilike '%inboundtransportation%' or concepto ilike '%partnered carrier%'
          or concepto ilike '%removal%' or concepto ilike '%pick%pack%'
+         or concepto ilike '%return%'
          or concepto ilike '%weight%handl%'                                 then 'fba'
     -- Resto de ItemFees (servicios digitales, shipping chargeback…) = coste
     when concepto ilike 'ItemFees/%'                                        then 'com'
