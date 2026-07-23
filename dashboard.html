@@ -658,17 +658,23 @@ function renderTiles(){
   });
   document.getElementById('tiles').innerHTML=h;
 }
-function setPer(id){perActivo=id;renderTiles();renderPnl();}
+function setPer(id){perActivo=id;window.PNL_REAL=false;renderTiles();renderPnl();}
 
 function renderPnl(){
-  var p=PERIODOS.find(function(x){return x.id===perActivo;}) || PERIODOS[0];
-  if(!p || !PNL || !PNL.ventas){
+  if(!PNL || !PNL.ventas){
     document.getElementById('pnl-per').textContent='';
     document.getElementById('pnl').innerHTML='<div style="color:var(--mu);font-size:12px;padding:14px 4px">Sin datos del periodo todavía. Se llena cuando entren ventas y tarifas.</div>';
     return;
   }
-  document.getElementById('pnl-per').textContent='· '+p.nom.toLowerCase()+' ('+p.fecha+')';
-  var esc=p.ventas/PNL.ventas; // escala demo
+  var esc, lab;
+  if(window.PNL_REAL){                 // P&L real del rango del selector de fechas
+    esc=1; lab=window.PNL_LAB||'';
+  } else {                             // modo tarjetas (escala aproximada)
+    var p=PERIODOS.find(function(x){return x.id===perActivo;}) || PERIODOS[0];
+    if(!p){ document.getElementById('pnl-per').textContent=''; document.getElementById('pnl').innerHTML=''; return; }
+    esc=p.ventas/PNL.ventas; lab=p.nom.toLowerCase()+' ('+p.fecha+')';
+  }
+  document.getElementById('pnl-per').textContent='· '+lab;
   var rows=[
     {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true},
     {n:'Coste de producto',v:-PNL.prod*esc,c:'#2EE6A0'},
@@ -881,6 +887,19 @@ function prodPeriodo(id){
   refetchProductos();
   cargarVentasPais();
   cargarSerie(desde,hasta,lab);   // el gráfico sigue al selector de fechas
+  cargarPnl(desde,hasta,lab);     // el P&L del periodo también sigue las fechas
+}
+function cargarPnl(desde,hasta,lab){
+  if(SB_CONFIG.mode!=='api')return;
+  fetch(SB_CONFIG.apiBase+'/v1/pnl?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.pnl && d.pnl.ventas!=null){
+        PNL=d.pnl; window.PNL_REAL=true;
+        window.PNL_LAB=(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
+        renderPnl();
+      }
+    }).catch(function(){});
 }
 function prodPais(p){
   PROD_PAIS=p||'';

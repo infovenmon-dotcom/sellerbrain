@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v19-comparativa-mensual'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v20-pnl-por-periodo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -231,6 +231,21 @@ export default {
         const patron = await selSafe(env, 'v_ppc_mejores_horas?' + f + 'order=pais.asc,hora.asc', []);
         const reciente = await selSafe(env, 'v_ppc_hora?' + f + 'order=fecha.desc,hora.desc&limit=240', []);
         return json({ patron, reciente }, cors);
+      }
+
+      // --- P&L (cuenta de resultados) por periodo, sigue el selector de fechas ---
+      if (url.pathname === '/v1/pnl') {
+        const desde = url.searchParams.get('desde');
+        const hasta = url.searchParams.get('hasta');
+        let pnl = {};
+        try {
+          if (desde && hasta) {
+            const r = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/pnl_periodo?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta),
+              { headers: { apikey: env.SUPABASE_SERVICE_KEY } });
+            if (r.ok) { const arr = await r.json(); pnl = (arr && arr[0]) || {}; }
+          }
+        } catch (_) {}
+        return json({ pnl }, cors);
       }
 
       // --- Ventas y unidades por MES (gráfico tipo Seller Central) ---
