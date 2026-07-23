@@ -56,3 +56,67 @@ order by pais, hora;
 
 -- Comprobar (cuando haya varias horas capturadas):
 -- select * from v_ppc_mejores_horas order by pais, hora;
+
+
+-- =====================================================================
+-- v14 · PPC por HORAS **POR CAMPAÑA** (para poder seleccionar campañas)
+-- El cron guarda ademas una foto por campaña cada hora (ppc_hora_camp_snap).
+-- Restando fotos consecutivas por campaña sacamos su gasto/ventas por franja.
+-- Con esto el analisis por horas se puede filtrar a las campañas que elijas.
+-- IMPORTANTE: esto empieza a acumular datos DESDE que se despliega el Worker
+-- nuevo; las fotos anteriores eran solo el total por pais (siguen valiendo
+-- para "todas las campañas").
+-- =====================================================================
+
+create table if not exists ppc_hora_camp_snap (
+  pais        text not null,
+  fecha       text not null,     -- YYYY-MM-DD (UTC)
+  hora        int  not null,     -- 0-23 (hora UTC de la captura)
+  campania_id text not null,
+  campania    text,              -- nombre (ultimo visto)
+  gasto       numeric default 0, -- acumulado del dia hasta esa hora
+  clics       int     default 0,
+  impresiones int     default 0,
+  ventas      numeric default 0,
+  pedidos     int     default 0,
+  ts          timestamptz default now(),
+  primary key (pais, fecha, hora, campania_id)
+);
+alter table ppc_hora_camp_snap enable row level security;
+
+-- Delta por franja y campaña = acumulado(hora) - acumulado(hora previa).
+create or replace view v_ppc_hora_camp as
+with s as (
+  select pais, fecha, hora, campania_id, campania, gasto, clics, ventas, pedidos,
+    lag(gasto)   over (partition by pais, fecha, campania_id order by hora) as g0,
+    lag(clics)   over (partition by pais, fecha, campania_id order by hora) as c0,
+    lag(ventas)  over (partition by pais, fecha, campania_id order by hora) as v0,
+    lag(pedidos) over (partition by pais, fecha, campania_id order by hora) as p0
+  from ppc_hora_camp_snap
+)
+select pais, fecha, hora, campania_id, campania,
+  greatest(gasto   - coalesce(g0, 0), 0) as gasto,
+  greatest(clics   - coalesce(c0, 0), 0) as clics,
+  greatest(ventas  - coalesce(v0, 0), 0) as ventas,
+  greatest(pedidos - coalesce(p0, 0), 0) as pedidos
+from s;
+
+-- Campañas con gasto en los ultimos 14 dias → alimenta el selector del front.
+create or replace view v_ppc_camp_activas as
+select
+  pais, campania_id,
+  max(campania)          as campania,
+  round(sum(gasto), 2)   as gasto,
+  sum(clics)             as clics,
+  round(sum(ventas), 2)  as ventas,
+  sum(pedidos)           as pedidos,
+  count(distinct fecha)  as dias
+from v_ppc_hora_camp
+where fecha >= to_char((now() at time zone 'utc')::date - 14, 'YYYY-MM-DD')
+group by pais, campania_id
+having sum(gasto) > 0
+order by gasto desc;
+
+-- Comprobar (cuando haya varias horas capturadas por campaña):
+-- select * from v_ppc_camp_activas order by pais, gasto desc;
+-- select * from v_ppc_hora_camp order by fecha desc, hora desc limit 40;

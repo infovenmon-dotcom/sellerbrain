@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v22-venta-con-iva'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v23-ppc-horas-campana'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -227,10 +227,22 @@ export default {
       //     Se alimenta de las "fotos" horarias del cron (v_ppc_hora / v_ppc_mejores_horas).
       if (url.pathname === '/v1/ppc/horas') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase();
+        const camp = (url.searchParams.get('campania') || '').trim();   // id o lista separada por comas
         const f = pais ? 'pais=eq.' + pais + '&' : '';
         const patron = await selSafe(env, 'v_ppc_mejores_horas?' + f + 'order=pais.asc,hora.asc', []);
-        const reciente = await selSafe(env, 'v_ppc_hora?' + f + 'order=fecha.desc,hora.desc&limit=240', []);
-        return json({ patron, reciente }, cors);
+        // Campañas activas (con gasto reciente) para el selector del front.
+        const campanas = await selSafe(env, 'v_ppc_camp_activas?' + f + 'order=gasto.desc', []);
+        let reciente;
+        if (camp) {
+          // Filtrado a campañas concretas → datos por campaña (foto por campaña).
+          const ids = camp.split(',').map(s => s.trim()).filter(Boolean).map(encodeURIComponent);
+          const inList = ids.length ? 'campania_id=in.(' + ids.join(',') + ')&' : '';
+          reciente = await selSafe(env, 'v_ppc_hora_camp?' + f + inList + 'order=fecha.desc,hora.desc&limit=3000', []);
+        } else {
+          // Sin filtro → total del pais (tiene historico previo a la captura por campaña).
+          reciente = await selSafe(env, 'v_ppc_hora?' + f + 'order=fecha.desc,hora.desc&limit=240', []);
+        }
+        return json({ patron, reciente, campanas }, cors);
       }
 
       // --- P&L (cuenta de resultados) por periodo, sigue el selector de fechas ---
@@ -1066,11 +1078,24 @@ async function capturarPPCHora(env) {
         g: a.g + (c.cost || 0), cl: a.cl + (c.clicks || 0), im: a.im + (c.impressions || 0),
         v: a.v + (c.sales14d || 0), pe: a.pe + (c.purchases14d || 0)
       }), { g: 0, cl: 0, im: 0, v: 0, pe: 0 });
+      const ts = new Date().toISOString();
       await upsertSupabase(env, 'ppc_hora_snap', [{
         pais, fecha: hoy, hora,
         gasto: +t.g.toFixed(2), clics: t.cl, impresiones: t.im,
-        ventas: +t.v.toFixed(2), pedidos: t.pe, ts: new Date().toISOString()
+        ventas: +t.v.toFixed(2), pedidos: t.pe, ts
       }]);
+      // Foto POR CAMPAÑA (el informe ya viene agrupado por campaña) → permite
+      // filtrar el analisis por horas a las campañas que elija el usuario.
+      const filasCamp = (data || [])
+        .filter(c => c.campaignId != null)
+        .map(c => ({
+          pais, fecha: hoy, hora,
+          campania_id: String(c.campaignId),
+          campania: c.campaignName || '',
+          gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
+          ventas: +(c.sales14d || 0).toFixed(2), pedidos: c.purchases14d || 0, ts
+        }));
+      if (filasCamp.length) await upsertSupabase(env, 'ppc_hora_camp_snap', filasCamp);
     } catch (_) { /* una hora suelta que falle no rompe nada */ }
   }
 }

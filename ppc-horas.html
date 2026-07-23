@@ -131,6 +131,36 @@ td{padding:6px;border-bottom:1px solid rgba(255,255,255,.05)}
   <div class="err" id="err"></div>
 </div>
 
+<!-- DATOS REALES (conectado) — solo aparece si hay sesión -->
+<div class="card" id="card-real" style="display:none;border:1.5px solid rgba(46,230,160,.45)">
+  <div class="ct"><span class="ci">🟢</span> Tus datos reales — sin subir nada</div>
+  <div class="inf">SellerBrain captura cada hora una foto de tu PPC. Elige <b>país</b> y las <b>campañas</b> que quieras analizar y saca tus franjas reales. <span style="color:var(--mu)">El detalle por campaña se va llenando desde hoy; el mapa de calor por día de la semana se afina a ~14 días.</span></div>
+  <div class="fr">
+    <div>
+      <label>País</label>
+      <select id="real-pais" onchange="pphFetchCamps()">
+        <option value="ES">España (ES)</option>
+        <option value="FR">Francia (FR)</option>
+        <option value="IT">Italia (IT)</option>
+        <option value="BE">Bélgica (BE)</option>
+        <option value="DE">Alemania (DE)</option>
+        <option value="NL">Países Bajos (NL)</option>
+        <option value="PL">Polonia (PL)</option>
+        <option value="SE">Suecia (SE)</option>
+        <option value="GB">Reino Unido (GB)</option>
+      </select>
+    </div>
+    <div>
+      <label>Campañas activas <span id="real-camps-lbl" style="color:var(--mu);font-weight:400"></span></label>
+      <div id="real-camps" style="max-height:150px;overflow:auto;background:#111;border:1.5px solid var(--bd);border-radius:10px;padding:8px;font-size:12.5px">Cargando…</div>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:12px">
+    <button class="btn" onclick="pphAnalizar()">📊 Analizar mis datos reales</button>
+  </div>
+  <div id="real-status" style="font-size:11px;color:var(--mu);text-align:center;margin-top:9px;line-height:1.5"></div>
+</div>
+
 <!-- RESULTADOS -->
 <div id="res" style="display:none">
 
@@ -590,6 +620,118 @@ function demo(){
         }
       }).catch(function(){});
   }catch(e){}
+})();
+
+// ===== DATOS REALES (conectado): PPC por horas desde el backend =====
+var PPH = { base:'', tok:'', total:[], campanas:[] };
+
+function pphBase(){
+  try{
+    PPH.base = (localStorage.getItem('sb_api_base')||'').replace(/\/$/,'');
+    PPH.tok  = sessionStorage.getItem('fba_token') || '';
+  }catch(e){ PPH.base=''; PPH.tok=''; }
+  return !!(PPH.base && PPH.tok);
+}
+function pphHeaders(){ return { 'Authorization':'Bearer '+PPH.tok }; }
+
+// Carga la lista de campañas activas + el total del país (con histórico).
+function pphFetchCamps(){
+  if(!PPH.base) return;
+  var pais = document.getElementById('real-pais').value;
+  var cont = document.getElementById('real-camps');
+  cont.innerHTML = 'Cargando…';
+  document.getElementById('real-camps-lbl').textContent = '';
+  fetch(PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais), {headers:pphHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      PPH.total = d.reciente || [];
+      PPH.campanas = d.campanas || [];
+      pphRenderCamps();
+      pphStatusInicial();
+    })
+    .catch(function(){ cont.innerHTML = '<span style="color:var(--am)">No pude cargar tus datos. ¿Has iniciado sesión?</span>'; });
+}
+
+function pphRenderCamps(){
+  var cont = document.getElementById('real-camps');
+  var lbl = document.getElementById('real-camps-lbl');
+  if(!PPH.campanas.length){
+    cont.innerHTML = '<span style="color:var(--mu)">Aún no hay detalle por campaña (se empieza a guardar desde hoy). Puedes analizar el <b>total del país</b> con el botón.</span>';
+    lbl.textContent = '';
+    return;
+  }
+  lbl.textContent = '· '+PPH.campanas.length+' con gasto (14 días)';
+  var h = '<label style="display:flex;align-items:center;gap:7px;margin-bottom:6px;font-weight:700;color:var(--tx);text-transform:none">'
+        + '<input type="checkbox" id="camp-all" checked onchange="pphToggleAll()" style="width:auto"> Todas</label>';
+  PPH.campanas.forEach(function(c){
+    h += '<label style="display:flex;align-items:center;gap:7px;margin:3px 0;font-weight:400;color:var(--tx);text-transform:none">'
+       + '<input type="checkbox" class="camp-chk" value="'+c.campania_id+'" checked style="width:auto"> '
+       + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(c.campania||c.campania_id)+'</span>'
+       + '<span style="color:var(--mu);font-size:11px">'+f(c.gasto,0)+'€</span></label>';
+  });
+  cont.innerHTML = h;
+}
+
+function pphToggleAll(){
+  var all = document.getElementById('camp-all').checked;
+  document.querySelectorAll('.camp-chk').forEach(function(x){ x.checked = all; });
+}
+
+function pphStatusInicial(){
+  var st = document.getElementById('real-status');
+  var dias = {}; (PPH.total||[]).forEach(function(r){ dias[r.fecha]=1; });
+  var nd = Object.keys(dias).length;
+  if(!PPH.total.length){
+    st.innerHTML = '⏳ Aún no hay fotos horarias guardadas. El sistema captura una cada hora; vuelve dentro de unas horas y verás tus franjas reales.';
+  } else {
+    st.innerHTML = '✅ '+PPH.total.length+' registros · '+nd+' día'+(nd===1?'':'s')+' capturado'+(nd===1?'':'s')+'. Pulsa «Analizar» para ver el desglose.';
+  }
+}
+
+// Convierte las filas del backend (fecha, hora, gasto…) al formato que espera procesar().
+function pphRows(reciente){
+  return (reciente||[]).map(function(r){
+    return {
+      Fecha: r.fecha + 'T' + String(r.hora).padStart(2,'0') + ':00',
+      Clics: r.clics||0, Gasto: r.gasto||0, Ventas: r.ventas||0,
+      Pedidos: r.pedidos||0, Impresiones: r.impresiones||0
+    };
+  });
+}
+
+function pphAnalizar(){
+  if(!PPH.base) return;
+  var pais = document.getElementById('real-pais').value;
+  var st = document.getElementById('real-status');
+  var chks = Array.prototype.slice.call(document.querySelectorAll('.camp-chk'));
+  var sel = chks.filter(function(x){return x.checked;}).map(function(x){return x.value;});
+  var todas = !chks.length || sel.length===0 || sel.length===chks.length;
+  st.innerHTML = '🔄 Cargando tus datos…';
+  var url = PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais);
+  if(!todas) url += '&campania='+encodeURIComponent(sel.join(','));
+  fetch(url, {headers:pphHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var reciente = d.reciente || [];
+      if(!reciente.length){
+        st.innerHTML = '⏳ Sin datos para esa selección todavía. El detalle por campaña se llena desde hoy — prueba con «Todas» o vuelve en unas horas.';
+        return;
+      }
+      var dias={}; reciente.forEach(function(r){dias[r.fecha]=1;});
+      var nd=Object.keys(dias).length;
+      procesar(pphRows(reciente));
+      st.innerHTML = '✅ Analizados '+reciente.length+' registros · '+nd+' día'+(nd===1?'':'s')
+        + (nd<7 ? ' · <span style="color:var(--am)">con más días el patrón y el mapa de calor serán más fiables</span>' : '');
+      var res=document.getElementById('res'); if(res) res.scrollIntoView({behavior:'smooth'});
+    })
+    .catch(function(){ st.innerHTML = '<span style="color:var(--am)">Error al cargar. Reinténtalo.</span>'; });
+}
+
+// Muestra el panel conectado si hay sesión y precarga las campañas del país por defecto.
+(function pphInit(){
+  if(!pphBase()) return;
+  var card = document.getElementById('card-real');
+  if(card){ card.style.display='block'; pphFetchCamps(); }
 })();
 </script>
 </body>
