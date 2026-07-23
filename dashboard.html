@@ -1755,7 +1755,8 @@ var SOON = { sobre:'Detector de sobrecobros FBA', ajustes:'Ajustes' };
 // Barra lateral plegable: en escritorio pliega/despliega (y lo recuerda);
 // en móvil abre/cierra el menú deslizante.
 function toggleSidebar(){
-  if(window.innerWidth>900){
+  var esEscritorio = window.matchMedia('(min-width:901px)').matches;
+  if(esEscritorio){
     var app=document.querySelector('.app');
     app.classList.toggle('collapsed');
     try{localStorage.setItem('sb_sidebar_collapsed', app.classList.contains('collapsed')?'1':'0');}catch(e){}
@@ -1763,7 +1764,7 @@ function toggleSidebar(){
     document.getElementById('side').classList.toggle('open');
   }
 }
-try{ if(localStorage.getItem('sb_sidebar_collapsed')==='1' && window.innerWidth>900){
+try{ if(localStorage.getItem('sb_sidebar_collapsed')==='1' && window.matchMedia('(min-width:901px)').matches){
   var _app=document.querySelector('.app'); if(_app) _app.classList.add('collapsed');
 }}catch(e){}
 
