@@ -560,6 +560,37 @@ function demo(){
   document.getElementById('err').style.display='none';
   procesar(rows);
 }
+
+// ===== Break-even AUTO-CALCULADO (mismo criterio que la parte conectada) =====
+// Coge el break-even de tus productos (precio − coste − tarifas) vía la API y
+// rellena el campo de margen, para que la calculadora analice IGUAL que el resto.
+(function autoBreakeven(){
+  try{
+    var base=(localStorage.getItem('sb_api_base')||'').replace(/\/$/,'');
+    var tok=null; try{ tok=sessionStorage.getItem('fba_token'); }catch(e){}
+    if(!base || !tok) return;               // sin sesión → se queda el campo manual
+    var hoy=new Date();
+    var desde=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1)).toISOString().slice(0,10);
+    var hasta=hoy.toISOString().slice(0,10);
+    fetch(base+'/v1/productos?desde='+desde+'&hasta='+hasta,{headers:{'Authorization':'Bearer '+tok}})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        var ps=(d.productos||[]).filter(function(p){return p.breakeven!=null;});
+        if(!ps.length) return;
+        // Break-even de cartera = beneficio antes de ads / ventas (ponderado).
+        var tb=0, tv=0;
+        ps.forEach(function(p){ tb+=(+p.ben||0); tv+=(+p.ventas||0); });
+        if(tv<=0) return;
+        var be=Math.round(tb/tv*1000)/10;
+        var inp=document.getElementById('cfg-mg');
+        if(inp && !inp.value){
+          inp.value=be;
+          var lab=inp.previousElementSibling;
+          if(lab) lab.innerHTML='Margen bruto sin PPC (%) — <b style="color:var(--gn)">auto: '+be+'%</b> de tus productos (ajústalo si quieres)';
+        }
+      }).catch(function(){});
+  }catch(e){}
+})();
 </script>
 </body>
 </html>

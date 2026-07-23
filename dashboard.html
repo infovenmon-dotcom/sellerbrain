@@ -343,6 +343,14 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
       </div>
     </div>
   </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="ch"><h2><span class="ci">🚦</span> Rentabilidad por producto <span style="font-size:11px;color:var(--mu);font-weight:400">· ACoS real vs break-even (verde = rentable, rojo = pierde dinero)</span></h2></div>
+    <div style="overflow-x:auto"><table class="tbl">
+      <thead><tr><th>Producto</th><th>Gasto PPC</th><th>ACoS real</th><th>Break-even</th><th>Veredicto</th></tr></thead>
+      <tbody id="ppc-rentab"></tbody>
+    </table></div>
+  </div>
 </div>
 
 <!-- ===== VISTA DASHBOARD ===== -->
@@ -1737,6 +1745,7 @@ function cambiarVista(v){
   document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
+  if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
   if(TOOL_SRC[v]){
     var meta=TOOL_SRC[v], f=document.getElementById('if-tool');
     if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
@@ -1781,6 +1790,31 @@ function cargarPPC(){
       renderPPC('datos reales de tu Ads API');
     }).catch(function(){ PPC_DATA=PPC_DEMO; renderPPC('demo (API no disponible)'); });
   } else { PPC_DATA=PPC_DEMO; renderPPC('demo — usa 🔌 Conexión para ver tus datos reales'); }
+}
+
+// Semáforo de rentabilidad por producto en "PPC · En vivo": ACoS real vs break-even.
+function renderPPCRentab(){
+  var el=document.getElementById('ppc-rentab'); if(!el) return;
+  var hoy=new Date(), desde=ymdUTC(new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1))), hasta=ymdUTC(hoy);
+  el.innerHTML='<tr><td colspan="5" style="color:var(--mu);font-size:12px;padding:10px">Cargando…</td></tr>';
+  fetch(SB_CONFIG.apiBase+'/v1/productos?desde='+desde+'&hasta='+hasta,{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var ps=(d.productos||[]).filter(function(p){return p.acos_real!=null;});
+      if(!ps.length){ el.innerHTML='<tr><td colspan="5" style="color:var(--mu);font-size:12px;padding:10px">Aún sin ACoS por producto. Lanza la ingesta de PPC (incluye la pasada «rentabilidad por producto») y vuelve.</td></tr>'; return; }
+      var ord={rd:0,am:1,gn:2};
+      ps.sort(function(a,b){return (ord[a.ppc_estado]==null?9:ord[a.ppc_estado])-(ord[b.ppc_estado]==null?9:ord[b.ppc_estado]);});
+      el.innerHTML=ps.map(function(p){
+        var col=p.ppc_estado==='gn'?'var(--gn)':p.ppc_estado==='am'?'var(--am)':'var(--rd)';
+        var vtxt=p.ppc_estado==='gn'?'Rentable · margen para subir pujas':p.ppc_estado==='am'?'Al límite · vigilar':'Pierde · baja pujas o pausa';
+        return '<tr><td>'+p.nom+'</td>'+
+          '<td>'+f(p.ppc||0,2)+'€</td>'+
+          '<td style="color:'+col+';font-weight:700">'+(p.acos_real!=null?f(p.acos_real,1)+'%':'—')+'</td>'+
+          '<td style="color:#4A9EDE">'+(p.breakeven!=null?'≤'+f(p.breakeven,1)+'%':'—')+'</td>'+
+          '<td><span class="pill '+(p.ppc_estado||'am')+'">'+vtxt+'</span></td></tr>';
+      }).join('');
+    })
+    .catch(function(){ el.innerHTML='<tr><td colspan="5" style="color:var(--mu);font-size:12px;padding:10px">No se pudo cargar la rentabilidad ahora mismo.</td></tr>'; });
 }
 
 function renderPPC(fuente){
