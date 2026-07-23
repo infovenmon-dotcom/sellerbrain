@@ -1,26 +1,39 @@
 -- =====================================================================
 -- Limpieza de nombres con acentos rotos (mojibake)
--- Ejecuta en Supabase → SQL Editor (incógnito).
+-- Ejecuta en Supabase -> SQL Editor (incognito). COPIA/PEGA el archivo entero
+-- (asi se conservan bien los caracteres). REPLACE NO da el error de codificacion
+-- que sale con el truco LATIN1. Solo cambia lo que coincide. Idempotente.
 --
--- Qué arregla: nombres tipo "Desodorante SÃ³lido AlgodÃ³n" → "Desodorante
--- Sólido Algodón". Es UTF-8 que en su día se leyó como Latin-1 (filas viejas;
--- la ingesta actual ya guarda bien). Solo toca las filas con el patrón roto
--- ('Ã' o 'Â'); las correctas NO se tocan. Es idempotente (re-ejecutar es seguro).
+--   A cada linea: [secuencia rota] -> [caracter correcto].
 -- =====================================================================
 
--- 1) Ver cuántas filas están rotas (antes de tocar nada)
-select count(*) as filas_rotas
+-- Minusculas acentuadas + enye + u-dieresis
+update productos_catalogo set nombre = replace(nombre, E'Ã¡', E'á') where nombre like E'%Ã¡%'; -- a acento
+update productos_catalogo set nombre = replace(nombre, E'Ã©', E'é') where nombre like E'%Ã©%'; -- e acento
+update productos_catalogo set nombre = replace(nombre, E'Ã­', E'í') where nombre like E'%Ã­%'; -- i acento
+update productos_catalogo set nombre = replace(nombre, E'Ã³', E'ó') where nombre like E'%Ã³%'; -- o acento
+update productos_catalogo set nombre = replace(nombre, E'Ãº', E'ú') where nombre like E'%Ãº%'; -- u acento
+update productos_catalogo set nombre = replace(nombre, E'Ã±', E'ñ') where nombre like E'%Ã±%'; -- enye
+update productos_catalogo set nombre = replace(nombre, E'Ã¼', E'ü') where nombre like E'%Ã¼%'; -- u dieresis
+
+-- Mayusculas acentuadas (mas raras)
+update productos_catalogo set nombre = replace(nombre, E'Ã‰', E'É') where nombre like E'%Ã‰%'; -- E acento
+update productos_catalogo set nombre = replace(nombre, E'Ã“', E'Ó') where nombre like E'%Ã“%'; -- O acento
+update productos_catalogo set nombre = replace(nombre, E'Ã‘', E'Ñ') where nombre like E'%Ã‘%'; -- Enye may
+update productos_catalogo set nombre = replace(nombre, E'Ãš', E'Ú') where nombre like E'%Ãš%'; -- U acento
+
+-- Simbolos: masculino, femenino, punto medio, espacio duro
+update productos_catalogo set nombre = replace(nombre, E'Âº', E'º') where nombre like E'%Âº%';
+update productos_catalogo set nombre = replace(nombre, E'Âª', E'ª') where nombre like E'%Âª%';
+update productos_catalogo set nombre = replace(nombre, E'Â·', E'·') where nombre like E'%Â·%';
+update productos_catalogo set nombre = replace(nombre, E'Â ', ' ')       where nombre like E'%Â %';
+
+-- Guion largo y comillas tipograficas (3 bytes)
+update productos_catalogo set nombre = replace(nombre, E'â€“', E'–') where nombre like E'%â€“%'; -- guion largo
+update productos_catalogo set nombre = replace(nombre, E'â€™', E'’') where nombre like E'%â€™%'; -- comilla simple
+update productos_catalogo set nombre = replace(nombre, E'â€¦', E'…') where nombre like E'%â€¦%'; -- puntos suspensivos
+
+-- Comprobar que ya no quedan rotas (idealmente 0)
+select count(*) as filas_rotas_restantes
 from productos_catalogo
-where nombre like '%Ã%' or nombre like '%Â%';
-
--- 2) Reparar (reinterpreta los bytes: Latin-1 → UTF-8)
-update productos_catalogo
-set nombre = convert_from(convert_to(nombre, 'LATIN1'), 'UTF8')
-where nombre like '%Ã%' or nombre like '%Â%';
-
--- 3) Comprobar que ya no quedan rotas (debe dar 0)
--- select count(*) from productos_catalogo where nombre like '%Ã%' or nombre like '%Â%';
-
--- NOTA: si el paso 2 diera un error de codificación en alguna fila suelta
--- (algún carácter raro fuera de Latin-1), no pasa nada: no cambia nada y me
--- lo dices para afinar esa fila en concreto.
+where nombre like E'%Ã%' or nombre like E'%Â%' or nombre like E'%â€%';
