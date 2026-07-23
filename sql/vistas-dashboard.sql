@@ -92,6 +92,7 @@ drop view if exists v_productos_mes   cascade;
 drop view if exists v_periodos        cascade;
 drop view if exists v_pnl_mes         cascade;
 drop view if exists v_fee_sku         cascade;
+drop view if exists v_fee_sku_pais    cascade;
 drop view if exists v_settle_clasificado cascade;
 drop view if exists v_ventas_dia      cascade;
 
@@ -168,6 +169,55 @@ select sku,
 from settlement_lineas
 where sku is not null and sku <> '' and sku not ilike 'amzn.gr.%'
 group by sku;
+
+
+-- ---------------------------------------------------------------------
+-- 1c) TARIFA REAL POR UNIDAD, SKU y PAÍS.
+--     La tarifa FBA y el IVA cambian por país (ES 21%, FR 20%, IT 22%, DE 19%).
+--     El informe de transacciones (settlement) trae el país en cada línea; lo
+--     guardamos en settlement_lineas.pais (lo rellena la ingesta). Con eso
+--     calculamos €/unidad con el IVA correcto de cada país.
+--     Las líneas viejas sin país (settlements ya cargados) se tratan como ES
+--     hasta que se vuelva a hacer backfill de settlements (Amazon guarda 90 días).
+-- ---------------------------------------------------------------------
+alter table settlement_lineas add column if not exists pais text;
+
+create or replace view v_fee_sku_pais as
+with base as (
+  select
+    sku,
+    coalesce(nullif(pais, ''), 'ES') as pais,
+    concepto, importe, cantidad
+  from settlement_lineas
+  where sku is not null and sku <> '' and sku not ilike 'amzn.gr.%'
+)
+select
+  sku,
+  pais,
+  -- divisor de IVA por país (para desgravar el IVA de la tarifa)
+  (case pais when 'FR' then 1.20 when 'IT' then 1.22 when 'DE' then 1.19
+             when 'NL' then 1.21 when 'BE' then 1.21 when 'PL' then 1.23
+             when 'SE' then 1.25 when 'GB' then 1.20 else 1.21 end) as iva_div,
+  sum(case when concepto ilike 'ItemPrice/Principal' then cantidad else 0 end) as uds_liq,
+  round(-sum(importe) filter (where (concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
+        or concepto ilike '%inboundtransportation%' or concepto ilike '%partnered carrier%'
+        or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%')
+        and concepto not ilike '%removal%' and concepto not ilike '%disposal%')
+        / (case pais when 'FR' then 1.20 when 'IT' then 1.22 when 'DE' then 1.19
+                     when 'NL' then 1.21 when 'BE' then 1.21 when 'PL' then 1.23
+                     when 'SE' then 1.25 when 'GB' then 1.20 else 1.21 end), 2) as fba,
+  round(-sum(importe) filter (where concepto ilike '%commission%' or concepto ilike '%referral%'
+        or (concepto ilike 'ItemFees/%'
+            and concepto not ilike '%fulfillment%' and concepto not ilike '%fbaperunit%'))
+        / (case pais when 'FR' then 1.20 when 'IT' then 1.22 when 'DE' then 1.19
+                     when 'NL' then 1.21 when 'BE' then 1.21 when 'PL' then 1.23
+                     when 'SE' then 1.25 when 'GB' then 1.20 else 1.21 end), 2) as com,
+  round(-sum(importe) filter (where concepto ilike '%removal%' or concepto ilike '%disposal%')
+        / (case pais when 'FR' then 1.20 when 'IT' then 1.22 when 'DE' then 1.19
+                     when 'NL' then 1.21 when 'BE' then 1.21 when 'PL' then 1.23
+                     when 'SE' then 1.25 when 'GB' then 1.20 else 1.21 end), 2) as retiro
+from base
+group by sku, pais;
 
 
 -- ---------------------------------------------------------------------

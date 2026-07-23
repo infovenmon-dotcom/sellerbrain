@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v11-inventario-backoff'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v12-tarifa-por-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1071,8 +1071,9 @@ async function productosPeriodo(env, desde, hasta, pais) {
   // Lee de la tabla granular por país (permite filtrar por país). Si aún no
   // está poblada (histórico sin re-backfill), cae a pedidos_dia (sin país).
   const filtroPais = pais ? '&pais=eq.' + encodeURIComponent(pais) : '';
-  let ped = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + filtroPais + '&select=sku,fecha,uds,ventas', []);
-  if (!ped || !ped.length) {
+  let ped = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + filtroPais + '&select=sku,fecha,pais,uds,ventas', []);
+  let hayPais = !!(ped && ped.length);
+  if (!hayPais) {
     ped = await selSafe(env, 'pedidos_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,fecha,uds,ventas', []);
   }
   const bySku = {};
@@ -1080,20 +1081,37 @@ async function productosPeriodo(env, desde, hasta, pais) {
   for (const r of (ped || [])) {
     const s = r.sku || '';
     if (!s || /^amzn\.gr\./i.test(s)) continue;   // ignora reacondicionados de Amazon
-    if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, dias: {} };
-    bySku[s].uds += +r.uds || 0;
-    bySku[s].ventas += +r.ventas || 0;
-    bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + (+r.uds || 0);
-    tv += +r.ventas || 0;
+    if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, dias: {}, udsPais: {}, ventasPais: {} };
+    const u = +r.uds || 0, v = +r.ventas || 0;
+    bySku[s].uds += u;
+    bySku[s].ventas += v;
+    const pz = r.pais || pais || 'ES';          // país de la venta (para la tarifa correcta)
+    bySku[s].udsPais[pz] = (bySku[s].udsPais[pz] || 0) + u;
+    bySku[s].ventasPais[pz] = (bySku[s].ventasPais[pz] || 0) + v;
+    bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + u;
+    tv += v;
   }
   // TARIFA REAL POR UNIDAD (de v_fee_sku, todo el histórico) → se aplica a las
   // unidades vendidas. Resuelve el desfase de liquidación de Amazon: aunque este
   // mes no estén liquidadas todas las unidades, el €/ud es el real y CUADRA.
-  const feeUnit = {};   // {sku: {perUnit, fbaU, comU}}
+  // Tarifa por unidad POR PAÍS (v_fee_sku_pais): la tarifa FBA y el IVA cambian
+  // según el país (ES 21%, FR 20%, IT 22%), y el settlement ya trae el país.
+  const feePais = {};   // {sku: {ES:{fbaU,comU}, FR:{...}, ...}}
+  try {
+    for (const r of (await selectSupabase(env, 'v_fee_sku_pais?select=sku,pais,uds_liq,fba,com'))) {
+      const u = +r.uds_liq || 0;
+      if (u <= 0) continue;
+      if (!feePais[r.sku]) feePais[r.sku] = {};
+      feePais[r.sku][r.pais] = { fbaU: (+r.fba || 0) / u, comU: (+r.com || 0) / u };
+    }
+  } catch (_) { /* aún sin v_fee_sku_pais → usa el blend de abajo */ }
+  // Blend de respaldo (todo el histórico, sin país) para productos/países sin
+  // liquidación propia todavía (settlements viejos sin país).
+  const feeUnit = {};   // {sku: {fbaU, comU}}
   try {
     for (const r of (await selectSupabase(env, 'v_fee_sku?select=sku,uds_liq,fba,com'))) {
       const u = +r.uds_liq || 0;
-      if (u > 0) feeUnit[r.sku] = { fbaU: (+r.fba || 0) / u, comU: (+r.com || 0) / u, perUnit: ((+r.fba || 0) + (+r.com || 0)) / u };
+      if (u > 0) feeUnit[r.sku] = { fbaU: (+r.fba || 0) / u, comU: (+r.com || 0) / u };
     }
   } catch (_) { /* sin v_fee_sku → se estima con % abajo */ }
   const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste'))) costes[c.sku] = +c.coste || 0; } catch (_) {}
@@ -1106,10 +1124,24 @@ async function productosPeriodo(env, desde, hasta, pais) {
     const nocoste = coste === undefined;
     const costeTot = +(p.uds * (coste || 0)).toFixed(2);
     const fu = feeUnit[p.sku];
-    const real = !!fu;                                    // ¿tenemos tarifa/ud real?
-    const precioMed = p.uds > 0 ? p.ventas / p.uds : 0;
-    const fba = +((real ? fu.fbaU * p.uds : p.ventas * 0.15)).toFixed(2);
-    const com = +((real ? fu.comU * p.uds : p.ventas * 0.15)).toFixed(2);
+    const fp = feePais[p.sku];
+    const real = !!(fu || fp);                            // ¿tenemos tarifa/ud real?
+    let fba, com;
+    if (real) {
+      // Suma por país: tarifa del país (fp) → si falta, el blend (fu) → si no,
+      // estima 15%+15% sobre las ventas de ese país.
+      fba = 0; com = 0;
+      for (const pz of Object.keys(p.udsPais)) {
+        const u = p.udsPais[pz];
+        const f = (fp && fp[pz]) || fu;
+        if (f) { fba += f.fbaU * u; com += f.comU * u; }
+        else { const vpz = p.ventasPais[pz] || 0; fba += vpz * 0.15; com += vpz * 0.15; }
+      }
+      fba = +fba.toFixed(2); com = +com.toFixed(2);
+    } else {
+      fba = +(p.ventas * 0.15).toFixed(2);
+      com = +(p.ventas * 0.15).toFixed(2);
+    }
     const dev = 0;
     const amazon = +(com + fba + dev).toFixed(2);        // lo que se queda Amazon
     const ben = +(p.ventas - costeTot - amazon).toFixed(2);
@@ -1557,6 +1589,23 @@ async function backfillRango(env, tipo, desde, hasta) {
   throw new Error('tipo desconocido: ' + tipo);
 }
 
+// El informe de transacciones (settlement) trae el marketplace en cada línea:
+// "Amazon.es", "Amazon.fr", "Amazon.it"… → lo normalizamos a ES/FR/IT para
+// aplicar la tarifa y el IVA correctos de cada país.
+function paisDeMarketplace(nombre) {
+  const s = (nombre || '').toLowerCase();
+  if (s.indexOf('.com.be') > -1 || /\.be(\b|$)/.test(s)) return 'BE';
+  if (s.indexOf('.co.uk') > -1 || /\.uk(\b|$)/.test(s)) return 'GB';
+  if (/\.es(\b|$)/.test(s)) return 'ES';
+  if (/\.fr(\b|$)/.test(s)) return 'FR';
+  if (/\.it(\b|$)/.test(s)) return 'IT';
+  if (/\.de(\b|$)/.test(s)) return 'DE';
+  if (/\.nl(\b|$)/.test(s)) return 'NL';
+  if (/\.pl(\b|$)/.test(s)) return 'PL';
+  if (/\.se(\b|$)/.test(s)) return 'SE';
+  return '';
+}
+
 function mapearSettlement(lineas, reportId) {
   return lineas
     .filter(l => l['transaction-type'])
@@ -1566,6 +1615,7 @@ function mapearSettlement(lineas, reportId) {
       tipo: l['transaction-type'],
       pedido: l['order-id'] || '',
       sku: l['sku'] || '',
+      pais: paisDeMarketplace(l['marketplace-name']),
       concepto: l['amount-type'] + '/' + l['amount-description'],
       importe: +(l['amount'] || '0').replace(',', '.'),
       cantidad: +l['quantity-purchased'] || 0
