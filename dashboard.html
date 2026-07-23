@@ -847,11 +847,28 @@ function renderMensual(){
   MENSUAL.forEach(function(m,i){
     var v=+m[key]||0, bh=(v/maxV)*(H-32), x=pad+i*slot+(slot-bw)/2, y=H-20-bh;
     var mm=String(m.mes).split('-');
-    bars+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(0,bh).toFixed(1)+'" rx="2" fill="var(--or)" opacity="'+(i===n-1?1:0.8)+'"><title>'+m.mes+': '+(key==='ventas'?f(v,2)+'€':v+' uds')+'</title></rect>';
+    bars+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(0,bh).toFixed(1)+'" rx="2" fill="var(--or)" opacity="'+(i===n-1?1:0.8)+'"/>';
     labels+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-6)+'" font-size="8" fill="#888" text-anchor="middle">'+(MESNOM[(+mm[1])-1]||'')+(mm[1]==='01'?" '"+mm[0].slice(2):'')+'</text>';
   });
-  el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+bars+labels+'</svg>'+
+  el.style.position='relative';
+  el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+bars+
+    '<rect id="mb-hl" x="0" y="0" width="0" height="0" fill="rgba(255,255,255,.10)" style="display:none"/>'+labels+'</svg>'+
+    '<div id="mb-tip" style="position:absolute;display:none;pointer-events:none;background:#0b0b0b;border:1px solid var(--bd2);border-radius:8px;padding:6px 9px;font-size:11px;white-space:nowrap;transform:translate(-50%,-115%);z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.5)"></div>'+
     '<div style="font-size:10.5px;color:var(--mu);margin-top:2px">'+(key==='ventas'?'Ventas (€) por mes':'Unidades vendidas por mes')+' · pasa el ratón por cada barra</div>';
+  el.onmousemove=function(ev){
+    var rect=el.getBoundingClientRect(); if(!rect.width)return;
+    var svgX=(ev.clientX-rect.left)/rect.width*W;            // coord en el sistema del SVG
+    var i=Math.floor((svgX-pad)/slot); if(i<0)i=0; if(i>n-1)i=n-1;
+    var m=MENSUAL[i], v=+m[key]||0, mm=String(m.mes).split('-');
+    var cx=pad+i*slot+slot/2;
+    var hl=document.getElementById('mb-hl'), tip=document.getElementById('mb-tip');
+    if(hl){hl.setAttribute('x',(pad+i*slot).toFixed(1));hl.setAttribute('width',slot.toFixed(1));hl.setAttribute('height',(H-20).toFixed(1));hl.style.display='';}
+    tip.style.display='block';
+    tip.style.left=(cx/W*rect.width).toFixed(0)+'px';
+    tip.style.top=(rect.height*0.12).toFixed(0)+'px';
+    tip.innerHTML='<b>'+(MESNOM[(+mm[1])-1]||'')+' '+mm[0]+'</b><div style="color:var(--or2)">'+(key==='ventas'?f(v,2)+'€':f(v,0)+' uds')+'</div>';
+  };
+  el.onmouseleave=function(){['mb-tip','mb-hl'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});};
 }
 
 function renderProds(){
