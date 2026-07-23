@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v14-breakeven-acos'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v15-acos-real-por-producto'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -809,6 +809,20 @@ function cuerpoAdsTerminos(desde, hasta) {
   };
 }
 
+// Informe "Advertised Product": gasto y ventas de PPC POR SKU → permite el ACoS
+// real por producto y compararlo con su break-even.
+function cuerpoAdsProducto(desde, hasta) {
+  return {
+    name: 'sb-adprod-' + desde + '-' + hasta,
+    startDate: desde, endDate: hasta,
+    configuration: {
+      adProduct: 'SPONSORED_PRODUCTS', groupBy: ['advertiser'],
+      columns: ['advertisedSku', 'advertisedAsin', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spAdvertisedProduct', timeUnit: 'SUMMARY', format: 'GZIP_JSON'
+    }
+  };
+}
+
 async function descargarInformeAds(urlInforme) {
   const gz = await fetch(urlInforme);
   const ds = new DecompressionStream('gzip');
@@ -858,6 +872,26 @@ async function guardarPPCterminos(env, filas, pais, desde, hasta) {
   return (filas || []).length;
 }
 
+// Agrega el informe Advertised Product por SKU y lo guarda (una fila por SKU/país/ventana).
+async function guardarPPCproducto(env, filas, pais, desde, hasta) {
+  const bySku = {};
+  for (const t of (filas || [])) {
+    const sku = t.advertisedSku || t.advertisedAsin || '';
+    if (!sku) continue;
+    if (!bySku[sku]) bySku[sku] = { pais, sku, desde, hasta, gasto: 0, clics: 0, impresiones: 0, ventas_ppc: 0, pedidos_ppc: 0 };
+    bySku[sku].gasto += (t.cost || 0);
+    bySku[sku].clics += (t.clicks || 0);
+    bySku[sku].impresiones += (t.impressions || 0);
+    bySku[sku].ventas_ppc += (t.sales14d || 0);
+    bySku[sku].pedidos_ppc += (t.purchases14d || 0);
+  }
+  const rows = Object.values(bySku).map(x => ({
+    ...x, gasto: +x.gasto.toFixed(2), ventas_ppc: +x.ventas_ppc.toFixed(2), actualizado: new Date().toISOString()
+  }));
+  await upsertSupabase(env, 'ppc_producto', rows);
+  return rows.length;
+}
+
 async function guardarPendientePPC(env, row) {
   try { await upsertSupabase(env, 'ppc_pendientes', [{ ...row, creado: new Date().toISOString() }]); }
   catch (_) { /* si no existe la tabla aún, no rompe la ingesta */ }
@@ -881,6 +915,7 @@ async function recogerPendientesPPC(env) {
       if (j.status === 'COMPLETED') {
         const data = await descargarInformeAds(j.url);
         if (p.tipo === 'dia') await guardarPPCdia(env, data, p.pais, p.fecha);
+        else if (p.tipo === 'producto') await guardarPPCproducto(env, data, p.pais, p.desde, p.hasta);
         else await guardarPPCterminos(env, data, p.pais, p.desde, p.hasta);
         await borrarPendientePPC(env, p.report_id); recogidos++;
       } else if (j.status === 'FAILURE') {
@@ -1047,9 +1082,11 @@ async function ingestaPPC(env, opts) {
   const perfiles = soloPais ? (ADS_PROFILES[soloPais] ? { [soloPais]: ADS_PROFILES[soloPais] } : {}) : ADS_PROFILES;
   const resultado = { fecha: ayer, pasos: [] };
 
+  const esLunes = new Date().getUTCDay() === 1;
+
   // 1. PPC del día por país (DESACOPLADO: crea informe → guarda pendiente →
   //    sondea corto → si listo ingesta; si no, se recoge en la próxima pasada).
-  if (solo !== 'terminos') for (const [pais, profileId] of Object.entries(perfiles)) {
+  if (!solo || solo === 'dia') for (const [pais, profileId] of Object.entries(perfiles)) {
     try {
       const headers = await cabecerasAds(env, profileId);
       const reportId = await crearReporteAds(headers, cuerpoAdsDia(ayer));
@@ -1066,7 +1103,7 @@ async function ingestaPPC(env, opts) {
   }
 
   // 2. Términos de búsqueda (resumen 30 días) — solo lunes UTC o si se fuerza.
-  if (solo !== 'dia' && (forzarTerminos || solo === 'terminos' || new Date().getUTCDay() === 1)) {
+  if (solo === 'terminos' || (!solo && (forzarTerminos || esLunes))) {
     const hastaT = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
     for (const [pais, profileId] of Object.entries(perfiles)) {
@@ -1083,6 +1120,28 @@ async function ingestaPPC(env, opts) {
           resultado.pasos.push({ ['terminos_' + pais]: 'pendiente · se recogerá solo' });
         }
       } catch (e) { resultado.pasos.push({ ['terminos_' + pais + '_error']: e.message }); }
+    }
+  }
+
+  // 2b. Gasto/ventas de PPC POR PRODUCTO (Advertised Product, 30 días) → ACoS
+  //     real por SKU para compararlo con su break-even. Mismo patrón desacoplado.
+  if (solo === 'producto' || (!solo && (forzarTerminos || esLunes))) {
+    const hastaP = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const desdeP = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
+    for (const [pais, profileId] of Object.entries(perfiles)) {
+      try {
+        const headers = await cabecerasAds(env, profileId);
+        const reportId = await crearReporteAds(headers, cuerpoAdsProducto(desdeP, hastaP));
+        await guardarPendientePPC(env, { report_id: reportId, pais, tipo: 'producto', desde: desdeP, hasta: hastaP });
+        const data = await sondearInformeAds(headers, reportId, 6, 12000);
+        if (data) {
+          const n = await guardarPPCproducto(env, data, pais, desdeP, hastaP);
+          await borrarPendientePPC(env, reportId);
+          resultado.pasos.push({ ['producto_' + pais]: n });
+        } else {
+          resultado.pasos.push({ ['producto_' + pais]: 'pendiente · se recogerá solo' });
+        }
+      } catch (e) { resultado.pasos.push({ ['producto_' + pais + '_error']: e.message }); }
     }
   }
 
@@ -1157,6 +1216,19 @@ async function productosPeriodo(env, desde, hasta, pais) {
   } catch (_) { /* sin v_fee_sku → se estima con % abajo */ }
   const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste'))) costes[c.sku] = +c.coste || 0; } catch (_) {}
   const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,imagen'))) cat[c.sku] = c; } catch (_) {}
+  // PPC real por SKU (informe Advertised Product, ventana más reciente) → ACoS real.
+  const ppcProd = {};
+  try {
+    const rows = await selectSupabase(env, 'ppc_producto?select=sku,pais,gasto,ventas_ppc,hasta&order=hasta.desc&limit=3000');
+    const maxHasta = (rows && rows[0]) ? rows[0].hasta : null;
+    for (const r of (rows || [])) {
+      if (r.hasta !== maxHasta) continue;            // solo la ventana más reciente
+      if (pais && r.pais !== pais) continue;         // respeta el filtro de país
+      if (!ppcProd[r.sku]) ppcProd[r.sku] = { gasto: 0, ventas: 0 };
+      ppcProd[r.sku].gasto += +r.gasto || 0;
+      ppcProd[r.sku].ventas += +r.ventas_ppc || 0;
+    }
+  } catch (_) { /* aún sin ppc_producto */ }
   const fin = new Date(hasta + 'T00:00:00Z');
   const dias10 = [];
   for (let i = 9; i >= 0; i--) dias10.push(new Date(fin.getTime() - i * 86400000).toISOString().slice(0, 10));
@@ -1193,12 +1265,20 @@ async function productosPeriodo(env, desde, hasta, pais) {
     // acos_obj = ACoS objetivo dejando ~10 puntos de margen neto de colchón.
     const breakeven = (nocoste || p.ventas <= 0 || ben <= 0) ? null : mg;
     const acos_obj = breakeven === null ? null : Math.max(0, +(breakeven - 10).toFixed(1));
+    // ACoS REAL de la publicidad de este SKU (Advertised Product) + veredicto vs break-even.
+    const pp = ppcProd[p.sku];
+    const ppcGasto = pp ? +pp.gasto.toFixed(2) : 0;
+    const acos_real = (pp && pp.ventas > 0) ? +(pp.gasto / pp.ventas * 100).toFixed(1) : null;
+    let ppc_estado = null;   // gn = rentable, am = ajustado, rd = en pérdida
+    if (acos_real != null && breakeven != null) {
+      ppc_estado = acos_real <= acos_obj ? 'gn' : acos_real <= breakeven ? 'am' : 'rd';
+    }
     const c = cat[p.sku] || {};
     return {
       nom: (c.nombre || p.sku), sku: p.sku, emoji: '📦', imagen: c.imagen || null,
       uds: p.uds, ventas: +p.ventas.toFixed(2),
       coste: costeTot, comision: com, fba, devol: dev, amazon,
-      real, ppc: 0, ben, mg, breakeven, acos_obj,
+      real, ppc: ppcGasto, acos_real, ppc_estado, ben, mg, breakeven, acos_obj,
       trend: dias10.map(d => p.dias[d] || 0),
       estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),
       txt: nocoste ? 'Sin coste ➜ clic' : (mg < 0 ? 'Pierde' : mg < 15 ? 'Margen bajo' : 'OK')

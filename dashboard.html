@@ -442,7 +442,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     <div style="overflow-x:auto">
     <table class="tbl">
       <thead><tr>
-        <th>Producto</th><th>Uds</th><th>Ventas</th><th>Coste</th><th>Amazon</th><th>Benef.</th><th>Margen</th><th title="ACoS de equilibrio: % máximo que puedes gastar en publicidad de una venta sin perder dinero">ACoS máx.</th><th>Estado</th>
+        <th>Producto</th><th>Uds</th><th>Ventas</th><th>Coste</th><th>Amazon</th><th>Benef.</th><th>Margen</th><th title="ACoS real de la publicidad (30d) frente al ACoS de equilibrio (break-even): el máximo que puedes gastar sin perder dinero. Verde = rentable, rojo = en pérdida.">ACoS real / máx.</th><th>Estado</th>
       </tr></thead>
       <tbody id="prods"></tbody>
     </table>
@@ -691,7 +691,9 @@ function renderProds(){
       '<td style="color:#F5A623" title="'+det+'">-'+f(amazon,2)+'€'+(p.real?'':' *')+'</td>'+
       '<td style="font-weight:700;color:'+(p.ben>=0?'var(--gn)':'var(--rd)')+'">'+(p.ben>=0?'+':'')+f(p.ben,2)+'€</td>'+
       '<td style="color:'+(p.mg>=15?'var(--gn)':p.mg>=0?'var(--am)':'var(--rd)')+'">'+f(p.mg,1)+'%</td>'+
-      '<td title="Break-even: gasta MENOS de este ACoS en ads y ganas; MÁS y pierdes en esas ventas.'+(p.acos_obj!=null?' ACoS objetivo (deja ~10% margen): '+f(p.acos_obj,1)+'%':'')+'" style="font-weight:600;color:'+(p.breakeven!=null?'#4A9EDE':'var(--mu)')+'">'+(p.breakeven!=null?'≤ '+f(p.breakeven,1)+'%':'—')+'</td>'+
+      '<td title="ACoS real de la publicidad de este producto (30d) vs break-even.'+(p.acos_obj!=null?' Objetivo (deja ~10% margen): '+f(p.acos_obj,1)+'%':'')+(p.ppc>0?' · Gasto PPC 30d: '+f(p.ppc,2)+'€':'')+'" style="font-weight:600">'+
+        ((p.acos_real!=null)?'<span style="color:'+(p.ppc_estado==='gn'?'var(--gn)':p.ppc_estado==='am'?'var(--am)':'var(--rd)')+'">'+f(p.acos_real,1)+'%</span> <span style="color:var(--mu);font-weight:400">/ </span>':'')+
+        '<span style="color:'+(p.breakeven!=null?'#4A9EDE':'var(--mu)')+'">'+(p.breakeven!=null?'≤'+f(p.breakeven,1)+'%':'—')+'</span></td>'+
       '<td><span class="pill '+p.estado+'">'+p.txt+'</span></td>'+
     '</tr>';
   });
@@ -1500,7 +1502,7 @@ function lanzarIngesta(){
             '<b style="color:var(--bl)">PPC (Ads API)</b><div style="margin-top:6px;color:var(--mu2)">'+(pasosHTML(pasos)||'…')+'</div></div>';
           box.innerHTML=htmlSp+htmlPpc+'<div style="margin-top:8px;font-size:11px;color:var(--mu)">'+estado+'</div>';
         }
-        var pasadas=[{solo:'dia',t:'gasto/campañas'},{solo:'terminos',t:'palabras de búsqueda'}];
+        var pasadas=[{solo:'dia',t:'gasto/campañas'},{solo:'terminos',t:'palabras de búsqueda'},{solo:'producto',t:'rentabilidad por producto'}];
         for(var j=0;j<pasadas.length;j++){
           for(var i=0;i<paises.length;i++){
             pinta('⏳ '+pasadas[j].t+' · '+paises[i]+'…');
