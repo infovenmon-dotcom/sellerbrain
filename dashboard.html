@@ -363,6 +363,32 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 <div id="vista-dash">
 <div class="tiles" id="tiles"></div>
 
+<!-- ===== 2 GRÁFICOS COMPARATIVA (llenan el hueco bajo las tarjetas) ===== -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px" id="grid-comp">
+  <div class="card">
+    <div class="ch"><h2><span class="ci">📅</span> Este mes vs año pasado <span id="yoy-per" style="font-size:11px;color:var(--mu);font-weight:400">· por día</span></h2></div>
+    <div id="yoy-chart" style="position:relative"></div>
+    <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--mu)">
+      <span><i style="display:inline-block;width:10px;height:3px;background:var(--or2);vertical-align:middle;margin-right:4px"></i><span id="yoy-lbl-a">Este mes</span></span>
+      <span><i style="display:inline-block;width:10px;height:0;border-top:2px dashed #8a8a8a;vertical-align:middle;margin-right:4px"></i><span id="yoy-lbl-b">Año pasado</span></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch" style="flex-wrap:wrap;gap:8px">
+      <h2><span class="ci">📊</span> Ventas por mes</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button class="chip on" id="mb-ventas" onclick="setMensualMetrica('ventas')" style="padding:3px 9px;font-size:11px">€ Ventas</button>
+        <button class="chip" id="mb-uds" onclick="setMensualMetrica('uds')" style="padding:3px 9px;font-size:11px">Uds</button>
+        <span style="width:6px"></span>
+        <select id="mb-pais" onchange="cargarMensual()" style="background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px;padding:3px 6px">
+          <option value="">🌍 Todos</option><option value="ES">🇪🇸 ES</option><option value="FR">🇫🇷 FR</option><option value="IT">🇮🇹 IT</option><option value="DE">🇩🇪 DE</option><option value="BE">🇧🇪 BE</option>
+        </select>
+      </div>
+    </div>
+    <div id="mensual-chart" style="position:relative"></div>
+  </div>
+</div>
+
 <div class="grid">
 <!-- ===== COLUMNA IZQUIERDA ===== -->
 <div>
@@ -735,6 +761,78 @@ function cargarSerie(desde,hasta,lab){
     .catch(function(){});
 }
 
+/* ===== Gráfico A: este mes vs mismo mes del año pasado, por día ===== */
+var MESNOM=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function cargarYoY(){
+  var box=document.getElementById('yoy-chart'); if(!box)return;
+  if(SB_CONFIG.mode!=='api'){ box.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; return; }
+  var h=new Date(),Y=h.getUTCFullYear(),M=h.getUTCMonth(),D=h.getUTCDate();
+  var a1=ymdUTC(new Date(Date.UTC(Y,M,1))),a2=ymdUTC(new Date(Date.UTC(Y,M,D)));
+  var b1=ymdUTC(new Date(Date.UTC(Y-1,M,1))),b2=ymdUTC(new Date(Date.UTC(Y-1,M+1,0)));
+  var mn=MESNOM[M];
+  var t=document.getElementById('yoy-per'); if(t)t.textContent='· '+mn+' '+Y+' vs '+mn+' '+(Y-1)+' (por día)';
+  document.getElementById('yoy-lbl-a').textContent=mn+' '+Y;
+  document.getElementById('yoy-lbl-b').textContent=mn+' '+(Y-1);
+  Promise.all([
+    fetch(SB_CONFIG.apiBase+'/v1/serie?desde='+a1+'&hasta='+a2,{headers:authHdr()}).then(function(r){return r.json();}),
+    fetch(SB_CONFIG.apiBase+'/v1/serie?desde='+b1+'&hasta='+b2,{headers:authHdr()}).then(function(r){return r.json();})
+  ]).then(function(res){
+    renderYoY((res[0].serie||[]).map(function(x){return +x.v||0;}),(res[1].serie||[]).map(function(x){return +x.v||0;}));
+  }).catch(function(){ box.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">No se pudo cargar.</div>'; });
+}
+function renderYoY(A,B){
+  var el=document.getElementById('yoy-chart'),W=560,H=150,pad=6;
+  var n=Math.max(A.length,B.length,1);
+  var maxV=Math.max.apply(null,[1].concat(A).concat(B));
+  function X(i){return pad+i*(W-2*pad)/Math.max(1,n-1);}
+  function Y(v){return H-pad-((+v||0)/maxV)*(H-2*pad);}
+  function pts(arr){return arr.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ');}
+  el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
+    '<polyline points="'+pts(B)+'" fill="none" stroke="#8a8a8a" stroke-width="1.5" stroke-dasharray="4 3"/>'+
+    '<polyline points="'+pts(A)+'" fill="none" stroke="var(--or2)" stroke-width="2"/>'+
+    '<line id="yoy-guide" x1="0" y1="0" x2="0" y2="'+H+'" stroke="rgba(255,255,255,.3)" style="display:none"/>'+
+    '</svg><div id="yoy-tip" style="position:absolute;display:none;pointer-events:none;background:#0b0b0b;border:1px solid var(--bd2);border-radius:8px;padding:6px 8px;font-size:11px;white-space:nowrap;transform:translate(-50%,-115%);z-index:6"></div>';
+  el.onmousemove=function(ev){
+    var rect=el.getBoundingClientRect(); if(!rect.width)return;
+    var i=Math.round((ev.clientX-rect.left)/rect.width*(n-1)); if(i<0)i=0; if(i>n-1)i=n-1;
+    var tip=document.getElementById('yoy-tip'),g=document.getElementById('yoy-guide');
+    if(g){g.setAttribute('x1',X(i));g.setAttribute('x2',X(i));g.style.display='';}
+    var dif=(A[i]||0)-(B[i]||0);
+    tip.style.display='block';tip.style.left=(X(i)/W*rect.width)+'px';tip.style.top='2px';
+    tip.innerHTML='<b>día '+(i+1)+'</b><div style="color:var(--or2)">'+f(A[i]||0,0)+'€</div><div style="color:#aaa">'+f(B[i]||0,0)+'€</div><div style="color:'+(dif>=0?'var(--gn)':'var(--rd)')+'">'+(dif>=0?'+':'')+f(dif,0)+'€</div>';
+  };
+  el.onmouseleave=function(){['yoy-tip','yoy-guide'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});};
+}
+
+/* ===== Gráfico B: barras por mes (tipo Seller Central), ventas/uds y país ===== */
+var MENSUAL=[],MENSUAL_METRICA='ventas';
+function setMensualMetrica(m){MENSUAL_METRICA=m;var bv=document.getElementById('mb-ventas'),bu=document.getElementById('mb-uds');if(bv)bv.classList.toggle('on',m==='ventas');if(bu)bu.classList.toggle('on',m==='uds');renderMensual();}
+function cargarMensual(){
+  var box=document.getElementById('mensual-chart'); if(!box)return;
+  if(SB_CONFIG.mode!=='api'){ box.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; return; }
+  var pais=(document.getElementById('mb-pais')||{}).value||'';
+  fetch(SB_CONFIG.apiBase+'/v1/mensual'+(pais?'?pais='+pais:''),{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ MENSUAL=(d.meses||[]).slice(-14); renderMensual(); })
+    .catch(function(){ box.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">No se pudo cargar.</div>'; });
+}
+function renderMensual(){
+  var el=document.getElementById('mensual-chart'); if(!el)return;
+  if(!MENSUAL.length){ el.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Sin datos aún.</div>'; return; }
+  var key=MENSUAL_METRICA, n=MENSUAL.length;
+  var maxV=Math.max.apply(null,[1].concat(MENSUAL.map(function(m){return +m[key]||0;})));
+  var W=560,H=160,pad=18, slot=(W-2*pad)/n, bw=slot*0.66;
+  var bars='',labels='';
+  MENSUAL.forEach(function(m,i){
+    var v=+m[key]||0, bh=(v/maxV)*(H-32), x=pad+i*slot+(slot-bw)/2, y=H-20-bh;
+    var mm=String(m.mes).split('-');
+    bars+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+Math.max(0,bh).toFixed(1)+'" rx="2" fill="var(--or)" opacity="'+(i===n-1?1:0.8)+'"><title>'+m.mes+': '+(key==='ventas'?f(v,2)+'€':v+' uds')+'</title></rect>';
+    labels+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-6)+'" font-size="8" fill="#888" text-anchor="middle">'+(MESNOM[(+mm[1])-1]||'')+(mm[1]==='01'?" '"+mm[0].slice(2):'')+'</text>';
+  });
+  el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">'+bars+labels+'</svg>'+
+    '<div style="font-size:10.5px;color:var(--mu);margin-top:2px">'+(key==='ventas'?'Ventas (€) por mes':'Unidades vendidas por mes')+' · pasa el ratón por cada barra</div>';
+}
+
 function renderProds(){
   var h='';
   (PRODUCTOS||[]).forEach(function(p){
@@ -1009,6 +1107,7 @@ function aplicarDatos(d){
   // En modo API, carga (una vez) la tabla por periodo y el panel "Ventas por país".
   if(SB_CONFIG.mode==='api' && !window._prodInit){ window._prodInit=true; try{ prodPeriodo('mes'); }catch(e){} }
   // Satisfacción del cliente (motivos de devolución). En demo, ejemplo ilustrativo.
+  try{ if(SB_CONFIG.mode==='api'){ cargarYoY(); cargarMensual(); } else { var yb=document.getElementById('yoy-chart'); if(yb)yb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; var mb=document.getElementById('mensual-chart'); if(mb)mb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; } }catch(e){}
   try{
     if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); }
     else{ renderSatisfaccion([
