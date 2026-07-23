@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v21-margen-real-sin-iva'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v22-venta-con-iva'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1304,14 +1304,16 @@ async function productosPeriodo(env, desde, hasta, pais) {
   for (const r of (ped || [])) {
     const s = r.sku || '';
     if (!s || /^amzn\.gr\./i.test(s)) continue;   // ignora reacondicionados de Amazon
-    if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, dias: {}, udsPais: {}, ventasPais: {} };
+    if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, neto: 0, dias: {}, udsPais: {}, ventasPais: {} };
     const u = +r.uds || 0;
     const pz = r.pais || pais || 'ES';          // país de la venta (para IVA y tarifa correctos)
-    const v = (+r.ventas || 0) / ivaPais(pz);   // VENTA SIN IVA (base real del margen)
+    const g = (+r.ventas || 0);                 // VENTA CON IVA (lo que se muestra, como Seller Central)
+    const v = g / ivaPais(pz);                  // VENTA SIN IVA (base real del margen)
     bySku[s].uds += u;
-    bySku[s].ventas += v;
+    bySku[s].ventas += g;                        // display: bruto CON IVA
+    bySku[s].neto += v;                          // beneficio: neto SIN IVA
     bySku[s].udsPais[pz] = (bySku[s].udsPais[pz] || 0) + u;
-    bySku[s].ventasPais[pz] = (bySku[s].ventasPais[pz] || 0) + v;
+    bySku[s].ventasPais[pz] = (bySku[s].ventasPais[pz] || 0) + v;   // neto (para el fallback de tarifa 15%)
     bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + u;
     tv += v;
   }
@@ -1376,12 +1378,14 @@ async function productosPeriodo(env, desde, hasta, pais) {
       }
       fba = +fba.toFixed(2); com = +com.toFixed(2);
     } else {
-      fba = +(p.ventas * 0.15).toFixed(2);
-      com = +(p.ventas * 0.15).toFixed(2);
+      fba = +(p.neto * 0.15).toFixed(2);
+      com = +(p.neto * 0.15).toFixed(2);
     }
     const dev = 0;
-    const amazon = +(com + fba + dev).toFixed(2);        // lo que se queda Amazon
-    const ben = +(p.ventas - costeTot - amazon).toFixed(2);   // beneficio ANTES de PPC
+    const amazon = +(com + fba + dev).toFixed(2);        // lo que se queda Amazon (sin IVA)
+    // Beneficio sobre la venta SIN IVA (el IVA repercutido va a Hacienda, no es tuyo).
+    // El margen % se muestra sobre la venta CON IVA (la que ves en pantalla).
+    const ben = +(p.neto - costeTot - amazon).toFixed(2);   // beneficio ANTES de PPC
     const mg = p.ventas > 0 ? +(ben / p.ventas * 100).toFixed(1) : 0;
     // BREAK-EVEN ACoS: % máximo que puedes gastar en publicidad de una venta sin
     // perder dinero = el margen ANTES de ads (beneficio/ventas). Si el ACoS real

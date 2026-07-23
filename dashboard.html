@@ -680,6 +680,7 @@ function renderPnl(){
   document.getElementById('pnl-per').textContent='· '+lab;
   var rows=[
     {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true},
+    {n:'IVA repercutido (a Hacienda)',v:-(PNL.iva_rep||0)*esc,c:'#7a7a7a'},
     {n:'Coste de producto',v:-PNL.prod*esc,c:'#2EE6A0'},
     {n:'Tarifas FBA',v:-PNL.fba*esc,c:'#E84040'},
     {n:'Comisión Amazon',v:-PNL.com*esc,c:'#F5A623'},
