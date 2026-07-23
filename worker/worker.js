@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v12-tarifa-por-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v13-ppc-por-horas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -221,6 +221,16 @@ export default {
       if (url.pathname === '/v1/ppc/recoger') {
         const rec = await recogerPendientesPPC(env);
         return json({ ok: true, ...rec }, cors);
+      }
+
+      // --- PPC por HORAS: patrón por hora del día + serie reciente ---
+      //     Se alimenta de las "fotos" horarias del cron (v_ppc_hora / v_ppc_mejores_horas).
+      if (url.pathname === '/v1/ppc/horas') {
+        const pais = (url.searchParams.get('pais') || '').toUpperCase();
+        const f = pais ? 'pais=eq.' + pais + '&' : '';
+        const patron = await selSafe(env, 'v_ppc_mejores_horas?' + f + 'order=pais.asc,hora.asc', []);
+        const reciente = await selSafe(env, 'v_ppc_hora?' + f + 'order=fecha.desc,hora.desc&limit=240', []);
+        return json({ patron, reciente }, cors);
       }
 
       // --- Satisfacción del cliente (a partir de los MOTIVOS DE DEVOLUCIÓN,
@@ -508,12 +518,17 @@ export default {
 
   // ============ CRON: ingesta diaria ============
   async scheduled(event, env, ctx) {
-    // Con el plan de pago (1000 subpeticiones) el cron ya puede hacer todo:
-    // SP-API + PPC del día + recoger informes PPC pendientes de días anteriores.
+    // Configura en Cloudflare un cron HORARIO: "0 * * * *".
+    //  · Cada hora → foto del PPC del día (para el análisis por horas).
+    //  · A las 03:00 UTC → ingesta completa (SP-API + PPC + recoger pendientes).
+    const hora = new Date(event.scheduledTime || Date.now()).getUTCHours();
     ctx.waitUntil((async () => {
-      await ingestaDiaria(env, 'cron');
-      try { await ingestaPPC(env, {}); } catch (_) {}
-      try { await recogerPendientesPPC(env); } catch (_) {}
+      try { await capturarPPCHora(env); } catch (_) {}
+      if (hora === 3) {
+        await ingestaDiaria(env, 'cron');
+        try { await ingestaPPC(env, {}); } catch (_) {}
+        try { await recogerPendientesPPC(env); } catch (_) {}
+      }
     })());
   }
 };
@@ -874,6 +889,32 @@ async function recogerPendientesPPC(env) {
     } catch (_) { /* transitorio: se reintenta en la próxima pasada */ }
   }
   return { recogidos, fallidos, pendientes: (pend || []).length - recogidos - fallidos };
+}
+
+// Captura una "foto" del PPC acumulado del día de HOY por país y la guarda con
+// la hora UTC actual. Restando fotos consecutivas (vista v_ppc_hora) sacamos lo
+// ocurrido en cada franja. Aproximado (Amazon reajusta datos), pero al promediar
+// una semana revela patrones por hora del día. La llama el cron cada hora.
+async function capturarPPCHora(env) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const hora = new Date().getUTCHours();
+  for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
+    try {
+      const headers = await cabecerasAds(env, profileId);
+      const reportId = await crearReporteAds(headers, cuerpoAdsDia(hoy));
+      const data = await sondearInformeAds(headers, reportId, 5, 12000);   // ~60s; si no está, se salta esta hora
+      if (!data) continue;
+      const t = (data || []).reduce((a, c) => ({
+        g: a.g + (c.cost || 0), cl: a.cl + (c.clicks || 0), im: a.im + (c.impressions || 0),
+        v: a.v + (c.sales14d || 0), pe: a.pe + (c.purchases14d || 0)
+      }), { g: 0, cl: 0, im: 0, v: 0, pe: 0 });
+      await upsertSupabase(env, 'ppc_hora_snap', [{
+        pais, fecha: hoy, hora,
+        gasto: +t.g.toFixed(2), clics: t.cl, impresiones: t.im,
+        ventas: +t.v.toFixed(2), pedidos: t.pe, ts: new Date().toISOString()
+      }]);
+    } catch (_) { /* una hora suelta que falle no rompe nada */ }
+  }
 }
 
 /* =====================================================================
