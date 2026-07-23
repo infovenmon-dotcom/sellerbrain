@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v20-pnl-por-periodo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v21-margen-real-sin-iva'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1305,10 +1305,11 @@ async function productosPeriodo(env, desde, hasta, pais) {
     const s = r.sku || '';
     if (!s || /^amzn\.gr\./i.test(s)) continue;   // ignora reacondicionados de Amazon
     if (!bySku[s]) bySku[s] = { sku: s, uds: 0, ventas: 0, dias: {}, udsPais: {}, ventasPais: {} };
-    const u = +r.uds || 0, v = +r.ventas || 0;
+    const u = +r.uds || 0;
+    const pz = r.pais || pais || 'ES';          // país de la venta (para IVA y tarifa correctos)
+    const v = (+r.ventas || 0) / ivaPais(pz);   // VENTA SIN IVA (base real del margen)
     bySku[s].uds += u;
     bySku[s].ventas += v;
-    const pz = r.pais || pais || 'ES';          // país de la venta (para la tarifa correcta)
     bySku[s].udsPais[pz] = (bySku[s].udsPais[pz] || 0) + u;
     bySku[s].ventasPais[pz] = (bySku[s].ventasPais[pz] || 0) + v;
     bySku[s].dias[String(r.fecha).slice(0, 10)] = (bySku[s].dias[String(r.fecha).slice(0, 10)] || 0) + u;
@@ -1864,6 +1865,16 @@ async function backfillRango(env, tipo, desde, hasta) {
 // El informe de transacciones (settlement) trae el marketplace en cada línea:
 // "Amazon.es", "Amazon.fr", "Amazon.it"… → lo normalizamos a ES/FR/IT para
 // aplicar la tarifa y el IVA correctos de cada país.
+// Divisor de IVA por país (para pasar ventas/tarifas a base SIN IVA).
+function ivaPais(p) {
+  switch ((p || '').toUpperCase()) {
+    case 'FR': return 1.20; case 'IT': return 1.22; case 'DE': return 1.19;
+    case 'PT': return 1.23; case 'PL': return 1.23; case 'NL': return 1.21;
+    case 'BE': return 1.21; case 'SE': return 1.25; case 'GB': return 1.20;
+    case 'IE': return 1.23; default: return 1.21;
+  }
+}
+
 function paisDeMarketplace(nombre) {
   const s = (nombre || '').toLowerCase();
   if (s.indexOf('.com.be') > -1 || /\.be(\b|$)/.test(s)) return 'BE';
