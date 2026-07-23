@@ -1,2 +1,5 @@
+# Rastreo permitido (para que herramientas de IA puedan analizar la web pública).
+# El sitio sigue sin indexarse en buscadores por la cabecera X-Robots-Tag: noindex (_headers).
+# Los datos reales viven detrás del login (Worker de Cloudflare): aquí no hay nada sensible.
 User-agent: *
-Disallow: /
+Allow: /
