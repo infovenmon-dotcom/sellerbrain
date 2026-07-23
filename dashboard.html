@@ -127,7 +127,14 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 .dias{font-weight:700;font-size:12px}
 
 /* Mobile */
-.burger{display:none}
+.burger{display:inline-flex;align-items:center;justify-content:center;background:none;border:1px solid var(--bd2);color:var(--tx);border-radius:8px;padding:6px 11px;font-size:15px;cursor:pointer}
+.burger:hover{background:rgba(255,255,255,.05)}
+/* Escritorio: barra lateral PLEGABLE → plegada, los datos ocupan todo */
+@media(min-width:901px){
+  .app{transition:grid-template-columns .18s ease}
+  .app.collapsed{grid-template-columns:0 1fr}
+  .app.collapsed .side{display:none}
+}
 @media(max-width:900px){
   .app{grid-template-columns:1fr}
   .side{position:fixed;z-index:50;width:230px;transform:translateX(-100%);transition:transform .2s}
@@ -172,7 +179,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:10px">
-    <button class="burger" onclick="document.getElementById('side').classList.toggle('open')">☰</button>
+    <button class="burger" onclick="toggleSidebar()" title="Mostrar/ocultar menú">☰</button>
     <h1>Dashboard</h1>
   </div>
   <div class="top-controls">
@@ -1744,6 +1751,21 @@ var TOOL_SRC = {
 };
 // Secciones aún no construidas → aviso "en desarrollo":
 var SOON = { sobre:'Detector de sobrecobros FBA', ajustes:'Ajustes' };
+
+// Barra lateral plegable: en escritorio pliega/despliega (y lo recuerda);
+// en móvil abre/cierra el menú deslizante.
+function toggleSidebar(){
+  if(window.innerWidth>900){
+    var app=document.querySelector('.app');
+    app.classList.toggle('collapsed');
+    try{localStorage.setItem('sb_sidebar_collapsed', app.classList.contains('collapsed')?'1':'0');}catch(e){}
+  } else {
+    document.getElementById('side').classList.toggle('open');
+  }
+}
+try{ if(localStorage.getItem('sb_sidebar_collapsed')==='1' && window.innerWidth>900){
+  var _app=document.querySelector('.app'); if(_app) _app.classList.add('collapsed');
+}}catch(e){}
 
 function cambiarVista(v){
   document.getElementById('vista-dash').style.display = v==='dash'?'block':'none';
