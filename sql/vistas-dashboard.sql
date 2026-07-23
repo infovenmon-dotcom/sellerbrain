@@ -151,12 +151,20 @@ create or replace view v_fee_sku as
 -- vendedor lo desgrava → dividimos por 1.21 para dejar el coste real (base).
 select sku,
   sum(case when concepto ilike 'ItemPrice/Principal' then cantidad else 0 end) as uds_liq,
-  round(-sum(importe) filter (where concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
+  -- FBA por unidad VENDIDA: cumplimiento + logística de entrada. NO incluye la
+  -- RETIRADA/ELIMINACIÓN de inventario (removal/disposal): es un coste puntual
+  -- de sacar stock, no una tarifa por venta → si se repartía entre las uds
+  -- vendidas, inflaba el €/unidad y hundía el margen. Se excluye aquí.
+  round(-sum(importe) filter (where (concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
         or concepto ilike '%inboundtransportation%' or concepto ilike '%partnered carrier%'
-        or concepto ilike '%removal%' or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%') / 1.21, 2) as fba,
+        or concepto ilike '%pick%pack%' or concepto ilike '%weight%handl%')
+        and concepto not ilike '%removal%' and concepto not ilike '%disposal%') / 1.21, 2) as fba,
   round(-sum(importe) filter (where concepto ilike '%commission%' or concepto ilike '%referral%'
         or (concepto ilike 'ItemFees/%'
-            and concepto not ilike '%fulfillment%' and concepto not ilike '%fbaperunit%')) / 1.21, 2) as com
+            and concepto not ilike '%fulfillment%' and concepto not ilike '%fbaperunit%')) / 1.21, 2) as com,
+  -- Retirada/eliminación de inventario, como DATO APARTE (para verlo claro y no
+  -- mezclarlo con la tarifa por venta).
+  round(-sum(importe) filter (where concepto ilike '%removal%' or concepto ilike '%disposal%') / 1.21, 2) as retiro
 from settlement_lineas
 where sku is not null and sku <> '' and sku not ilike 'amzn.gr.%'
 group by sku;
