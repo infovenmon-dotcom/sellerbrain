@@ -75,6 +75,34 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
   <div style="font-size:12px;color:var(--mu2);line-height:1.6">🔌 <b style="color:var(--am)">Cuando la conexión con Amazon (SP-API) esté activa</b>, el stock y el histórico de ventas entrarán solos y esto se rellenará automáticamente. Mientras, súbelos aquí — todo se calcula en tu navegador.</div>
 </div>
 
+<!-- CONECTADO: stock real + fecha límite de pedido por método (sin subir nada) -->
+<div class="card" id="card-stock-real" style="display:none;border:1.5px solid rgba(46,230,160,.4)">
+  <div class="ct"><span class="ci">🟢</span> Tu stock real — cuándo pedir por barco / tren / aire</div>
+  <div class="inf">Todos tus productos con <b>stock real</b>, <b>salida media</b> (uds/día, 30 días) y la <b>fecha límite para pedir</b> según el transporte, contando la semana que tarda Amazon en colocarlo en inventario. Ajusta los plazos si los tuyos son otros.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">🚢 Barco (días)</label><input type="number" id="lt-barco" value="60" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">🚆 Tren/camión</label><input type="number" id="lt-tren" value="35" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">✈️ Aire</label><input type="number" id="lt-aire" value="15" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">📦 Recepción Amazon</label><input type="number" id="lt-recep" value="7" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
+    <button class="btn-sec" onclick="stkCargar()">↻ Actualizar</button>
+  </div>
+  <div id="stk-status" style="font-size:12px;color:var(--mu);margin-bottom:8px"></div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <thead><tr style="text-align:left;color:var(--mu);font-size:11px">
+      <th style="padding:6px 8px">Producto</th>
+      <th style="padding:6px 8px">Stock</th>
+      <th style="padding:6px 8px" title="Unidades en camino a Amazon">En camino</th>
+      <th style="padding:6px 8px">Uds/día</th>
+      <th style="padding:6px 8px">Cobertura</th>
+      <th style="padding:6px 8px" title="Pide antes de esta fecha si vas por barco">🚢 Barco</th>
+      <th style="padding:6px 8px" title="Pide antes de esta fecha si vas por tren/camión">🚆 Tren</th>
+      <th style="padding:6px 8px" title="Pide antes de esta fecha si vas por aire">✈️ Aire</th>
+    </tr></thead>
+    <tbody id="stk-tabla"></tbody>
+  </table></div>
+  <div style="margin-top:9px;font-size:11px;color:var(--mu)">🚢 Barco ≈ 60d · 🚆 Tren/camión ≈ 30-35d · ✈️ Aire ≈ 15d, <b>+ ~7 días</b> que tarda Amazon en recepcionar. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b> para ese método.</div>
+</div>
+
 <!-- PASO 1 -->
 <div class="card">
   <div class="ct"><span class="ci">1️⃣</span> Sube tu histórico de pedidos (All Orders)</div>
@@ -388,6 +416,58 @@ function descargarCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
 }
+
+// ===== Conectado: stock real + fecha límite de pedido por método =====
+var STK={base:'',tok:'',datos:[]};
+function stkEsc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function stkFechaLimite(dias, lead){
+  if(dias==null) return {txt:'—', col:'var(--mu)'};
+  var margen = dias - lead;               // días de aquí a la fecha límite de pedido
+  if(margen < 0) return {txt:'⚠️ ya tarde', col:'#ff5c5c'};
+  var d=new Date(); d.setDate(d.getDate()+margen);
+  var col = margen<=7 ? '#ff5c5c' : margen<=21 ? '#f5b23e' : 'var(--tx)';
+  return {txt: fechaCorta(d), col:col};
+}
+function stkRender(){
+  var recep=+document.getElementById('lt-recep').value||0;
+  var lb=(+document.getElementById('lt-barco').value||0)+recep;
+  var lt=(+document.getElementById('lt-tren').value||0)+recep;
+  var la=(+document.getElementById('lt-aire').value||0)+recep;
+  var tb=document.getElementById('stk-tabla'), datos=STK.datos||[];
+  if(!datos.length){ tb.innerHTML='<tr><td colspan="8" style="padding:10px;color:var(--mu)">Sin datos de stock todavía (necesita inventario y ventas ingestados).</td></tr>'; return; }
+  tb.innerHTML=datos.map(function(p){
+    var cob = p.dias==null ? 'sin ventas' : p.dias+'d';
+    var colCob = p.dias==null?'var(--mu)':(p.dias<=15?'#ff5c5c':p.dias<=30?'#f5b23e':'#2ee6a0');
+    var b=stkFechaLimite(p.dias,lb), t=stkFechaLimite(p.dias,lt), a=stkFechaLimite(p.dias,la);
+    return '<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+      '<td style="padding:6px 8px;max-width:240px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+stkEsc(p.nombre||p.sku)+'</span></td>'+
+      '<td style="padding:6px 8px;font-weight:700">'+p.disponible+'</td>'+
+      '<td style="padding:6px 8px;color:var(--mu2)">'+(p.entrante||0)+'</td>'+
+      '<td style="padding:6px 8px">'+f(p.vel,2)+'</td>'+
+      '<td style="padding:6px 8px;color:'+colCob+';font-weight:600">'+cob+'</td>'+
+      '<td style="padding:6px 8px;color:'+b.col+'">'+b.txt+'</td>'+
+      '<td style="padding:6px 8px;color:'+t.col+'">'+t.txt+'</td>'+
+      '<td style="padding:6px 8px;color:'+a.col+'">'+a.txt+'</td></tr>';
+  }).join('');
+}
+function stkCargar(){
+  if(!STK.base) return;
+  var st=document.getElementById('stk-status');
+  st.textContent='🔄 Cargando tu stock…';
+  fetch(STK.base+'/v1/stock',{headers:{'Authorization':'Bearer '+STK.tok}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      STK.datos=(d&&d.datos)||[];
+      var urg=STK.datos.filter(function(p){return p.dias!=null&&p.dias<=15;}).length;
+      st.innerHTML=STK.datos.length+' productos · <b style="color:#ff5c5c">'+urg+'</b> con menos de 15 días de cobertura';
+      stkRender();
+    })
+    .catch(function(){ st.innerHTML='<span style="color:#f5b23e">No pude cargar el stock. ¿Has iniciado sesión?</span>'; });
+}
+(function stkInit(){
+  try{ STK.base=(localStorage.getItem('sb_api_base')||'').replace(/\/$/,''); STK.tok=sessionStorage.getItem('fba_token')||''; }catch(e){}
+  if(STK.base&&STK.tok){ var c=document.getElementById('card-stock-real'); if(c){ c.style.display='block'; stkCargar(); } }
+})();
 </script>
 </body>
 </html>

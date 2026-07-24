@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v32-presupuestos'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v33-stock-reposicion'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -369,6 +369,27 @@ export default {
           };
         }).sort((a, b) => (b.pct || 0) - (a.pct || 0) || b.devoluciones - a.devoluciones);
         return json({ desde, hasta, datos }, cors);
+      }
+
+      // --- STOCK: TODOS los productos con stock real, en camino, salida media
+      //     (uds/día 30d) y días de cobertura. El front calcula la fecha límite de
+      //     pedido según el método de envío (barco/tren/aire) + recepción Amazon. ---
+      if (url.pathname === '/v1/stock') {
+        const inv = {};
+        try { for (const r of (await selectSupabase(env, 'inventario?select=sku,disponible,entrante'))) inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0 }; } catch (_) {}
+        const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+        const vel = {};
+        try { for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds', []))) { const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0); } } catch (_) {}
+        const cat = {};
+        try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre'))) cat[c.sku] = c.nombre; } catch (_) {}
+        const skus = new Set([...Object.keys(inv), ...Object.keys(vel)]);
+        const datos = [...skus].filter(s => !/^amzn\.gr\./i.test(s)).map(s => {
+          const disp = (inv[s] && inv[s].disp) || 0, ent = (inv[s] && inv[s].ent) || 0;
+          const v = (vel[s] || 0) / 30;                          // uds/día (media 30 días)
+          const dias = v > 0 ? Math.floor(disp / v) : null;      // cobertura; null = sin ventas
+          return { sku: s, nombre: cat[s] || s, disponible: disp, entrante: ent, vel: +v.toFixed(2), dias };
+        }).sort((a, b) => (a.dias == null ? 99999 : a.dias) - (b.dias == null ? 99999 : b.dias));
+        return json({ datos }, cors);
       }
 
       // --- SOBRECOSTES de logística (fugas de tarifa cross-border) → tabla + datos
