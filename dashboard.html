@@ -433,6 +433,23 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   </div>
   <div id="mapa-tip" style="display:none;position:fixed;z-index:9999;pointer-events:none;background:#0b0b0b;border:1px solid var(--bd2);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--tx);box-shadow:0 4px 18px rgba(0,0,0,.5)"></div>
 
+  <!-- MODAL PLAN DE LA SEMANA (en grande) -->
+  <div id="plan-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.65);backdrop-filter:blur(2px)" onclick="if(event.target===this)cerrarPlan()">
+    <div style="max-width:840px;margin:3vh auto;max-height:94vh;overflow-y:auto;background:#0D0D0D;border:1px solid var(--bd2);border-radius:16px;padding:22px 24px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px">
+        <h2 style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800">✍️ Plan de la semana</h2>
+        <span onclick="cerrarPlan()" style="cursor:pointer;color:var(--mu);font-size:24px;line-height:1">✕</span>
+      </div>
+      <div id="plan-potencial" style="margin-bottom:14px"></div>
+      <div id="plan-modal-body" style="font-size:14px;line-height:1.75;color:var(--tx)"></div>
+      <div style="margin-top:16px;border-top:1px solid var(--bd);padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="chip" onclick="verHistorialPlanes()">📚 Historial por semana</button>
+        <span style="font-size:11px;color:var(--mu)">Se guarda cada semana por cuenta para seguir si las correcciones funcionan.</span>
+      </div>
+      <div id="plan-historial" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+
   <!-- MODAL DETALLE DE PRODUCTO (operaciones reales de Amazon) -->
   <div id="det-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)" onclick="if(event.target===this)cerrarDetalle()">
     <div style="max-width:820px;margin:3vh auto;max-height:94vh;overflow-y:auto;background:#0D0D0D;border:1px solid var(--bd2);border-radius:16px;padding:20px">
@@ -1083,7 +1100,7 @@ function cargarVentasPais(){
 function renderCerebro(){
   var total=0, h='';
   ACCIONES.forEach(function(a){
-    total+=parseFloat(a.v.replace('+','').replace(',','.'));
+    var m=/([\d.,]+)\s*€/.exec(a.v||''); total+= m?parseFloat(m[1].replace(/\./g,'').replace(',','.')):0;
     h+='<div class="accion"><div class="aic" style="background:'+a.bg+'">'+a.ic+'</div>'+
        '<div><div class="at">'+a.t+'</div><div class="av" style="color:'+a.c+'">'+a.v+'</div><div class="ap">'+a.p+'</div></div></div>';
   });
@@ -1104,15 +1121,65 @@ function mdMini(t){
   return out.join('');
 }
 
+function abrirPlan(){ document.getElementById('plan-modal').style.display='block'; }
+function cerrarPlan(){ document.getElementById('plan-modal').style.display='none'; }
+function planPotencialHTML(pot){
+  return '<div style="padding:13px 15px;background:rgba(46,230,160,.08);border:1px solid rgba(46,230,160,.3);border-radius:12px">'+
+    '<span style="font-size:12px;color:var(--mu2)">Potencial total esta semana</span>'+
+    '<div style="font-family:Syne,sans-serif;font-size:27px;font-weight:800;color:var(--or2);line-height:1.1;margin-top:2px">≈ '+f(pot||0,2)+'€/mes</div>'+
+    '<div style="font-size:11px;color:var(--mu);margin-top:3px">suma de negativizaciones PPC + sobrecostes de logística recuperables</div></div>';
+}
+// Historial de planes por cuenta conectada (localStorage)
+function cuentaKey(){
+  var e=''; try{ e=(document.getElementById('cx-auto-email')||{}).textContent||''; }catch(_){}
+  e=e.replace(/[()\s]/g,''); return 'sb_planes_'+(e||'cuenta');
+}
+function historialPlanes(){ try{ return JSON.parse(localStorage.getItem(cuentaKey())||'[]'); }catch(e){ return []; } }
+function guardarPlanHist(plan,pot,n){
+  try{ var k=cuentaKey(); var arr=JSON.parse(localStorage.getItem(k)||'[]');
+    arr.unshift({ts:new Date().toISOString(),potencial:pot,n:n,plan:plan,aplicado:false});
+    localStorage.setItem(k, JSON.stringify(arr.slice(0,20)));
+  }catch(e){}
+}
+function marcarPlanAplicado(i,val){ try{ var k=cuentaKey(); var arr=JSON.parse(localStorage.getItem(k)||'[]'); if(arr[i]){arr[i].aplicado=!!val; localStorage.setItem(k,JSON.stringify(arr));} }catch(e){} }
+function verPlanGuardado(i){ var p=historialPlanes()[i]; if(!p)return;
+  document.getElementById('plan-potencial').innerHTML=planPotencialHTML(p.potencial);
+  document.getElementById('plan-modal-body').innerHTML=mdMini(p.plan||'');
+  document.getElementById('plan-historial').style.display='none';
+}
+function verHistorialPlanes(){
+  var box=document.getElementById('plan-historial'); if(!box)return;
+  if(box.style.display!=='none'){ box.style.display='none'; return; }
+  box.style.display='block';
+  var arr=historialPlanes();
+  if(!arr.length){ box.innerHTML='<div style="font-size:12px;color:var(--mu)">Aún no hay planes guardados. Se guardan al generarlos.</div>'; return; }
+  var h='<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Si el potencial €/mes baja semana a semana, tus correcciones están funcionando.</div>';
+  arr.forEach(function(p,i){
+    var fecha=new Date(p.ts).toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'});
+    h+='<div style="border-top:1px solid rgba(255,255,255,.06);padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'+
+      '<div style="font-size:12.5px"><b>'+fecha+'</b> · <b style="color:#ff8a8a">'+f(p.potencial||0,0)+'€/mes</b> · '+(p.n||0)+' acciones'+
+      ' <label style="font-size:11px;color:var(--mu);margin-left:6px"><input type="checkbox" '+(p.aplicado?'checked':'')+' onchange="marcarPlanAplicado('+i+',this.checked)"> aplicado</label></div>'+
+      '<button class="chip" onclick="verPlanGuardado('+i+')">Ver</button></div>';
+  });
+  box.innerHTML=h;
+}
 function generarPlanIA(){
   var btn=document.getElementById('btn-plan'), box=document.getElementById('plan-ia');
   if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){box.innerHTML='<span style="color:var(--am)">Conecta la API (Ajustes) para usar el plan con IA.</span>';return;}
-  btn.disabled=true; var txt0=btn.textContent; btn.textContent='🧠 Pensando…'; box.innerHTML='';
-  fetch(SB_CONFIG.apiBase+'/v1/plan',{method:'POST',headers:{'Authorization':'Bearer '+SB_CONFIG.apiKey}})
+  btn.disabled=true; var txt0=btn.textContent; btn.textContent='🧠 Pensando…';
+  box.innerHTML='<span style="color:var(--mu)">🧠 Generando tu plan…</span>';
+  fetch(SB_CONFIG.apiBase+'/v1/plan',{method:'POST',headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(d){
-      if(d.plan){box.innerHTML=mdMini(d.plan)+'<div style="font-size:10px;color:var(--mu);margin-top:8px">Generado por '+(d.modelo||'IA')+' sobre '+(d.n_acciones||0)+' acciones · las cifras salen de tus datos reales</div>';}
-      else box.innerHTML='<span style="color:var(--mu)">'+(d.mensaje||d.error||'No se pudo generar el plan.')+'</span>';
+      if(d.plan){
+        var pot=d.potencial_mes||0;
+        document.getElementById('plan-potencial').innerHTML=planPotencialHTML(pot);
+        document.getElementById('plan-modal-body').innerHTML=mdMini(d.plan)+'<div style="font-size:10px;color:var(--mu);margin-top:12px">Generado por '+(d.modelo||'SellerBrain IA')+' sobre '+(d.n_acciones||0)+' acciones · las cifras salen de tus datos reales</div>';
+        document.getElementById('plan-historial').style.display='none';
+        guardarPlanHist(d.plan,pot,d.n_acciones||0);
+        abrirPlan();
+        box.innerHTML='<span style="color:var(--gn)">✓ Plan generado</span> · <a href="#" onclick="abrirPlan();return false" style="color:var(--or2)">ver en grande</a> · potencial ≈ '+f(pot,0)+'€/mes';
+      } else box.innerHTML='<span style="color:var(--mu)">'+(d.mensaje||d.error||'No se pudo generar el plan.')+'</span>';
     })
     .catch(function(e){box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>';})
     .then(function(){btn.disabled=false;btn.textContent=txt0;});

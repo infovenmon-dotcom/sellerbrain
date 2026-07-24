@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v29-sobrecostes'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v30-plan-potencial'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -532,10 +532,16 @@ export default {
         if (!acciones.length) return json({ plan: null, mensaje: 'No hay acciones esta semana.' }, cors);
         // Contexto ligero: títulos de producto para que la IA juzgue relevancia de términos.
         const contexto = { productos: (productos || []).slice(0, 50).map(p => ({ sku: p.sku, nombre: p.nom })) };
+        // Potencial total en €/mes = suma de todos los importes en € de las acciones
+        // (negativizaciones + sobrecostes de logística recuperables + …).
+        const potencial_mes = +(acciones.reduce((a, x) => {
+          const m = /([\d.,]+)\s*€/.exec(x.v || '');
+          return a + (m ? parseFloat(m[1].replace(/\./g, '').replace(',', '.')) : 0);
+        }, 0)).toFixed(2);
         try {
           const plan = await generarPlanClaude(env, acciones, contexto);
-          if (!plan) return json({ plan: null, mensaje: 'IA no disponible (falta ANTHROPIC_API_KEY).', acciones }, cors);
-          return json({ plan, modelo: MODELO_IA, generado: new Date().toISOString(), n_acciones: acciones.length }, cors);
+          if (!plan) return json({ plan: null, mensaje: 'IA no disponible (falta ANTHROPIC_API_KEY).', acciones, potencial_mes }, cors);
+          return json({ plan, modelo: 'SellerBrain IA', potencial_mes, generado: new Date().toISOString(), n_acciones: acciones.length }, cors);
         } catch (e) {
           return json({ error: e.message, acciones }, cors, 500);
         }
@@ -1663,9 +1669,11 @@ async function generarPlanClaude(env, acciones, contexto) {
     'lenguaje claro y directo, y juzgar la RELEVANCIA de cada término: si un término de ' +
     'búsqueda no encaja con el producto, confirma negativizar; si es relevante pero caro, ' +
     'recomienda bajar la puja en vez de negativizar. Responde en español, en Markdown, breve ' +
-    'y accionable. Estructura: (1) un titular con el ahorro total en € (suma SOLO los € de las ' +
-    'acciones de negativizar que te paso), (2) "Haz primero" (máximo 5, cada una con su porqué en ' +
-    'una línea), (3) "Vigila" (máximo 3). Nada de relleno ni de introducciones.';
+    'y accionable. Estructura: (1) un TITULAR con el potencial total en €/mes = SUMA de TODOS ' +
+    'los importes en € de las acciones que te paso (negativizaciones + sobrecostes de logística ' +
+    'recuperables); di además de dónde sale (cuánto de ahorro en PPC y cuánto de logística). ' +
+    '(2) "Haz primero" (máximo 5): cada línea con su € o ACoS y la CONSECUENCIA (qué ganas si lo ' +
+    'haces o qué pierdes si no). (3) "Vigila" (máximo 3). Nada de relleno ni de introducciones.';
   const user = 'Acciones y contexto de esta semana (JSON):\n' +
     JSON.stringify({ acciones: acciones, contexto: contexto || {} }).slice(0, 12000);
   const r = await fetch('https://api.anthropic.com/v1/messages', {
