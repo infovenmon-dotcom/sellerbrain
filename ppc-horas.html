@@ -134,7 +134,7 @@ td{padding:6px;border-bottom:1px solid rgba(255,255,255,.05)}
 <!-- DATOS REALES (conectado) — solo aparece si hay sesión -->
 <div class="card" id="card-real" style="display:none;border:1.5px solid rgba(46,230,160,.45)">
   <div class="ct"><span class="ci">🟢</span> Tus datos reales — sin subir nada</div>
-  <div class="inf">SellerBrain captura cada hora una foto de tu PPC. Elige <b>país</b> y las <b>campañas</b> que quieras analizar y saca tus franjas reales. <span style="color:var(--mu)">El detalle por campaña se va llenando desde hoy; el mapa de calor por día de la semana se afina a ~14 días.</span></div>
+  <div class="inf">SellerBrain captura cada hora una foto de tu PPC. Elige <b>país</b> y las <b>campañas</b> que quieras analizar y saca tus franjas reales, <b>en hora peninsular de España</b>. <span style="color:var(--mu)">El detalle por campaña se va llenando desde hoy; el mapa de calor por día de la semana se afina a ~14 días.</span></div>
   <div class="fr">
     <div>
       <label>País</label>
@@ -688,11 +688,26 @@ function pphStatusInicial(){
   }
 }
 
+// Las fotos se guardan en hora UTC. Convierte (fecha, hora UTC) a hora peninsular
+// de España (Europe/Madrid), respetando el cambio verano/invierno y el salto de
+// día si cruza medianoche. Así el eje y el mapa de calor salen en tu hora real.
+function aHoraEspana(fecha, horaUTC){
+  try{
+    var d = new Date(Date.UTC(+fecha.slice(0,4), +fecha.slice(5,7)-1, +fecha.slice(8,10), horaUTC, 0, 0));
+    var p = {};
+    new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Madrid',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hour12:false})
+      .formatToParts(d).forEach(function(x){ p[x.type]=x.value; });
+    return p.year+'-'+p.month+'-'+p.day+'T'+(p.hour==='24'?'00':p.hour)+':00';
+  }catch(e){
+    return fecha+'T'+String(horaUTC).padStart(2,'0')+':00';   // fallback: UTC
+  }
+}
+
 // Convierte las filas del backend (fecha, hora, gasto…) al formato que espera procesar().
 function pphRows(reciente){
   return (reciente||[]).map(function(r){
     return {
-      Fecha: r.fecha + 'T' + String(r.hora).padStart(2,'0') + ':00',
+      Fecha: aHoraEspana(r.fecha, r.hora),
       Clics: r.clics||0, Gasto: r.gasto||0, Ventas: r.ventas||0,
       Pedidos: r.pedidos||0, Impresiones: r.impresiones||0
     };
