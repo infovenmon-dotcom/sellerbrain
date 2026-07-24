@@ -120,3 +120,8 @@ order by gasto desc;
 -- Comprobar (cuando haya varias horas capturadas por campaña):
 -- select * from v_ppc_camp_activas order by pais, gasto desc;
 -- select * from v_ppc_hora_camp order by fecha desc, hora desc limit 40;
+
+
+-- La captura horaria deja el informe en pendiente (tipo 'hora') si Amazon tarda;
+-- necesita guardar la hora objetivo para recogerlo luego en la franja correcta.
+alter table ppc_pendientes add column if not exists hora int;

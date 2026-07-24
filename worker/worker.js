@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v25-ppc-diagnostico'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v26-ppc-horas-pendiente'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1059,6 +1059,7 @@ async function recogerPendientesPPC(env) {
         const data = await descargarInformeAds(j.url);
         if (p.tipo === 'dia') await guardarPPCdia(env, data, p.pais, p.fecha);
         else if (p.tipo === 'producto') await guardarPPCproducto(env, data, p.pais, p.desde, p.hasta);
+        else if (p.tipo === 'hora') await guardarPPChoraSnap(env, data, p.pais, p.fecha, p.hora);
         else await guardarPPCterminos(env, data, p.pais, p.desde, p.hasta);
         await borrarPendientePPC(env, p.report_id); recogidos++;
       } else if (j.status === 'FAILURE') {
@@ -1082,34 +1083,43 @@ async function capturarPPCHora(env) {
     try {
       const headers = await cabecerasAds(env, profileId);
       const reportId = await crearReporteAds(headers, cuerpoAdsDia(hoy));
-      const data = await sondearInformeAds(headers, reportId, 5, 12000);   // ~60s; si no está, se salta esta hora
-      if (!data) { diag.push({ pais, estado: 'informe_no_listo' }); continue; }
-      const t = (data || []).reduce((a, c) => ({
-        g: a.g + (c.cost || 0), cl: a.cl + (c.clicks || 0), im: a.im + (c.impressions || 0),
-        v: a.v + (c.sales14d || 0), pe: a.pe + (c.purchases14d || 0)
-      }), { g: 0, cl: 0, im: 0, v: 0, pe: 0 });
-      const ts = new Date().toISOString();
-      await upsertSupabase(env, 'ppc_hora_snap', [{
-        pais, fecha: hoy, hora,
-        gasto: +t.g.toFixed(2), clics: t.cl, impresiones: t.im,
-        ventas: +t.v.toFixed(2), pedidos: t.pe, ts
-      }]);
-      // Foto POR CAMPAÑA (el informe ya viene agrupado por campaña) → permite
-      // filtrar el analisis por horas a las campañas que elija el usuario.
-      const filasCamp = (data || [])
-        .filter(c => c.campaignId != null)
-        .map(c => ({
-          pais, fecha: hoy, hora,
-          campania_id: String(c.campaignId),
-          campania: c.campaignName || '',
-          gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
-          ventas: +(c.sales14d || 0).toFixed(2), pedidos: c.purchases14d || 0, ts
-        }));
-      if (filasCamp.length) await upsertSupabase(env, 'ppc_hora_camp_snap', filasCamp);
-      diag.push({ pais, estado: 'ok', gasto: +t.g.toFixed(2), campanas: filasCamp.length });
+      // Deja el informe en PENDIENTE antes de sondear: si Amazon tarda >~48s en
+      // generarlo, la recogida (ahora horaria) lo guardará en la próxima pasada,
+      // en vez de perderse (que es lo que dejaba ppc_hora_snap vacío).
+      await guardarPendientePPC(env, { report_id: reportId, pais, tipo: 'hora', fecha: hoy, hora });
+      const data = await sondearInformeAds(headers, reportId, 4, 12000);   // ~48s
+      if (!data) { diag.push({ pais, estado: 'pendiente' }); continue; }
+      const r = await guardarPPChoraSnap(env, data, pais, hoy, hora);
+      await borrarPendientePPC(env, reportId);
+      diag.push({ pais, estado: 'ok', gasto: r.gasto, campanas: r.campanas });
     } catch (e) { diag.push({ pais, estado: 'error', msg: ((e && e.message) || String(e)).slice(0, 180) }); }
   }
   return diag;
+}
+
+// Guarda una foto horaria (total país + por campaña) a partir del informe diario.
+// La usan tanto la captura en vivo como la recogida de pendientes de tipo 'hora'.
+async function guardarPPChoraSnap(env, data, pais, fecha, hora) {
+  const t = (data || []).reduce((a, c) => ({
+    g: a.g + (c.cost || 0), cl: a.cl + (c.clicks || 0), im: a.im + (c.impressions || 0),
+    v: a.v + (c.sales14d || 0), pe: a.pe + (c.purchases14d || 0)
+  }), { g: 0, cl: 0, im: 0, v: 0, pe: 0 });
+  const ts = new Date().toISOString();
+  await upsertSupabase(env, 'ppc_hora_snap', [{
+    pais, fecha, hora,
+    gasto: +t.g.toFixed(2), clics: t.cl, impresiones: t.im,
+    ventas: +t.v.toFixed(2), pedidos: t.pe, ts
+  }]);
+  const filasCamp = (data || [])
+    .filter(c => c.campaignId != null)
+    .map(c => ({
+      pais, fecha, hora,
+      campania_id: String(c.campaignId), campania: c.campaignName || '',
+      gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
+      ventas: +(c.sales14d || 0).toFixed(2), pedidos: c.purchases14d || 0, ts
+    }));
+  if (filasCamp.length) await upsertSupabase(env, 'ppc_hora_camp_snap', filasCamp);
+  return { gasto: +t.g.toFixed(2), campanas: filasCamp.length };
 }
 
 /* =====================================================================
