@@ -1146,7 +1146,7 @@ function renderSatisfaccion(datos){
   var h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
     '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">Estrellas (est.)</th>'+
-    '<th style="padding:6px 8px">Devol.</th><th style="padding:6px 8px">De calidad</th>'+
+    '<th style="padding:6px 8px">Devol.</th><th style="padding:6px 8px" title="Devoluciones ÷ unidades vendidas (90 días)">% Devol.</th><th style="padding:6px 8px">De calidad</th>'+
     '<th style="padding:6px 8px">Motivo principal</th><th style="padding:6px 8px">Señal</th></tr></thead><tbody>';
   datos.forEach(function(d){
     var c=col[d.senal]||'#888';
@@ -1155,6 +1155,7 @@ function renderSatisfaccion(datos){
       '<td style="padding:7px 8px">'+img+'<span style="font-weight:600">'+(d.nombre||d.sku)+'</span> <a href="https://sellercentral.amazon.es/skucentral?mSku='+encodeURIComponent(d.sku||'')+'" target="_blank" rel="noopener" title="Abrir en Seller Central" style="color:#4A9EDE;text-decoration:none">↗</a></td>'+
       '<td style="padding:7px 8px;color:#f5b23e;letter-spacing:1px">'+estrellasHTML(d.estrellas_est)+' <span style="color:var(--mu);font-size:11px">'+(d.estrellas_est||'')+'</span></td>'+
       '<td style="padding:7px 8px">'+(d.devoluciones||0)+'</td>'+
+      '<td style="padding:7px 8px" title="'+(d.uds_vendidas||0)+' uds vendidas (90 días)"><span style="font-weight:600;color:'+(d.pct_devolucion>=10?'#ff5c5c':d.pct_devolucion>=5?'#f5b23e':'var(--mu2)')+'">'+(d.pct_devolucion!=null?f(d.pct_devolucion,1)+'%':'—')+'</span></td>'+
       '<td style="padding:7px 8px;color:'+(d.criticas>0?'#ff8a8a':'var(--mu)')+'">'+(d.criticas||0)+'</td>'+
       '<td style="padding:7px 8px;color:var(--mu2)">'+motivoBonito(d.motivo_top)+'</td>'+
       '<td style="padding:7px 8px"><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;color:'+c+';background:'+c+'22">'+(eti[d.senal]||'')+'</span></td></tr>';
@@ -1209,8 +1210,8 @@ function aplicarDatos(d){
   try{
     if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); }
     else{ renderSatisfaccion([
-      {sku:'DEMO-1',nombre:'Set de botellas (ejemplo)',estrellas_est:2.6,devoluciones:5,criticas:3,motivo_top:'DEFECTIVE',senal:'rojo'},
-      {sku:'DEMO-2',nombre:'Jabón natural (ejemplo)',estrellas_est:4.3,devoluciones:2,criticas:0,motivo_top:'FOUND_BETTER_PRICE',senal:'verde'}
+      {sku:'DEMO-1',nombre:'Set de botellas (ejemplo)',estrellas_est:2.6,devoluciones:5,criticas:3,pct_devolucion:8.5,uds_vendidas:59,motivo_top:'DEFECTIVE',senal:'rojo'},
+      {sku:'DEMO-2',nombre:'Jabón natural (ejemplo)',estrellas_est:4.3,devoluciones:2,criticas:0,pct_devolucion:1.2,uds_vendidas:168,motivo_top:'FOUND_BETTER_PRICE',senal:'verde'}
     ]); }
   }catch(e){}
   avisoDatos();

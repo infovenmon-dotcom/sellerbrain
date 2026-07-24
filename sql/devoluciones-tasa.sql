@@ -1,34 +1,13 @@
 -- =====================================================================
--- v10 · PPC desacoplado + Satisfacción del cliente
--- Ejecuta en Supabase → SQL Editor (mejor en pestaña de incógnito para
--- evitar el fallo de la traducción automática de Chrome).
--- Es seguro re-ejecutar: usa "if not exists" y "create or replace".
+-- % de DEVOLUCIÓN por artículo + motivos. Ejecuta en Supabase -> SQL Editor.
+-- Idempotente. Amplía v_satisfaccion_producto añadiendo, al final, dos columnas:
+--   uds_vendidas   = unidades vendidas del SKU (últimos 90 días)
+--   pct_devolucion = devoluciones ÷ uds vendidas (%), últimos 90 días
+-- Todo (devoluciones, motivos y %) se calcula sobre los últimos 90 días para que
+-- la tasa sea comparable. Los motivos ya venían clasificados (crítico = problema
+-- del producto → posible reseña 1-2★; logística = transporte; neutro = otros).
 -- =====================================================================
 
--- 1) COLA DE INFORMES PPC PENDIENTES ----------------------------------
---    Los informes de Amazon Ads pueden tardar >4 min. Guardamos su id aquí
---    y una "pasada de recogida" (botón /v1/ppc/recoger o el cron) los ingesta
---    en cuanto Amazon los tiene listos. Así el PPC entra SIEMPRE.
-create table if not exists ppc_pendientes (
-  report_id text primary key,          -- id del informe en Amazon Ads
-  pais      text not null,             -- ES / FR / IT
-  tipo      text not null,             -- 'dia' | 'terminos'
-  fecha     text,                      -- para tipo 'dia' (YYYY-MM-DD)
-  desde     text,                      -- para tipo 'terminos'
-  hasta     text,                      -- para tipo 'terminos'
-  creado    timestamptz not null default now()
-);
-alter table ppc_pendientes enable row level security;
-
--- 2) SATISFACCIÓN DEL CLIENTE POR PRODUCTO ----------------------------
---    Amazon NO da las reseñas por API. Lo único oficial que sí manda es el
---    MOTIVO de cada devolución → lo usamos como señal de satisfacción real.
---    Clasificamos cada devolución en:
---      · crítico   → problema del PRODUCTO (defecto, calidad, no era lo descrito)
---                    = lo que suele acabar en una reseña de 1-2★
---      · logística → daño en transporte / centro logístico (no es el producto)
---      · neutro    → cambio de opinión, pedido equivocado, mejor precio…
---    "estrellas_est" es un PROXY orientativo (no la reseña real de Amazon).
 create or replace view v_satisfaccion_producto as
 with d as (
   select
@@ -65,7 +44,6 @@ select
   sum(c.cantidad) filter (where c.bucket = 'neutro')::int     as neutras,
   round(100.0 * sum(c.cantidad) filter (where c.bucket = 'critico')
         / nullif(sum(c.cantidad), 0), 0)                      as pct_criticas,
-  -- 5★ menos penalización proporcional a las devoluciones de calidad
   greatest(1.0, round(5 - 4.0 * sum(c.cantidad) filter (where c.bucket = 'critico')
         / nullif(sum(c.cantidad), 0), 1))                     as estrellas_est,
   mode() within group (order by c.motivo)                     as motivo_top,
@@ -85,4 +63,5 @@ left join ventas v on v.sku = c.sku
 group by c.sku, v.uds;
 
 -- Comprobar:
--- select * from v_satisfaccion_producto order by criticas desc, devoluciones desc;
+-- select sku, devoluciones, uds_vendidas, pct_devolucion, motivo_top, senal
+-- from v_satisfaccion_producto order by pct_devolucion desc nulls last;
