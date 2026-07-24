@@ -540,8 +540,8 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   </div>
 
   <div class="card">
-    <div class="ch"><h2><span class="ci">📦</span> Riesgo de stock</h2></div>
-    <div id="stock"></div>
+    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleStock()"><h2><span class="ci">📦</span> Riesgo de stock <span id="stock-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
+    <div id="stock" style="display:none"></div>
   </div>
 
   <div class="card">
@@ -1124,6 +1124,13 @@ function renderAlertas(){
   document.getElementById('alertas').innerHTML=h;
 }
 
+function toggleStock(){
+  var box=document.getElementById('stock'); if(!box)return;
+  var caret=document.getElementById('stock-caret');
+  var abrir=box.style.display==='none';
+  box.style.display=abrir?'block':'none';
+  if(caret) caret.innerHTML=(window._stockResumen||'')+(abrir?'  ▾ ocultar':'  ▸ ver');
+}
 function renderStock(){
   var h='';
   STOCK.forEach(function(s){
@@ -1133,6 +1140,14 @@ function renderStock(){
        '<div class="dias" style="color:'+s.c+'">'+s.dias+' días</div></div>';
   });
   document.getElementById('stock').innerHTML=h;
+  // Resumen para la cabecera plegada: X sin stock (0 días) · Y en riesgo (el resto)
+  var aCero=(STOCK||[]).filter(function(s){return (+s.dias||0)===0;}).length;
+  var enRiesgo=(STOCK||[]).length-aCero;
+  window._stockResumen = (STOCK&&STOCK.length)
+    ? ' <b style="color:#ff8a8a">'+aCero+' a cero</b> · '+enRiesgo+' en riesgo'
+    : ' 👍 sin riesgos';
+  var caret=document.getElementById('stock-caret');
+  if(caret && document.getElementById('stock').style.display==='none') caret.innerHTML=window._stockResumen+'  ▸ ver';
 }
 
 /* ===== SATISFACCIÓN DEL CLIENTE (a partir de motivos de devolución) ===== */
