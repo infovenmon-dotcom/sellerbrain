@@ -1230,27 +1230,60 @@ function toggleFugas(){
   box.style.display=abrir?'block':'none';
   if(caret) caret.innerHTML=(window._fugasResumen||'')+(abrir?'  ▾ ocultar':'  ▸ ver');
 }
-function fugasHTML(total){
-  var h='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+
-    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+function keyFuga(x){ return (x.sku||'')+'|'+(x.pais||''); }
+function fugasHechasSet(){ try{ return new Set(JSON.parse(localStorage.getItem('sb_fugas_hechas')||'[]')); }catch(e){ return new Set(); } }
+function guardarHechas(s){ try{ localStorage.setItem('sb_fugas_hechas', JSON.stringify(Array.prototype.slice.call(s))); }catch(e){} }
+function marcarFuga(k){ var s=fugasHechasSet(); s.add(k); guardarHechas(s); pintarFugas(); }
+function reactivarFuga(k){ var s=fugasHechasSet(); s.delete(k); guardarHechas(s); pintarFugas(); }
+
+function filaFuga(x, hecho){
+  var k=keyFuga(x).replace(/'/g,'');
+  var acc = hecho
+    ? '<button class="chip" style="cursor:pointer" onclick="reactivarFuga(\''+k+'\')">↩ Reactivar</button>'
+    : '<button class="chip" style="cursor:pointer" onclick="copiarCasoK(\''+k+'\')">📋 Mensaje</button> <button class="chip" style="cursor:pointer;border-color:rgba(46,230,160,.45);color:var(--or2)" onclick="marcarFuga(\''+k+'\')">✓ Hecho</button>';
+  return '<tr style="border-top:1px solid rgba(255,255,255,.06)'+(hecho?';opacity:.5':'')+'">'+
+    '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
+    '<td style="padding:7px 8px">'+(x.pais||'')+'</td>'+
+    '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
+    '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
+    '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
+    '<td style="padding:7px 8px;font-weight:700;color:#ff8a8a">'+f(x.sobrecoste_mes,2)+'€</td>'+
+    '<td style="padding:7px 8px;white-space:nowrap">'+acc+'</td></tr>';
+}
+function tablaFugas(rows, hecho){
+  var h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
     '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">País</th><th style="padding:6px 8px">Uds</th>'+
     '<th style="padding:6px 8px" title="Tarifa media que pagas vs tu mejor tarifa local (sin IVA)">Media / Local</th>'+
     '<th style="padding:6px 8px" title="% de unidades servidas caras (cross-border)">% Caras</th>'+
-    '<th style="padding:6px 8px">€/mes</th><th style="padding:6px 8px">Caso</th></tr></thead><tbody>';
-  FUGAS.forEach(function(x,i){
-    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
-      '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
-      '<td style="padding:7px 8px">'+(x.pais||'')+'</td>'+
-      '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
-      '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
-      '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
-      '<td style="padding:7px 8px;font-weight:700;color:#ff8a8a">'+f(x.sobrecoste_mes,2)+'€</td>'+
-      '<td style="padding:7px 8px"><button class="chip" style="cursor:pointer" onclick="copiarCaso('+i+')">📋 Mensaje</button></td></tr>';
-  });
-  h+='</tbody></table></div>'+
-    '<div style="margin-top:9px;font-size:11px;color:var(--mu)">Si el producto está <b>activo en Paneuropeo</b> para ese país y aun así te cobran cross-border, el mensaje sirve para <b>reclamar el reembolso</b>. Si no, es señal para <b>mandar stock a ese país</b>.</div>';
-  return h;
+    '<th style="padding:6px 8px">€/mes</th><th style="padding:6px 8px">'+(hecho?'':'Acción')+'</th></tr></thead><tbody>';
+  rows.forEach(function(x){ h+=filaFuga(x,hecho); });
+  return h+'</tbody></table></div>';
+}
+// Pinta la tabla en la tarjeta del dash y en la pestaña, a partir de FUGAS (sin refetch).
+function pintarFugas(){
+  var done=fugasHechasSet();
+  var activos=FUGAS.filter(function(x){ return !done.has(keyFuga(x)); });
+  var hechos =FUGAS.filter(function(x){ return  done.has(keyFuga(x)); });
+  var total=activos.reduce(function(a,x){ return a+(+x.sobrecoste_mes||0); },0);
+  var h='';
+  if(activos.length){
+    h+='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+tablaFugas(activos,false);
+  } else {
+    h+='<div style="color:var(--gn);font-size:13px;margin-bottom:8px">👍 Sin sobrecostes pendientes. Todo revisado o servido en local.</div>';
+  }
+  if(hechos.length){
+    h+='<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--mu);font-size:12px">✔ Realizados / reclamados ('+hechos.length+') — pulsa para ver</summary>'+
+       '<div style="margin-top:8px">'+tablaFugas(hechos,true)+'</div></details>';
+  }
+  h+='<div style="margin-top:9px;font-size:11px;color:var(--mu)">Pulsa <b>✓ Hecho</b> cuando abras el caso o mandes stock: sale de la lista pero queda en <b>Realizados</b> por si hay que volver a reclamar. Si está <b>activo en Paneuropeo</b> y aun así te cobran cross-border, el mensaje sirve para <b>reclamar el reembolso</b>.</div>';
+  var body=document.getElementById('fugas-body'); if(body)body.innerHTML=h;
+  var full=document.getElementById('fugas-body-full'); if(full)full.innerHTML=h;
+  var card=document.getElementById('card-fugas');
+  if(card) card.style.display=(activos.length?'block':'none');   // en el dash, solo si hay pendientes
+  window._fugasResumen = activos.length ? (' <b style="color:#ff8a8a">≈'+f(total,0)+'€/mes</b>') : '';
+  var caret=document.getElementById('fugas-caret'), coll=document.getElementById('fugas-collapse');
+  if(caret && coll && coll.style.display==='none') caret.innerHTML=window._fugasResumen+'  ▸ ver';
 }
 function cargarFugas(){
   var card=document.getElementById('card-fugas');
@@ -1262,24 +1295,7 @@ function cargarFugas(){
   }
   fetch(SB_CONFIG.apiBase+'/v1/fugas',{headers:authHdr()})
     .then(function(r){return r.json();})
-    .then(function(d){
-      FUGAS=(d&&d.datos)||[];
-      var total=(d&&d.total_mes)||0;
-      if(!FUGAS.length){
-        if(card)card.style.display='none';   // en el dash no molesta si no hay fugas
-        if(full)full.innerHTML='<div style="color:var(--gn);font-size:13px">👍 Sin sobrecostes de logística en los últimos 90 días. Tus envíos van a tarifa local.</div>';
-        window._fugasResumen='';
-        var cr=document.getElementById('fugas-caret'); if(cr)cr.textContent='  ▸ ver';
-        return;
-      }
-      var html=fugasHTML(total);
-      var body=document.getElementById('fugas-body'); if(body)body.innerHTML=html;
-      if(full)full.innerHTML=html;
-      if(card)card.style.display='block';
-      window._fugasResumen=' <b style="color:#ff8a8a">≈'+f(total,0)+'€/mes</b>';
-      var caret=document.getElementById('fugas-caret');
-      if(caret && document.getElementById('fugas-collapse').style.display==='none') caret.innerHTML=window._fugasResumen+'  ▸ ver';
-    })
+    .then(function(d){ FUGAS=(d&&d.datos)||[]; pintarFugas(); })
     .catch(function(){ if(card)card.style.display='none'; if(full)full.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
 
@@ -1289,8 +1305,8 @@ function msgCaso(x){
     'He detectado que en los últimos 90 días una parte relevante de las unidades ('+f(x.pct_caras,0)+'%) se ha servido a una tarifa de gestión superior a la local: tarifa media '+f(x.fee_medio,2)+' € frente a '+f(x.fee_local,2)+' € local, sobre '+(x.uds||0)+' unidades. Esto supone un sobrecoste estimado de '+f(x.sobrecoste_mes,2)+' €/mes.\n\n'+
     'Solicito: (1) confirmación de por qué estas unidades no se sirvieron a tarifa local, (2) revisión de mi estado/elegibilidad en el Programa Paneuropeo de Logística para este ASIN, y (3) si procede, el reembolso de la diferencia de tarifa cobrada de más.\n\nGracias.';
 }
-function copiarCaso(i){
-  var x=FUGAS[i]; if(!x)return;
+function copiarCasoK(k){
+  var x=FUGAS.filter(function(y){ return keyFuga(y).replace(/'/g,'')===k; })[0]; if(!x)return;
   var txt=msgCaso(x);
   var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select();
   try{ document.execCommand('copy'); alert('✓ Mensaje copiado. Pégalo al abrir el caso en Seller Central.'); }catch(e){ prompt('Copia el mensaje:', txt); }
