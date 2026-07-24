@@ -1333,14 +1333,15 @@ function toggleFugas(){
 function keyFuga(x){ return (x.sku||'')+'|'+(x.pais||''); }
 function fugasHechasSet(){ try{ return new Set(JSON.parse(localStorage.getItem('sb_fugas_hechas')||'[]')); }catch(e){ return new Set(); } }
 function guardarHechas(s){ try{ localStorage.setItem('sb_fugas_hechas', JSON.stringify(Array.prototype.slice.call(s))); }catch(e){} }
-function marcarFuga(k){ var s=fugasHechasSet(); s.add(k); guardarHechas(s); pintarFugas(); }
-function reactivarFuga(k){ var s=fugasHechasSet(); s.delete(k); guardarHechas(s); pintarFugas(); }
+// Handlers por ÍNDICE en FUGAS (número): inmune a comillas/caracteres del SKU.
+function marcarFugaI(i){ var x=FUGAS[i]; if(!x)return; var s=fugasHechasSet(); s.add(keyFuga(x)); guardarHechas(s); pintarFugas(); }
+function reactivarFugaI(i){ var x=FUGAS[i]; if(!x)return; var s=fugasHechasSet(); s.delete(keyFuga(x)); guardarHechas(s); pintarFugas(); }
 
 function filaFuga(x, hecho){
-  var k=keyFuga(x).replace(/'/g,'');
+  var i=FUGAS.indexOf(x);
   var acc = hecho
-    ? '<button class="chip" style="cursor:pointer" onclick="reactivarFuga(\''+k+'\')">↩ Reactivar</button>'
-    : '<button class="chip" style="cursor:pointer" onclick="copiarCasoK(\''+k+'\')">📋 Mensaje</button> <button class="chip" style="cursor:pointer;border-color:rgba(46,230,160,.45);color:var(--or2)" onclick="marcarFuga(\''+k+'\')">✓ Hecho</button>';
+    ? '<button class="chip" style="cursor:pointer" onclick="reactivarFugaI('+i+')">↩ Reactivar</button>'
+    : '<button class="chip" style="cursor:pointer" onclick="copiarCasoI('+i+')">📋 Mensaje</button> <button class="chip" style="cursor:pointer;border-color:rgba(46,230,160,.45);color:var(--or2)" onclick="marcarFugaI('+i+')">✓ Hecho</button>';
   return '<tr style="border-top:1px solid rgba(255,255,255,.06)'+(hecho?';opacity:.5':'')+'">'+
     '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
     '<td style="padding:7px 8px">'+(x.pais||'')+'</td>'+
@@ -1405,8 +1406,8 @@ function msgCaso(x){
     'He detectado que en los últimos 90 días una parte relevante de las unidades ('+f(x.pct_caras,0)+'%) se ha servido a una tarifa de gestión superior a la local: tarifa media '+f(x.fee_medio,2)+' € frente a '+f(x.fee_local,2)+' € local, sobre '+(x.uds||0)+' unidades. Esto supone un sobrecoste estimado de '+f(x.sobrecoste_mes,2)+' €/mes.\n\n'+
     'Solicito: (1) confirmación de por qué estas unidades no se sirvieron a tarifa local, (2) revisión de mi estado/elegibilidad en el Programa Paneuropeo de Logística para este ASIN, y (3) si procede, el reembolso de la diferencia de tarifa cobrada de más.\n\nGracias.';
 }
-function copiarCasoK(k){
-  var x=FUGAS.filter(function(y){ return keyFuga(y).replace(/'/g,'')===k; })[0]; if(!x)return;
+function copiarCasoI(i){
+  var x=FUGAS[i]; if(!x)return;
   var txt=msgCaso(x);
   var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select();
   try{ document.execCommand('copy'); alert('✓ Mensaje copiado. Pégalo al abrir el caso en Seller Central.'); }catch(e){ prompt('Copia el mensaje:', txt); }
