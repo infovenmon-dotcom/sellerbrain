@@ -1756,7 +1756,9 @@ function lanzarIngesta(){
             }catch(e){}
           }
         }
-        pinta('Refresca el dashboard: PPC, acciones y palabras ya tienen datos. (Si algo quedó pendiente, el cron lo recoge solo.)');
+        // Recarga los datos del panel automáticamente (antes había que refrescar a mano).
+        try { await cargarDatos().then(aplicarDatos); } catch(e){}
+        pinta('✅ Datos actualizados en pantalla. (Si algo quedó pendiente, el cron lo recoge solo.)');
       })();
     })
     .catch(function(e){box.innerHTML='<span style="color:var(--rd)">Error o tardó demasiado: '+e.message+'. Si es timeout, el cron de las 03:00 lo hará solo — revisa mañana.</span>';});
