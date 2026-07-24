@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v27-cvr-conversion'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v28-devoluciones-rango'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -314,6 +314,39 @@ export default {
           imagen: (nombres[f.sku] && nombres[f.sku].imagen) || ''
         }));
         return json({ datos }, cors);
+      }
+
+      // --- DEVOLUCIONES por artículo en un RANGO de fechas: uds vendidas,
+      //     devoluciones y % de devolución (dev ÷ uds) + motivo principal. ---
+      if (url.pathname === '/v1/devoluciones') {
+        const desde = url.searchParams.get('desde');
+        const hasta = url.searchParams.get('hasta');
+        if (!desde || !hasta) return json({ error: 'faltan desde/hasta' }, cors, 400);
+        // Uds vendidas por SKU en el rango (fuente limpia: ventas_sku_pais_dia)
+        const ventas = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,uds', []);
+        const udsBySku = {};
+        for (const r of (ventas || [])) { const s = r.sku || ''; if (!s) continue; udsBySku[s] = (udsBySku[s] || 0) + (+r.uds || 0); }
+        // Devoluciones por SKU en el rango (+ motivos)
+        const devs = await selSafe(env, 'devoluciones?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cantidad,motivo', []);
+        const devBySku = {};
+        for (const r of (devs || [])) {
+          const s = r.sku || ''; if (!s || /^amzn\.gr\./i.test(s)) continue;
+          if (!devBySku[s]) devBySku[s] = { dev: 0, motivos: {} };
+          const c = +r.cantidad || 1;
+          devBySku[s].dev += c;
+          const m = (r.motivo || '').toUpperCase(); if (m) devBySku[s].motivos[m] = (devBySku[s].motivos[m] || 0) + c;
+        }
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        const skus = new Set([...Object.keys(udsBySku), ...Object.keys(devBySku)]);
+        const datos = [...skus].filter(s => !/^amzn\.gr\./i.test(s)).map(s => {
+          const uds = udsBySku[s] || 0; const d = devBySku[s] || { dev: 0, motivos: {} };
+          let motivoTop = '', max = 0; for (const m in d.motivos) { if (d.motivos[m] > max) { max = d.motivos[m]; motivoTop = m; } }
+          return {
+            sku: s, nombre: (cat[s] && cat[s].nombre) || s, asin: (cat[s] && cat[s].asin) || '', imagen: (cat[s] && cat[s].imagen) || '',
+            uds, devoluciones: d.dev, pct: uds > 0 ? +(d.dev / uds * 100).toFixed(1) : null, motivo_top: motivoTop
+          };
+        }).sort((a, b) => (b.pct || 0) - (a.pct || 0) || b.devoluciones - a.devoluciones);
+        return json({ desde, hasta, datos }, cors);
       }
 
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
@@ -1404,6 +1437,9 @@ async function productosPeriodo(env, desde, hasta, pais) {
       ppcProd[r.sku].pedidos += +r.pedidos_ppc || 0;
     }
   } catch (_) { /* aún sin ppc_producto */ }
+  // Devoluciones por SKU en el rango → % de devolución del producto (dev ÷ uds).
+  const devSku = {};
+  try { for (const r of (await selSafe(env, 'devoluciones?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cantidad', []))) { const s = r.sku || ''; if (!s) continue; devSku[s] = (devSku[s] || 0) + (+r.cantidad || 1); } } catch (_) {}
   const fin = new Date(hasta + 'T00:00:00Z');
   const dias10 = [];
   for (let i = 9; i >= 0; i--) dias10.push(new Date(fin.getTime() - i * 86400000).toISOString().slice(0, 10));
@@ -1459,6 +1495,7 @@ async function productosPeriodo(env, desde, hasta, pais) {
       uds: p.uds, ventas: +p.ventas.toFixed(2),
       coste: costeTot, comision: com, fba, devol: dev, amazon,
       real, ppc: ppcGasto, acos_real, cvr, ppc_clics: ppcClics, ppc_estado, ben, mg, breakeven, acos_obj,
+      devol_uds: devSku[p.sku] || 0, pct_devol: p.uds > 0 ? +((devSku[p.sku] || 0) / p.uds * 100).toFixed(1) : null,
       trend: dias10.map(d => p.dias[d] || 0),
       estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),
       txt: nocoste ? 'Sin coste ➜ clic' : (mg < 0 ? 'Pierde' : mg < 15 ? 'Margen bajo' : 'OK')

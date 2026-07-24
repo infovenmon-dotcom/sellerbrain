@@ -75,6 +75,33 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
   <p>Sube el informe de <b>Devoluciones de clientes</b> de Logística de Amazon y SellerBrain separa lo que puedes controlar (listing, calidad, tallaje) de lo que no (el cliente cambió de idea), te dice qué producto arreglar primero y cuánto stock vuelve revendible frente a lo que es pérdida.</p>
 </div>
 
+<!-- CONECTADO: devoluciones por rango de fechas (sin subir nada) -->
+<div class="card" id="card-dev-real" style="display:none;border:1.5px solid rgba(46,230,160,.4)">
+  <div class="ct"><span class="ci">🟢</span> Tus devoluciones — sin subir nada</div>
+  <div class="inf">Elige un rango de fechas y SellerBrain saca, por artículo: <b>unidades vendidas</b>, <b>devoluciones</b> y <b>% de devolución</b> del periodo, con el motivo principal. Datos reales de tu cuenta, sin subir ficheros.</div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <button class="btn-sec" onclick="devRango('mes')">Este mes</button>
+    <button class="btn-sec" onclick="devRango('90')">90 días</button>
+    <button class="btn-sec" onclick="devRango('anio')">Este año</button>
+    <span style="color:var(--mu);font-size:11px">·</span>
+    <input type="date" id="dev-d1" style="padding:8px 10px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px">
+    <input type="date" id="dev-d2" style="padding:8px 10px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px">
+    <button class="btn" onclick="devRango('custom')">Aplicar</button>
+  </div>
+  <div id="dev-status" style="font-size:12px;color:var(--mu);margin-bottom:8px"></div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="text-align:left;color:var(--mu);font-size:11px">
+      <th style="padding:6px 8px">Producto</th>
+      <th style="padding:6px 8px">Uds vendidas</th>
+      <th style="padding:6px 8px">Devoluciones</th>
+      <th style="padding:6px 8px" title="Devoluciones ÷ unidades vendidas">% Devol.</th>
+      <th style="padding:6px 8px">Motivo principal</th>
+    </tr></thead>
+    <tbody id="dev-tabla"></tbody>
+  </table></div>
+  <div style="margin-top:9px;font-size:11px;color:var(--mu)">¿Prefieres analizar un informe descargado? Usa los pasos de abajo para subir tu CSV.</div>
+</div>
+
 <!-- PASO 1 -->
 <div class="card">
   <div class="ct"><span class="ci">1️⃣</span> Sube tu informe de devoluciones FBA</div>
@@ -436,6 +463,50 @@ function copiarResumen(){
   try{document.execCommand('copy');alert('✓ Resumen copiado.');}catch(e){}
   document.body.removeChild(ta);
 }
+
+// ===== Conectado: devoluciones por rango de fechas (lee del backend) =====
+var DEVB={base:'',tok:''};
+function devBase(){ try{ DEVB.base=(localStorage.getItem('sb_api_base')||'').replace(/\/$/,''); DEVB.tok=sessionStorage.getItem('fba_token')||''; }catch(e){ DEVB.base=''; DEVB.tok=''; } return !!(DEVB.base&&DEVB.tok); }
+function ymdD(d){ return d.toISOString().slice(0,10); }
+function devRango(id){
+  var h=new Date(),Y=h.getUTCFullYear(),M=h.getUTCMonth(),D=h.getUTCDate(),desde,hasta;
+  if(id==='mes'){ desde=ymdD(new Date(Date.UTC(Y,M,1))); hasta=ymdD(new Date(Date.UTC(Y,M,D))); }
+  else if(id==='90'){ desde=ymdD(new Date(Date.UTC(Y,M,D-90))); hasta=ymdD(new Date(Date.UTC(Y,M,D))); }
+  else if(id==='anio'){ desde=ymdD(new Date(Date.UTC(Y,0,1))); hasta=ymdD(new Date(Date.UTC(Y,M,D))); }
+  else { desde=document.getElementById('dev-d1').value; hasta=document.getElementById('dev-d2').value; if(!desde||!hasta){ alert('Elige las dos fechas.'); return; } }
+  document.getElementById('dev-d1').value=desde; document.getElementById('dev-d2').value=hasta;
+  devCargar(desde,hasta);
+}
+function devCargar(desde,hasta){
+  if(!DEVB.base) return;
+  var st=document.getElementById('dev-status'), tb=document.getElementById('dev-tabla');
+  st.textContent='🔄 Cargando…'; tb.innerHTML='';
+  fetch(DEVB.base+'/v1/devoluciones?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:{'Authorization':'Bearer '+DEVB.tok}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var datos=(d&&d.datos)||[];
+      var totU=0,totD=0; datos.forEach(function(x){ totU+=x.uds; totD+=x.devoluciones; });
+      var tasa=totU>0?(totD/totU*100):0;
+      st.innerHTML='Periodo '+desde+' → '+hasta+' · <b>'+totD+'</b> devoluciones · <b>'+totU+'</b> uds vendidas · tasa global <b style="color:'+(tasa>=10?'#ff5c5c':tasa>=5?'#f5b23e':'#2ee6a0')+'">'+f(tasa,1)+'%</b>';
+      if(!datos.length){ tb.innerHTML='<tr><td colspan="5" style="padding:10px;color:var(--mu)">Sin datos en ese periodo (ni ventas ni devoluciones).</td></tr>'; return; }
+      tb.innerHTML=datos.map(function(x){
+        var col=x.pct>=10?'#ff5c5c':x.pct>=5?'#f5b23e':'var(--mu2)';
+        var img=x.imagen?'<img src="'+x.imagen+'" style="width:24px;height:24px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:7px" onerror="this.style.display=\'none\'">':'';
+        return '<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+          '<td style="padding:7px 8px">'+img+'<span style="font-weight:600">'+esc(x.nombre||x.sku)+'</span></td>'+
+          '<td style="padding:7px 8px">'+x.uds+'</td>'+
+          '<td style="padding:7px 8px">'+x.devoluciones+'</td>'+
+          '<td style="padding:7px 8px;font-weight:700;color:'+col+'">'+(x.pct!=null?f(x.pct,1)+'%':'—')+'</td>'+
+          '<td style="padding:7px 8px;color:var(--mu2)">'+(x.motivo_top?titulo(x.motivo_top):'—')+'</td></tr>';
+      }).join('');
+    })
+    .catch(function(){ st.innerHTML='<span style="color:#f5b23e">No pude cargar tus datos. ¿Has iniciado sesión?</span>'; });
+}
+(function devInit(){
+  if(!devBase()) return;
+  var card=document.getElementById('card-dev-real');
+  if(card){ card.style.display='block'; devRango('mes'); }
+})();
 </script>
 </body>
 </html>
