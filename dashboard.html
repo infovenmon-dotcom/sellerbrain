@@ -550,9 +550,11 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   </div>
 
   <div class="card" id="card-fugas" style="display:none">
-    <div class="ch"><h2><span class="ci">💸</span> Sobrecostes de logística <span style="font-size:11px;color:var(--mu);font-weight:400">· envíos cross-border vs tarifa local (90 días)</span></h2></div>
-    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Cuando una parte de tus ventas se sirve desde otro país, Amazon cobra la gestión más cara que la local. Aquí ves cuánto pierdes por SKU y puedes generar el <b>mensaje para abrir caso</b>.</div>
-    <div id="fugas-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleFugas()"><h2><span class="ci">💸</span> Sobrecostes de logística <span style="font-size:11px;color:var(--mu);font-weight:400">· envíos cross-border vs tarifa local (90 días)</span> <span id="fugas-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
+    <div id="fugas-collapse" style="display:none">
+      <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Cuando una parte de tus ventas se sirve desde otro país, Amazon cobra la gestión más cara que la local. Aquí ves cuánto pierdes por SKU y puedes generar el <b>mensaje para abrir caso</b>.</div>
+      <div id="fugas-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+    </div>
   </div>
 
 </div>
@@ -569,6 +571,15 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     </div>
   </div>
   <iframe id="if-tool" title="Herramienta" style="width:100%;height:calc(100vh - 140px);border:none;border-radius:14px;background:var(--bg)"></iframe>
+</div>
+
+<!-- ===== DETECTOR DE SOBRECOSTES (pestaña) ===== -->
+<div id="vista-sobre" style="display:none">
+  <h2 style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;margin-bottom:10px">🔍 Detector de sobrecobros FBA</h2>
+  <div class="card">
+    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Cuando una parte de tus ventas se sirve desde otro país, Amazon cobra la gestión más cara que la local. Aquí ves cuánto pierdes por SKU y generas el <b>mensaje para abrir caso</b>. Ventana: últimos 90 días.</div>
+    <div id="fugas-body-full"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+  </div>
 </div>
 
 <!-- ===== SECCIONES EN DESARROLLO ===== -->
@@ -1197,38 +1208,64 @@ function cargarSatisfaccion(){
 
 // ===== Sobrecostes de logística (fugas de tarifa cross-border) =====
 var FUGAS=[];
+function toggleFugas(){
+  var box=document.getElementById('fugas-collapse'); if(!box)return;
+  var caret=document.getElementById('fugas-caret');
+  var abrir=box.style.display==='none';
+  box.style.display=abrir?'block':'none';
+  if(caret) caret.innerHTML=(window._fugasResumen||'')+(abrir?'  ▾ ocultar':'  ▸ ver');
+}
+function fugasHTML(total){
+  var h='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
+    '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">País</th><th style="padding:6px 8px">Uds</th>'+
+    '<th style="padding:6px 8px" title="Tarifa media que pagas vs tu mejor tarifa local (sin IVA)">Media / Local</th>'+
+    '<th style="padding:6px 8px" title="% de unidades servidas caras (cross-border)">% Caras</th>'+
+    '<th style="padding:6px 8px">€/mes</th><th style="padding:6px 8px">Caso</th></tr></thead><tbody>';
+  FUGAS.forEach(function(x,i){
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+      '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
+      '<td style="padding:7px 8px">'+(x.pais||'')+'</td>'+
+      '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
+      '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
+      '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:#ff8a8a">'+f(x.sobrecoste_mes,2)+'€</td>'+
+      '<td style="padding:7px 8px"><button class="chip" style="cursor:pointer" onclick="copiarCaso('+i+')">📋 Mensaje</button></td></tr>';
+  });
+  h+='</tbody></table></div>'+
+    '<div style="margin-top:9px;font-size:11px;color:var(--mu)">Si el producto está <b>activo en Paneuropeo</b> para ese país y aun así te cobran cross-border, el mensaje sirve para <b>reclamar el reembolso</b>. Si no, es señal para <b>mandar stock a ese país</b>.</div>';
+  return h;
+}
 function cargarFugas(){
-  var card=document.getElementById('card-fugas'), body=document.getElementById('fugas-body');
-  if(!card||!body) return;
+  var card=document.getElementById('card-fugas');
+  var full=document.getElementById('fugas-body-full');
+  if(SB_CONFIG.mode!=='api'){
+    if(card)card.style.display='none';
+    if(full)full.innerHTML='<div style="color:var(--mu);font-size:13px">Disponible con tus datos reales (conecta la API en 🔌 Conexión).</div>';
+    return;
+  }
   fetch(SB_CONFIG.apiBase+'/v1/fugas',{headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(d){
       FUGAS=(d&&d.datos)||[];
-      if(!FUGAS.length){ card.style.display='none'; return; }   // sin fugas → no molesta
-      card.style.display='block';
       var total=(d&&d.total_mes)||0;
-      var h='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+
-        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
-        '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
-        '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">País</th><th style="padding:6px 8px">Uds</th>'+
-        '<th style="padding:6px 8px" title="Tarifa media que pagas vs tu mejor tarifa local (sin IVA)">Media / Local</th>'+
-        '<th style="padding:6px 8px" title="% de unidades servidas caras (cross-border)">% Caras</th>'+
-        '<th style="padding:6px 8px">€/mes</th><th style="padding:6px 8px">Caso</th></tr></thead><tbody>';
-      FUGAS.forEach(function(x,i){
-        h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
-          '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
-          '<td style="padding:7px 8px">'+(x.pais||'')+'</td>'+
-          '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
-          '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
-          '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
-          '<td style="padding:7px 8px;font-weight:700;color:#ff8a8a">'+f(x.sobrecoste_mes,2)+'€</td>'+
-          '<td style="padding:7px 8px"><button class="chip" style="cursor:pointer" onclick="copiarCaso('+i+')">📋 Mensaje</button></td></tr>';
-      });
-      h+='</tbody></table></div>'+
-        '<div style="margin-top:9px;font-size:11px;color:var(--mu)">Si el producto está <b>activo en Paneuropeo</b> para ese país y aun así te cobran cross-border, el mensaje sirve para <b>reclamar el reembolso</b>. Si no, es señal para <b>mandar stock a ese país</b>.</div>';
-      body.innerHTML=h;
+      if(!FUGAS.length){
+        if(card)card.style.display='none';   // en el dash no molesta si no hay fugas
+        if(full)full.innerHTML='<div style="color:var(--gn);font-size:13px">👍 Sin sobrecostes de logística en los últimos 90 días. Tus envíos van a tarifa local.</div>';
+        window._fugasResumen='';
+        var cr=document.getElementById('fugas-caret'); if(cr)cr.textContent='  ▸ ver';
+        return;
+      }
+      var html=fugasHTML(total);
+      var body=document.getElementById('fugas-body'); if(body)body.innerHTML=html;
+      if(full)full.innerHTML=html;
+      if(card)card.style.display='block';
+      window._fugasResumen=' <b style="color:#ff8a8a">≈'+f(total,0)+'€/mes</b>';
+      var caret=document.getElementById('fugas-caret');
+      if(caret && document.getElementById('fugas-collapse').style.display==='none') caret.innerHTML=window._fugasResumen+'  ▸ ver';
     })
-    .catch(function(){ card.style.display='none'; });
+    .catch(function(){ if(card)card.style.display='none'; if(full)full.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
 
 function msgCaso(x){
@@ -2068,7 +2105,7 @@ var TOOL_SRC = {
   stock:   { src:'stock.html',                     title:'Stock y reposición' }
 };
 // Secciones aún no construidas → aviso "en desarrollo":
-var SOON = { sobre:'Detector de sobrecobros FBA', ajustes:'Ajustes' };
+var SOON = { ajustes:'Ajustes' };
 
 // Barra lateral plegable: en escritorio pliega/despliega (y lo recuerda);
 // en móvil abre/cierra el menú deslizante.
@@ -2090,11 +2127,13 @@ function cambiarVista(v){
   document.getElementById('vista-dash').style.display = v==='dash'?'block':'none';
   document.getElementById('vista-ppc').style.display  = v==='ppc'?'block':'none';
   document.getElementById('vista-tool').style.display = TOOL_SRC[v]?'block':'none';
+  document.getElementById('vista-sobre').style.display = v==='sobre'?'block':'none';
   document.getElementById('vista-soon').style.display = SOON[v]?'block':'none';
   document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
+  if(v==='sobre') cargarFugas();
   if(TOOL_SRC[v]){
     var meta=TOOL_SRC[v], f=document.getElementById('if-tool');
     if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
