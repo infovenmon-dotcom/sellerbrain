@@ -1097,14 +1097,33 @@ function cargarVentasPais(){
     .catch(function(){lista.innerHTML='<div style="color:var(--mu);font-size:12px">No pude cargar ventas por país.</div>';});
 }
 
+// ===== Tachar acciones gestionadas (compartido por Acciones y PPC) =====
+function accHechas(){ try{ return new Set(JSON.parse(localStorage.getItem('sb_acciones_hechas')||'[]')); }catch(e){ return new Set(); } }
+function guardarAccHechas(s){ try{ localStorage.setItem('sb_acciones_hechas', JSON.stringify(Array.prototype.slice.call(s))); }catch(e){} }
+function accKey(t){ return (t||'').replace(/\s+/g,' ').trim().slice(0,140); }
+function marcarAcc(k){ var s=accHechas(); s.add(decodeURIComponent(k)); guardarAccHechas(s); rerenderAcciones(); }
+function reactAcc(k){ var s=accHechas(); s.delete(decodeURIComponent(k)); guardarAccHechas(s); rerenderAcciones(); }
+function rerenderAcciones(){ try{renderCerebro();}catch(e){} try{ if(typeof PPC_DATA!=='undefined'&&PPC_DATA) renderPPCTerminos(); }catch(e){} }
+var _verAccHechas=false;
+function toggleAccHechas(){ _verAccHechas=!_verAccHechas; rerenderAcciones(); }
+function btnHecho(k){ return '<button class="chip" style="align-self:center;cursor:pointer" title="Marcar como gestionada" onclick="event.stopPropagation();marcarAcc(\''+encodeURIComponent(k)+'\')">✓ Hecho</button>'; }
+function btnReact(k){ return '<button class="chip" style="align-self:center;cursor:pointer" title="Reactivar" onclick="event.stopPropagation();reactAcc(\''+encodeURIComponent(k)+'\')">↩</button>'; }
+function linkHechas(n){ return n?('<div style="text-align:center;margin-top:4px"><a href="#" onclick="toggleAccHechas();return false" style="font-size:11px;color:var(--mu)">'+(_verAccHechas?'ocultar':'ver')+' '+n+' gestionada'+(n>1?'s':'')+'</a></div>'):''; }
+
 function renderCerebro(){
-  var total=0, h='';
+  var done=accHechas(), total=0, h='', nHech=0;
   ACCIONES.forEach(function(a){
+    var k=accKey(a.t);
+    if(done.has(k)){ nHech++;
+      if(_verAccHechas) h+='<div class="accion" style="opacity:.5"><div class="aic" style="background:'+a.bg+'">'+a.ic+'</div><div style="flex:1"><div class="at">'+a.t+'</div><div class="ap">gestionada</div></div>'+btnReact(k)+'</div>';
+      return;
+    }
     var m=/([\d.,]+)\s*€/.exec(a.v||''); total+= m?parseFloat(m[1].replace(/\./g,'').replace(',','.')):0;
     h+='<div class="accion"><div class="aic" style="background:'+a.bg+'">'+a.ic+'</div>'+
-       '<div><div class="at">'+a.t+'</div><div class="av" style="color:'+a.c+'">'+a.v+'</div><div class="ap">'+a.p+'</div></div></div>';
+       '<div style="flex:1"><div class="at">'+a.t+'</div><div class="av" style="color:'+a.c+'">'+a.v+'</div><div class="ap">'+a.p+'</div></div>'+btnHecho(k)+'</div>';
   });
-  document.getElementById('acciones').innerHTML=h;
+  h+=linkHechas(nHech);
+  document.getElementById('acciones').innerHTML=h||'<div style="font-size:12px;color:var(--mu)">Sin acciones pendientes. 👌</div>';
   document.getElementById('brain-total').textContent='+'+f(total,2)+'€';
 }
 
@@ -1174,7 +1193,7 @@ function generarPlanIA(){
       if(d.plan){
         var pot=d.potencial_mes||0;
         document.getElementById('plan-potencial').innerHTML=planPotencialHTML(pot);
-        document.getElementById('plan-modal-body').innerHTML=mdMini(d.plan)+'<div style="font-size:10px;color:var(--mu);margin-top:12px">Generado por '+(d.modelo||'SellerBrain IA')+' sobre '+(d.n_acciones||0)+' acciones · las cifras salen de tus datos reales</div>';
+        document.getElementById('plan-modal-body').innerHTML=mdMini(d.plan)+'<div style="font-size:10px;color:var(--mu);margin-top:12px">Las cifras salen de tus datos reales · '+(d.n_acciones||0)+' acciones analizadas</div>';
         document.getElementById('plan-historial').style.display='none';
         guardarPlanHist(d.plan,pot,d.n_acciones||0);
         abrirPlan();
@@ -2379,10 +2398,15 @@ function renderPPCTerminos(){
   }).join('')||'<tr><td colspan="8" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
   // Acciones del cerebro PPC
   document.getElementById('ppc-brain-total').textContent='+'+f(recuperable,2)+'€';
-  document.getElementById('ppc-acciones').innerHTML=acciones.slice(0,6).map(function(a){
+  var doneP=accHechas(), nHp=0;
+  var htmlP=acciones.slice(0,6).map(function(a){
+    var k=accKey(a.t);
+    if(doneP.has(k)){ nHp++; return _verAccHechas
+      ? '<div class="accion" style="opacity:.5"><div class="aic" style="background:rgba(232,64,64,.15)">❌</div><div style="flex:1"><div class="at">'+a.t+'</div><div class="ap">gestionada</div></div>'+btnReact(k)+'</div>' : ''; }
     return '<div class="accion"><div class="aic" style="background:rgba(232,64,64,.15)">❌</div>'+
-      '<div><div class="at">'+a.t+'</div><div class="av" style="color:var(--gn)">+'+f(a.v,2)+'€/mes</div><div class="ap">'+a.p+'</div></div></div>';
-  }).join('')||'<div style="font-size:12px;color:var(--mu)">Sin fugas detectadas en los términos actuales. 👌</div>';
+      '<div style="flex:1"><div class="at">'+a.t+'</div><div class="av" style="color:var(--gn)">+'+f(a.v,2)+'€/mes</div><div class="ap">'+a.p+'</div></div>'+btnHecho(k)+'</div>';
+  }).join('')+linkHechas(nHp);
+  document.getElementById('ppc-acciones').innerHTML=htmlP.trim()?htmlP:'<div style="font-size:12px;color:var(--mu)">Sin fugas detectadas en los términos actuales. 👌</div>';
   // Por país
   var porPais={};
   (PPC_DATA.campanas.length?PPC_DATA.campanas:[]).forEach(function(x){
