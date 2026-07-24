@@ -536,12 +536,14 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 <div>
 
   <div class="card brain-feed">
-    <div class="ch"><h2><span class="ci">🧠</span> Acciones de hoy</h2></div>
-    <div class="brain-total">
-      <div class="v" id="brain-total">+0€</div>
-      <div class="l">impacto mensual si ejecutas las 4 acciones</div>
+    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleAcciones()"><h2><span class="ci">🧠</span> Acciones de hoy <span id="acc-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
+    <div id="acc-collapse" style="display:none">
+      <div class="brain-total">
+        <div class="v" id="brain-total">+0€</div>
+        <div class="l"><span id="acc-count">0</span> acciones · impacto mensual si las ejecutas</div>
+      </div>
+      <div id="acciones"></div>
     </div>
-    <div id="acciones"></div>
   </div>
 
   <div class="card brain-feed">
@@ -1123,8 +1125,20 @@ function renderCerebro(){
        '<div style="flex:1"><div class="at">'+a.t+'</div><div class="av" style="color:'+a.c+'">'+a.v+'</div><div class="ap">'+a.p+'</div></div>'+btnHecho(k)+'</div>';
   });
   h+=linkHechas(nHech);
+  var nPend=(ACCIONES?ACCIONES.length:0)-nHech;
   document.getElementById('acciones').innerHTML=h||'<div style="font-size:12px;color:var(--mu)">Sin acciones pendientes. 👌</div>';
   document.getElementById('brain-total').textContent='+'+f(total,2)+'€';
+  var lbl=document.getElementById('acc-count'); if(lbl)lbl.textContent=nPend;
+  window._accResumen=' <b style="color:var(--or2)">+'+f(total,0)+'€</b>';
+  var caret=document.getElementById('acc-caret'), coll=document.getElementById('acc-collapse');
+  if(caret && coll && coll.style.display==='none') caret.innerHTML=window._accResumen+'  ▸ ver';
+}
+function toggleAcciones(){
+  var box=document.getElementById('acc-collapse'); if(!box)return;
+  var caret=document.getElementById('acc-caret');
+  var abrir=box.style.display==='none';
+  box.style.display=abrir?'block':'none';
+  if(caret) caret.innerHTML=(window._accResumen||'')+(abrir?'  ▾ ocultar':'  ▸ ver');
 }
 
 // Mini-Markdown → HTML (negritas, títulos y listas) para el plan de la IA
