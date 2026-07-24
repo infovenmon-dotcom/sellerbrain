@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v30-plan-potencial'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v31-ppc-horas-rango'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -229,12 +229,26 @@ export default {
         return json({ ok: true, hora_utc: new Date().getUTCHours(), diag }, cors);
       }
 
+      // --- CORREGIR el cierre de ayer: Amazon atribuye tarde las últimas horas;
+      //     una vez cerrado el día, refleja el total real en la última franja. ---
+      if (url.pathname === '/v1/ppc/cierre') {
+        const diag = await corregirCierrePPCHora(env);
+        return json({ ok: true, diag }, cors);
+      }
+
       // --- PPC por HORAS: patrón por hora del día + serie reciente ---
       //     Se alimenta de las "fotos" horarias del cron (v_ppc_hora / v_ppc_mejores_horas).
       if (url.pathname === '/v1/ppc/horas') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase();
         const camp = (url.searchParams.get('campania') || '').trim();   // id o lista separada por comas
+        const desde = url.searchParams.get('desde');   // YYYY-MM-DD (opcional)
+        const hasta = url.searchParams.get('hasta');   // YYYY-MM-DD (opcional)
         const f = pais ? 'pais=eq.' + pais + '&' : '';
+        // Rango de fechas opcional → permite elegir los días a consultar (los datos
+        // se guardan sin límite, así que el histórico completo está disponible).
+        let rango = '';
+        if (desde) rango += 'fecha=gte.' + encodeURIComponent(desde) + '&';
+        if (hasta) rango += 'fecha=lte.' + encodeURIComponent(hasta) + '&';
         const patron = await selSafe(env, 'v_ppc_mejores_horas?' + f + 'order=pais.asc,hora.asc', []);
         // Campañas activas (con gasto reciente) para el selector del front.
         const campanas = await selSafe(env, 'v_ppc_camp_activas?' + f + 'order=gasto.desc', []);
@@ -243,10 +257,11 @@ export default {
           // Filtrado a campañas concretas → datos por campaña (foto por campaña).
           const ids = camp.split(',').map(s => s.trim()).filter(Boolean).map(encodeURIComponent);
           const inList = ids.length ? 'campania_id=in.(' + ids.join(',') + ')&' : '';
-          reciente = await selSafe(env, 'v_ppc_hora_camp?' + f + inList + 'order=fecha.desc,hora.desc&limit=3000', []);
+          reciente = await selSafe(env, 'v_ppc_hora_camp?' + f + inList + rango + 'order=fecha.desc,hora.desc&limit=6000', []);
         } else {
           // Sin filtro → total del pais (tiene historico previo a la captura por campaña).
-          reciente = await selSafe(env, 'v_ppc_hora?' + f + 'order=fecha.desc,hora.desc&limit=240', []);
+          const lim = rango ? 6000 : 240;
+          reciente = await selSafe(env, 'v_ppc_hora?' + f + rango + 'order=fecha.desc,hora.desc&limit=' + lim, []);
         }
         return json({ patron, reciente, campanas }, cors);
       }
@@ -696,6 +711,9 @@ export default {
         await ingestaDiaria(env, 'cron');
         try { await ingestaPPC(env, {}); } catch (_) {}
       }
+      // A las 04:00 UTC, con el día de ayer ya cerrado, corrige el gasto de las
+      // últimas horas que Amazon atribuyó tarde (opción "cierre real").
+      if (hora === 4) { try { await corregirCierrePPCHora(env); } catch (_) {} }
     })());
   }
 };
@@ -1173,6 +1191,29 @@ async function guardarPPChoraSnap(env, data, pais, fecha, hora) {
     }));
   if (filasCamp.length) await upsertSupabase(env, 'ppc_hora_camp_snap', filasCamp);
   return { gasto: +t.g.toFixed(2), campanas: filasCamp.length };
+}
+
+// Corrige el CIERRE de AYER. Amazon atribuye tarde las últimas horas del día, así
+// que la última foto capturada quedó congelada por debajo del total real. Una vez
+// el día está cerrado, pedimos el informe de ayer (ya completo) y fijamos su total
+// en la franja 23:00 → v_ppc_hora recupera el gasto que faltaba (no se pierde nada).
+// Se lanza en el cron a las 04:00 UTC (tras la ingesta diaria) y a mano en /v1/ppc/cierre.
+async function corregirCierrePPCHora(env) {
+  const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const diag = [];
+  for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
+    try {
+      const headers = await cabecerasAds(env, profileId);
+      const reportId = await crearReporteAds(headers, cuerpoAdsDia(ayer));
+      await guardarPendientePPC(env, { report_id: reportId, pais, tipo: 'hora', fecha: ayer, hora: 23 });
+      const data = await sondearInformeAds(headers, reportId, 5, 12000);   // ~60s
+      if (!data) { diag.push({ pais, estado: 'pendiente' }); continue; }
+      const r = await guardarPPChoraSnap(env, data, pais, ayer, 23);   // fija el cierre real en la última franja
+      await borrarPendientePPC(env, reportId);
+      diag.push({ pais, estado: 'ok', gasto_cierre: r.gasto });
+    } catch (e) { diag.push({ pais, estado: 'error', msg: ((e && e.message) || String(e)).slice(0, 180) }); }
+  }
+  return diag;
 }
 
 /* =====================================================================

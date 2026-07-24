@@ -134,7 +134,16 @@ td{padding:6px;border-bottom:1px solid rgba(255,255,255,.05)}
 <!-- DATOS REALES (conectado) — solo aparece si hay sesión -->
 <div class="card" id="card-real" style="display:none;border:1.5px solid rgba(46,230,160,.45)">
   <div class="ct"><span class="ci">🟢</span> Tus datos reales — sin subir nada</div>
-  <div class="inf">SellerBrain captura cada hora una foto de tu PPC. Elige <b>país</b> y las <b>campañas</b> que quieras analizar y saca tus franjas reales, <b>en hora peninsular de España</b>. <span style="color:var(--mu)">El detalle por campaña se va llenando desde hoy; el mapa de calor por día de la semana se afina a ~14 días.</span></div>
+  <div class="inf">SellerBrain captura cada hora una foto de tu PPC. Elige <b>días</b>, <b>país</b> y las <b>campañas</b> que quieras analizar y saca tus franjas reales, <b>en hora peninsular de España</b>. <span style="color:var(--mu)">El histórico se guarda sin límite; el mapa de calor por día de la semana se afina a ~14 días.</span></div>
+  <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <span style="color:var(--mu);font-size:11px">Días:</span>
+    <button class="btn-sec" onclick="pphRango(7)">7 días</button>
+    <button class="btn-sec" onclick="pphRango(14)">14 días</button>
+    <button class="btn-sec" onclick="pphRango(30)">30 días</button>
+    <span style="color:var(--mu);font-size:11px">·</span>
+    <input type="date" id="pph-d1" onchange="pphFetchCamps()" style="padding:7px 9px;background:#111;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-size:12px">
+    <input type="date" id="pph-d2" onchange="pphFetchCamps()" style="padding:7px 9px;background:#111;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-size:12px">
+  </div>
   <div class="fr">
     <div>
       <label>País</label>
@@ -634,6 +643,21 @@ function pphBase(){
 }
 function pphHeaders(){ return { 'Authorization':'Bearer '+PPH.tok }; }
 
+// Rango de fechas → &desde=&hasta= para el endpoint. Vacío = por defecto (últimos días).
+function pphYmd(d){ return d.toISOString().slice(0,10); }
+function pphRangoQS(){
+  var d1=(document.getElementById('pph-d1')||{}).value||'';
+  var d2=(document.getElementById('pph-d2')||{}).value||'';
+  var q=''; if(d1) q+='&desde='+encodeURIComponent(d1); if(d2) q+='&hasta='+encodeURIComponent(d2);
+  return q;
+}
+function pphRango(n){
+  var h=new Date(), Y=h.getUTCFullYear(), M=h.getUTCMonth(), D=h.getUTCDate();
+  document.getElementById('pph-d1').value = pphYmd(new Date(Date.UTC(Y,M,D-(n-1))));
+  document.getElementById('pph-d2').value = pphYmd(new Date(Date.UTC(Y,M,D)));
+  pphFetchCamps();
+}
+
 // Carga la lista de campañas activas + el total del país (con histórico).
 function pphFetchCamps(){
   if(!PPH.base) return;
@@ -641,7 +665,7 @@ function pphFetchCamps(){
   var cont = document.getElementById('real-camps');
   cont.innerHTML = 'Cargando…';
   document.getElementById('real-camps-lbl').textContent = '';
-  fetch(PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais), {headers:pphHeaders()})
+  fetch(PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais)+pphRangoQS(), {headers:pphHeaders()})
     .then(function(r){return r.json();})
     .then(function(d){
       PPH.total = d.reciente || [];
@@ -722,7 +746,7 @@ function pphAnalizar(){
   var sel = chks.filter(function(x){return x.checked;}).map(function(x){return x.value;});
   var todas = !chks.length || sel.length===0 || sel.length===chks.length;
   st.innerHTML = '🔄 Cargando tus datos…';
-  var url = PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais);
+  var url = PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais)+pphRangoQS();
   if(!todas) url += '&campania='+encodeURIComponent(sel.join(','));
   fetch(url, {headers:pphHeaders()})
     .then(function(r){return r.json();})
@@ -746,7 +770,12 @@ function pphAnalizar(){
 (function pphInit(){
   if(!pphBase()) return;
   var card = document.getElementById('card-real');
-  if(card){ card.style.display='block'; pphFetchCamps(); }
+  if(card){ card.style.display='block';
+    var h=new Date(), Y=h.getUTCFullYear(), M=h.getUTCMonth(), D=h.getUTCDate();
+    document.getElementById('pph-d1').value = pphYmd(new Date(Date.UTC(Y,M,D-13)));  // por defecto: 14 días
+    document.getElementById('pph-d2').value = pphYmd(new Date(Date.UTC(Y,M,D)));
+    pphFetchCamps();
+  }
 })();
 </script>
 </body>
