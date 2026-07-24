@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v24-fugas-tarifa'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v25-ppc-diagnostico'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -221,6 +221,12 @@ export default {
       if (url.pathname === '/v1/ppc/recoger') {
         const rec = await recogerPendientesPPC(env);
         return json({ ok: true, ...rec }, cors);
+      }
+
+      // --- FORZAR captura horaria AHORA y devolver diagnóstico (por qué no entra PPC) ---
+      if (url.pathname === '/v1/ppc/capturar') {
+        const diag = await capturarPPCHora(env);
+        return json({ ok: true, hora_utc: new Date().getUTCHours(), diag }, cors);
       }
 
       // --- PPC por HORAS: patrón por hora del día + serie reciente ---
@@ -630,10 +636,12 @@ export default {
     const hora = new Date(event.scheduledTime || Date.now()).getUTCHours();
     ctx.waitUntil((async () => {
       try { await capturarPPCHora(env); } catch (_) {}
+      // Recoger informes async listos CADA hora (antes solo a las 3 UTC → un
+      // informe que no estaba listo esperaba 24h). Ahora entra en la hora siguiente.
+      try { await recogerPendientesPPC(env); } catch (_) {}
       if (hora === 3) {
         await ingestaDiaria(env, 'cron');
         try { await ingestaPPC(env, {}); } catch (_) {}
-        try { await recogerPendientesPPC(env); } catch (_) {}
       }
     })());
   }
@@ -1068,12 +1076,14 @@ async function recogerPendientesPPC(env) {
 async function capturarPPCHora(env) {
   const hoy = new Date().toISOString().slice(0, 10);
   const hora = new Date().getUTCHours();
+  const diag = [];   // diagnóstico por país (para ver por qué no entra PPC)
+  if (!Object.keys(ADS_PROFILES).length) diag.push({ estado: 'sin_perfiles_ads' });
   for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
     try {
       const headers = await cabecerasAds(env, profileId);
       const reportId = await crearReporteAds(headers, cuerpoAdsDia(hoy));
       const data = await sondearInformeAds(headers, reportId, 5, 12000);   // ~60s; si no está, se salta esta hora
-      if (!data) continue;
+      if (!data) { diag.push({ pais, estado: 'informe_no_listo' }); continue; }
       const t = (data || []).reduce((a, c) => ({
         g: a.g + (c.cost || 0), cl: a.cl + (c.clicks || 0), im: a.im + (c.impressions || 0),
         v: a.v + (c.sales14d || 0), pe: a.pe + (c.purchases14d || 0)
@@ -1096,8 +1106,10 @@ async function capturarPPCHora(env) {
           ventas: +(c.sales14d || 0).toFixed(2), pedidos: c.purchases14d || 0, ts
         }));
       if (filasCamp.length) await upsertSupabase(env, 'ppc_hora_camp_snap', filasCamp);
-    } catch (_) { /* una hora suelta que falle no rompe nada */ }
+      diag.push({ pais, estado: 'ok', gasto: +t.g.toFixed(2), campanas: filasCamp.length });
+    } catch (e) { diag.push({ pais, estado: 'error', msg: ((e && e.message) || String(e)).slice(0, 180) }); }
   }
+  return diag;
 }
 
 /* =====================================================================
