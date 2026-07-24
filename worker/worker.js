@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v26-ppc-horas-pendiente'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v27-cvr-conversion'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1392,14 +1392,16 @@ async function productosPeriodo(env, desde, hasta, pais) {
   // PPC real por SKU (informe Advertised Product, ventana más reciente) → ACoS real.
   const ppcProd = {};
   try {
-    const rows = await selectSupabase(env, 'ppc_producto?select=sku,pais,gasto,ventas_ppc,hasta&order=hasta.desc&limit=3000');
+    const rows = await selectSupabase(env, 'ppc_producto?select=sku,pais,gasto,ventas_ppc,clics,pedidos_ppc,hasta&order=hasta.desc&limit=3000');
     const maxHasta = (rows && rows[0]) ? rows[0].hasta : null;
     for (const r of (rows || [])) {
       if (r.hasta !== maxHasta) continue;            // solo la ventana más reciente
       if (pais && r.pais !== pais) continue;         // respeta el filtro de país
-      if (!ppcProd[r.sku]) ppcProd[r.sku] = { gasto: 0, ventas: 0 };
+      if (!ppcProd[r.sku]) ppcProd[r.sku] = { gasto: 0, ventas: 0, clics: 0, pedidos: 0 };
       ppcProd[r.sku].gasto += +r.gasto || 0;
       ppcProd[r.sku].ventas += +r.ventas_ppc || 0;
+      ppcProd[r.sku].clics += +r.clics || 0;
+      ppcProd[r.sku].pedidos += +r.pedidos_ppc || 0;
     }
   } catch (_) { /* aún sin ppc_producto */ }
   const fin = new Date(hasta + 'T00:00:00Z');
@@ -1444,6 +1446,9 @@ async function productosPeriodo(env, desde, hasta, pais) {
     const pp = ppcProd[p.sku];
     const ppcGasto = pp ? +pp.gasto.toFixed(2) : 0;
     const acos_real = (pp && pp.ventas > 0) ? +(pp.gasto / pp.ventas * 100).toFixed(1) : null;
+    // CVR de la publicidad de este SKU = pedidos ÷ clics (informe Advertised Product).
+    const cvr = (pp && pp.clics > 0) ? +(pp.pedidos / pp.clics * 100).toFixed(1) : null;
+    const ppcClics = pp ? pp.clics : 0;
     let ppc_estado = null;   // gn = rentable, am = ajustado, rd = en pérdida
     if (acos_real != null && breakeven != null) {
       ppc_estado = acos_real <= acos_obj ? 'gn' : acos_real <= breakeven ? 'am' : 'rd';
@@ -1453,7 +1458,7 @@ async function productosPeriodo(env, desde, hasta, pais) {
       nom: (c.nombre || p.sku), sku: p.sku, emoji: '📦', imagen: c.imagen || null,
       uds: p.uds, ventas: +p.ventas.toFixed(2),
       coste: costeTot, comision: com, fba, devol: dev, amazon,
-      real, ppc: ppcGasto, acos_real, ppc_estado, ben, mg, breakeven, acos_obj,
+      real, ppc: ppcGasto, acos_real, cvr, ppc_clics: ppcClics, ppc_estado, ben, mg, breakeven, acos_obj,
       trend: dias10.map(d => p.dias[d] || 0),
       estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),
       txt: nocoste ? 'Sin coste ➜ clic' : (mg < 0 ? 'Pierde' : mg < 15 ? 'Margen bajo' : 'OK')

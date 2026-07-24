@@ -314,7 +314,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
         <div class="ch"><h2><span class="ci">🎯</span> Campañas · últimos 30 días</h2></div>
         <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
           <tbody id="ppc-campanas"></tbody>
         </table>
         </div>
@@ -327,7 +327,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
         </div>
         <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Término del cliente</th><th>Keyword</th><th>Clics</th><th>Gasto</th><th>Pedidos</th><th>ACoS</th><th>Veredicto</th></tr></thead>
+          <thead><tr><th>Término del cliente</th><th>Keyword</th><th>Clics</th><th>Gasto</th><th>Pedidos</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>ACoS</th><th>Veredicto</th></tr></thead>
           <tbody id="ppc-terminos"></tbody>
         </table>
         </div>
@@ -353,7 +353,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   <div class="card" style="margin-top:14px">
     <div class="ch"><h2><span class="ci">🚦</span> Rentabilidad por producto <span style="font-size:11px;color:var(--mu);font-weight:400">· ACoS real vs break-even (verde = rentable, rojo = pierde dinero)</span></h2></div>
     <div style="overflow-x:auto"><table class="tbl">
-      <thead><tr><th>Producto</th><th>Gasto PPC</th><th>ACoS real</th><th>Break-even</th><th>Veredicto</th></tr></thead>
+      <thead><tr><th>Producto</th><th>Gasto PPC</th><th title="Conversión de la publicidad: pedidos ÷ clics">CVR</th><th>ACoS real</th><th>Break-even</th><th>Veredicto</th></tr></thead>
       <tbody id="ppc-rentab"></tbody>
     </table></div>
   </div>
@@ -2087,12 +2087,12 @@ function cargarPPC(){
 function renderPPCRentab(){
   var el=document.getElementById('ppc-rentab'); if(!el) return;
   var hoy=new Date(), desde=ymdUTC(new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1))), hasta=ymdUTC(hoy);
-  el.innerHTML='<tr><td colspan="5" style="color:var(--mu);font-size:12px;padding:10px">Cargando…</td></tr>';
+  el.innerHTML='<tr><td colspan="6" style="color:var(--mu);font-size:12px;padding:10px">Cargando…</td></tr>';
   fetch(SB_CONFIG.apiBase+'/v1/productos?desde='+desde+'&hasta='+hasta,{headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(d){
       var ps=(d.productos||[]).filter(function(p){return p.acos_real!=null;});
-      if(!ps.length){ el.innerHTML='<tr><td colspan="5" style="color:var(--mu);font-size:12px;padding:10px">Aún sin ACoS por producto. Lanza la ingesta de PPC (incluye la pasada «rentabilidad por producto») y vuelve.</td></tr>'; return; }
+      if(!ps.length){ el.innerHTML='<tr><td colspan="6" style="color:var(--mu);font-size:12px;padding:10px">Aún sin ACoS por producto. Lanza la ingesta de PPC (incluye la pasada «rentabilidad por producto») y vuelve.</td></tr>'; return; }
       var ord={rd:0,am:1,gn:2};
       ps.sort(function(a,b){return (ord[a.ppc_estado]==null?9:ord[a.ppc_estado])-(ord[b.ppc_estado]==null?9:ord[b.ppc_estado]);});
       el.innerHTML=ps.map(function(p){
@@ -2100,12 +2100,13 @@ function renderPPCRentab(){
         var vtxt=p.ppc_estado==='gn'?'Rentable · margen para subir pujas':p.ppc_estado==='am'?'Al límite · vigilar':'Pierde · baja pujas o pausa';
         return '<tr><td>'+p.nom+'</td>'+
           '<td>'+f(p.ppc||0,2)+'€</td>'+
+          '<td title="'+(p.ppc_clics||0)+' clics">'+(p.cvr!=null?f(p.cvr,1)+'%':'—')+'</td>'+
           '<td style="color:'+col+';font-weight:700">'+(p.acos_real!=null?f(p.acos_real,1)+'%':'—')+'</td>'+
           '<td style="color:#4A9EDE">'+(p.breakeven!=null?'≤'+f(p.breakeven,1)+'%':'—')+'</td>'+
           '<td><span class="pill '+(p.ppc_estado||'am')+'">'+vtxt+'</span></td></tr>';
       }).join('');
     })
-    .catch(function(){ el.innerHTML='<tr><td colspan="5" style="color:var(--mu);font-size:12px;padding:10px">No se pudo cargar la rentabilidad ahora mismo.</td></tr>'; });
+    .catch(function(){ el.innerHTML='<tr><td colspan="6" style="color:var(--mu);font-size:12px;padding:10px">No se pudo cargar la rentabilidad ahora mismo.</td></tr>'; });
 }
 
 function renderPPC(fuente){
@@ -2153,11 +2154,12 @@ function renderPPC(fuente){
     var est=a<=25?['gn','Rentable']:a<=40?['am','Vigilar']:x.ventas_ppc>0?['rd','ACoS alto']:['rd','Sin ventas'];
     return '<tr><td style="max-width:210px;overflow:hidden;text-overflow:ellipsis">'+x.nombre+'</td><td>'+x.pais+'</td>'+
       '<td style="color:#B983D6">'+f(x.gasto,2)+'€</td><td>'+x.clics+'</td>'+
+      '<td>'+(x.clics>0?f(x.pedidos_ppc/x.clics*100,1)+'%':'—')+'</td>'+
       '<td style="color:var(--gn)">'+f(x.ventas_ppc,2)+'€</td>'+
       '<td>'+(x.ventas_ppc>0?f(a,1)+'%':'—')+'</td>'+
       '<td>'+(roas>0?f(roas,2)+'x':'—')+'</td>'+
       '<td><span class="pill '+est[0]+'">'+est[1]+'</span></td></tr>';
-  }).join('')||'<tr><td colspan="8" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
+  }).join('')||'<tr><td colspan="9" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
   renderPPCTerminos();
 }
 
@@ -2176,9 +2178,10 @@ function renderPPCTerminos(){
     return '<tr><td style="max-width:190px;overflow:hidden;text-overflow:ellipsis"><b>'+t.termino+'</b></td>'+
       '<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(t.keyword||'')+'</td>'+
       '<td>'+clics+'</td><td style="color:#B983D6">'+f(gasto,2)+'€</td><td>'+ped+'</td>'+
+      '<td>'+(clics>0?f(ped/clics*100,1)+'%':'—')+'</td>'+
       '<td>'+(ven>0?f(a*100,1)+'%':'—')+'</td>'+
       '<td><span class="pill '+pill+'">'+ver+'</span></td></tr>';
-  }).join('')||'<tr><td colspan="7" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
+  }).join('')||'<tr><td colspan="8" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
   // Acciones del cerebro PPC
   document.getElementById('ppc-brain-total').textContent='+'+f(recuperable,2)+'€';
   document.getElementById('ppc-acciones').innerHTML=acciones.slice(0,6).map(function(a){
