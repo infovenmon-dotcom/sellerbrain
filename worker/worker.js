@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v28-devoluciones-rango'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v29-sobrecostes'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -347,6 +347,20 @@ export default {
           };
         }).sort((a, b) => (b.pct || 0) - (a.pct || 0) || b.devoluciones - a.devoluciones);
         return json({ desde, hasta, datos }, cors);
+      }
+
+      // --- SOBRECOSTES de logística (fugas de tarifa cross-border) → tabla + datos
+      //     para generar el mensaje de reclamación. Lee la vista v_fuga_tarifa. ---
+      if (url.pathname === '/v1/fugas') {
+        const filas = await selSafe(env, 'v_fuga_tarifa?order=sobrecoste_mes.desc', []);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin'))) cat[c.sku] = c; } catch (_) {}
+        const datos = (filas || []).map(f => ({
+          ...f,
+          nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku,
+          asin: (cat[f.sku] && cat[f.sku].asin) || ''
+        }));
+        const total_mes = +(datos.reduce((a, x) => a + (+x.sobrecoste_mes || 0), 0)).toFixed(2);
+        return json({ datos, total_mes }, cors);
       }
 
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
