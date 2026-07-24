@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v31-ppc-horas-rango'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v32-presupuestos'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -234,6 +234,13 @@ export default {
       if (url.pathname === '/v1/ppc/cierre') {
         const diag = await corregirCierrePPCHora(env);
         return json({ ok: true, diag }, cors);
+      }
+
+      // --- Traer presupuestos de campañas (para detectar limitadas por presupuesto) ---
+      if (url.pathname === '/v1/ppc/presupuestos') {
+        const diag = await traerPresupuestosAds(env);
+        const limitadas = await selSafe(env, 'v_ppc_limitadas?order=total_dia.desc', []);
+        return json({ ok: true, diag, limitadas }, cors);
       }
 
       // --- PPC por HORAS: patrón por hora del día + serie reciente ---
@@ -712,8 +719,12 @@ export default {
         try { await ingestaPPC(env, {}); } catch (_) {}
       }
       // A las 04:00 UTC, con el día de ayer ya cerrado, corrige el gasto de las
-      // últimas horas que Amazon atribuyó tarde (opción "cierre real").
-      if (hora === 4) { try { await corregirCierrePPCHora(env); } catch (_) {} }
+      // últimas horas que Amazon atribuyó tarde (opción "cierre real") y refresca
+      // los presupuestos de las campañas (para detectar las limitadas del día).
+      if (hora === 4) {
+        try { await corregirCierrePPCHora(env); } catch (_) {}
+        try { await traerPresupuestosAds(env); } catch (_) {}
+      }
     })());
   }
 };
@@ -887,6 +898,41 @@ const ADS_PROFILES = {
 
 // Crea un informe de Ads y devuelve su reportId. Si Amazon responde 425
 // (ya existe uno igual hoy), reutiliza ese informe en vez de fallar.
+// Trae el PRESUPUESTO diario de cada campaña (API de campañas SP v3, distinta del
+// endpoint de informes) y lo guarda en ppc_presupuestos. Con eso detectamos las
+// campañas limitadas por presupuesto (v_ppc_limitadas).
+async function traerPresupuestosAds(env) {
+  const diag = [];
+  const token = await lwaToken(env, 'ads');
+  for (const [pais, profileId] of Object.entries(ADS_PROFILES)) {
+    try {
+      const headers = {
+        'Authorization': 'Bearer ' + token,
+        'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+        'Amazon-Advertising-API-Scope': profileId,
+        'Content-Type': 'application/vnd.spCampaign.v3+json',
+        'Accept': 'application/vnd.spCampaign.v3+json'
+      };
+      const r = await fetch(ADS_HOST + '/sp/campaigns/list', {
+        method: 'POST', headers,
+        body: JSON.stringify({ maxResults: 500, stateFilter: { include: ['ENABLED', 'PAUSED'] } })
+      });
+      if (!r.ok) { diag.push({ pais, estado: 'error', http: r.status, msg: (await r.text()).slice(0, 140) }); continue; }
+      const j = await r.json();
+      const camps = j.campaigns || [];
+      const filas = camps.map(c => {
+        let bud = 0;
+        if (c.budget && typeof c.budget === 'object') bud = +c.budget.budget || 0;
+        else bud = +c.budget || +c.dailyBudget || 0;
+        return { pais, campania_id: String(c.campaignId || ''), campania: c.name || '', presupuesto: bud, estado: c.state || '', actualizado: new Date().toISOString() };
+      }).filter(x => x.campania_id);
+      if (filas.length) await upsertSupabase(env, 'ppc_presupuestos', filas);
+      diag.push({ pais, estado: 'ok', campanas: filas.length });
+    } catch (e) { diag.push({ pais, estado: 'error', msg: ((e && e.message) || String(e)).slice(0, 150) }); }
+  }
+  return diag;
+}
+
 async function crearReporteAds(headers, body) {
   const r = await fetch(ADS_HOST + '/reporting/reports', { method: 'POST', headers, body: JSON.stringify(body) });
   if (r.status === 425) {
@@ -1686,6 +1732,24 @@ async function generarAcciones(env, productos) {
       });
     }
   } catch (e) { /* aún sin v_fuga_tarifa o sin settlements → el motor sigue */ }
+
+  // --- 4) Campañas LIMITADAS POR PRESUPUESTO (dejan de anunciarse por la tarde) ---
+  try {
+    const limitadas = await selectSupabase(env, 'v_ppc_limitadas?order=total_dia.desc&limit=15');
+    for (const c of (limitadas || [])) {
+      const gastado = +c.total_dia || 0, bud = +c.presupuesto || 0;
+      if (bud <= 0) continue;
+      const horaEs = (c.hora_tope != null) ? ((+c.hora_tope + 2) % 24) : null;  // UTC→España (verano, aprox)
+      acciones.push({
+        _v: gastado,
+        ic: '💸', bg: 'rgba(245,166,35,.15)', c: 'var(--am)',
+        t: 'Presupuesto agotado: «' + (c.campania || c.campania_id).slice(0, 42) + '»' + (c.pais ? ' · ' + c.pais : ''),
+        v: gastado.toFixed(2).replace('.', ',') + '€ / ' + bud.toFixed(0) + '€',
+        p: 'Gasta el ' + (c.pct_budget || 100) + '% del budget' + (horaEs != null ? ' hacia las ' + horaEs + 'h' : '') +
+           ': tarde/noche deja de anunciarse. Sube el presupuesto o baja pujas de día si esas horas convierten.'
+      });
+    }
+  } catch (e) { /* aún sin v_ppc_limitadas / presupuestos → el motor sigue */ }
 
   // Ordenar por impacto (€/ventas reales) y limitar; quitar el campo interno _v
   acciones.sort((a, b) => (b._v || 0) - (a._v || 0));
