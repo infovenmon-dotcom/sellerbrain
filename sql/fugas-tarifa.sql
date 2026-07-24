@@ -30,7 +30,7 @@ bench as (
     sku, pais,
     count(*)                                                     as uds,
     round(avg(fee), 2)                                           as fee_medio,
-    round(percentile_cont(0.15) within group (order by fee), 2) as fee_local,  -- tu mejor tarifa (≈ local)
+    round((percentile_cont(0.15) within group (order by fee))::numeric, 2) as fee_local,  -- tu mejor tarifa (≈ local)
     round(max(fee), 2)                                           as fee_max
   from lineas
   group by sku, pais
