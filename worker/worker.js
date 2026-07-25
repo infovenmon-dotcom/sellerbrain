@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v33-stock-reposicion'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v34-mercado-be'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1298,7 +1298,7 @@ async function ingestaDiaria(env, origen) {
     const tsv = await pedirInforme(env,
       'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
       ayer + 'T00:00:00Z', new Date().toISOString(),
-      [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
+      [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
     const filas = parseTSV(tsv);
     await upsertSupabase(env, 'pedidos_dia', agregarPedidosPorDia(filas));
     await upsertSupabase(env, 'ventas_sku_pais_dia', agregarVentasSkuPais(filas)); // total y por país
@@ -1334,7 +1334,7 @@ async function ingestaDiaria(env, origen) {
   if (planCompleto) try {
     const hace30d = new Date(Date.now() - 30 * 86400000).toISOString();
     const tsv = await pedirInforme(env, 'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA',
-      hace30d, ayer + 'T23:59:59Z', [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT]);
+      hace30d, ayer + 'T23:59:59Z', [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
     const devMap = {};
     for (const r of parseTSV(tsv)) {
       if (!r['sku'] && !r['return-date']) continue;
@@ -2031,7 +2031,7 @@ async function traerImagenesCatalogo(env) {
     sinAsin = +(r.headers.get('content-range') || '').split('/')[1] || 0;
   } catch (_) {}
   let ok = 0; const errores = [];
-  const markets = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT];
+  const markets = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE];
   for (const p of (pend || [])) {
     const asin = (p.asin || '').trim();
     if (!asin) continue;
@@ -2068,7 +2068,7 @@ async function getCatalogoItem(env, asin, marketplaceId) {
 async function backfillRango(env, tipo, desde, hasta) {
   const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
   if (!planCompleto) throw new Error('SP-API no configurada (faltan secretos LWA/SPAPI)');
-  const MKT = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT];
+  const MKT = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE];
 
   if (tipo === 'pedidos') {
     const tsv = await pedirInforme(env, 'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
