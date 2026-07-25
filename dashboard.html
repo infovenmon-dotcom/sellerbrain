@@ -2064,7 +2064,9 @@ async function cargarStockPais(){
     else {
       var m=(d.muestra||[]).map(function(x){return x.sku+' · '+x.pais+' · '+x.unidades+' uds';}).join('<br>');
       box.innerHTML='<div style="color:var(--gn)">✅ '+(d.filas||0)+' filas guardadas.</div>'+
-        '<div style="color:var(--mu);margin-top:6px">Columnas del informe: '+((d.columnas||[]).join(', ')||'—')+'</div>'+
+        '<div style="color:var(--mu);margin-top:6px">Columnas: '+((d.columnas||[]).join(', ')||'—')+'</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Líneas crudas: '+(d.lineas_crudas!=null?d.lineas_crudas:'?')+' · parseadas: '+(d.filas_parseadas!=null?d.filas_parseadas:'?')+'</div>'+
+        (d.crudo?'<div style="color:var(--mu2);margin-top:6px;white-space:pre-wrap;font-size:10.5px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:8px">'+(d.crudo||'').replace(/</g,'&lt;')+'</div>':'')+
         (m?'<div style="color:var(--mu2);margin-top:6px">'+m+'</div>':'');
     }
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error o timeout: '+e.message+'. Comprueba en SQL: select * from inventario_pais;</span>'; }

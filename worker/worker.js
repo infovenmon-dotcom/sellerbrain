@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v36-ledger-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v37-ledger-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -843,6 +843,10 @@ async function ingestaInventarioPais(env) {
     [MARKETPLACES.ES], { aggregateByLocation: 'COUNTRY', aggregatedByTimePeriod: 'MONTHLY' });
   const filas = parseTSV(tsv);
   if (filas[0]) diag.columnas = Object.keys(filas[0]).slice(0, 30);
+  // Diagnóstico en crudo: ver qué devuelve Amazon exactamente (vacío, cabeceras, otro formato…)
+  diag.lineas_crudas = (tsv || '').split('\n').length;
+  diag.crudo = (tsv || '').slice(0, 700);
+  diag.filas_parseadas = filas.length;
   const byKey = {};   // sku|pais -> { bal, date }
   for (const r of filas) {
     const sku = r['MSKU'] || r['msku'] || r['seller-sku'] || r['sku'] || '';
