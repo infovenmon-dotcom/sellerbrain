@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v35-inventario-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v36-ledger-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -836,22 +836,26 @@ async function spapiCall(env, path, opts = {}) {
 // defensivo (los nombres de columna pueden variar) + diagnóstico para verificar.
 async function ingestaInventarioPais(env) {
   const diag = { filas: 0, muestra: [], columnas: [] };
-  const tsv = await pedirInforme(env, 'GET_AFN_INVENTORY_DATA_BY_COUNTRY', null, null, [MARKETPLACES.ES]);
+  // Libro Mayor de Inventario agregado POR PAÍS (saldo final = stock actual por país).
+  const desde = new Date(Date.now() - 32 * 86400000).toISOString();
+  const hasta = new Date().toISOString();
+  const tsv = await pedirInforme(env, 'GET_LEDGER_SUMMARY_VIEW_DATA', desde, hasta,
+    [MARKETPLACES.ES], { aggregateByLocation: 'COUNTRY', aggregatedByTimePeriod: 'MONTHLY' });
   const filas = parseTSV(tsv);
-  if (filas[0]) diag.columnas = Object.keys(filas[0]).slice(0, 25);
-  const byKey = {};
+  if (filas[0]) diag.columnas = Object.keys(filas[0]).slice(0, 30);
+  const byKey = {};   // sku|pais -> { bal, date }
   for (const r of filas) {
-    const sku = r['seller-sku'] || r['sku'] || r['msku'] || r['MSKU'] || '';
-    const pais = String(r['country'] || r['Country'] || r['país'] || r['pais'] || r['store'] || '').trim().toUpperCase();
-    const q = +(r['quantity-for-local-fulfillment'] || r['quantity'] || r['afn-fulfillable-quantity'] ||
-                r['ending-warehouse-balance'] || r['Quantity'] || 0) || 0;
-    if (!sku || !pais || pais.length > 3) continue;   // país en código de 2-3 letras
+    const sku = r['MSKU'] || r['msku'] || r['seller-sku'] || r['sku'] || '';
+    const pais = String(r['Country'] || r['country'] || r['Location'] || r['location'] || '').trim().toUpperCase();
+    const bal = +(r['Ending Warehouse Balance'] || r['ending-warehouse-balance'] || r['Ending Balance'] || 0) || 0;
+    const date = String(r['Date'] || r['date'] || '');
+    if (!sku || !pais || pais.length > 3) continue;    // país en código de 2 letras (no el FC completo)
     const k = sku + '|' + pais;
-    byKey[k] = (byKey[k] || 0) + q;
+    if (!byKey[k] || date > byKey[k].date) byKey[k] = { bal, date };   // el saldo del mes más reciente
   }
   const rows = Object.keys(byKey).map(k => {
     const i = k.lastIndexOf('|');
-    return { sku: k.slice(0, i), pais: k.slice(i + 1), unidades: byKey[k], actualizado: new Date().toISOString() };
+    return { sku: k.slice(0, i), pais: k.slice(i + 1), unidades: byKey[k].bal, actualizado: new Date().toISOString() };
   });
   if (rows.length) await upsertSupabase(env, 'inventario_pais', rows);
   diag.filas = rows.length;
@@ -897,12 +901,13 @@ async function traerInventarioFBA(env, marketplaceId) {
   return { inv, cat };
 }
 
-async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketplaceIds) {
+async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketplaceIds, reportOptions) {
   // Los informes "snapshot" (p.ej. inventario) NO aceptan rango de fechas:
   // se piden con dataStartTime/dataEndTime a null y solo se manda el tipo.
   const body = { reportType, marketplaceIds };
   if (dataStartTime) body.dataStartTime = dataStartTime;
   if (dataEndTime) body.dataEndTime = dataEndTime;
+  if (reportOptions) body.reportOptions = reportOptions;   // p.ej. { aggregateByLocation:'COUNTRY' }
   const { reportId } = await spapiCall(env, '/reports/2021-06-30/reports', {
     method: 'POST',
     body: JSON.stringify(body)
