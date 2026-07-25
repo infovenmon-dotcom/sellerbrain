@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v34-mercado-be'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v35-inventario-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -524,6 +524,13 @@ export default {
         return json(res, cors);
       }
 
+      // --- Stock por país (informe paneuropeo) — fuerza la ingesta y devuelve
+      //     diagnóstico (columnas + muestra) para verificar que llega bien. ---
+      if (url.pathname === '/v1/inventario-pais') {
+        const diag = await ingestaInventarioPais(env);
+        return json({ ok: true, ...diag }, cors);
+      }
+
       // --- BACKFILL histórico: procesa UN tipo + UN rango de fechas por llamada.
       //     El navegador lo orquesta mes a mes (así cada invocación del Worker
       //     hace un solo informe y no revienta límites de subrequests/tiempo).
@@ -825,6 +832,33 @@ async function spapiCall(env, path, opts = {}) {
 // Inventario FBA en TIEMPO REAL (FBA Inventory API) — sin generar informe, así
 // evita el FATAL del report GET_FBA_MYI_*. Trae stock + nombre + ASIN de todos
 // los SKUs de un marketplace, paginado.
+// Stock POR PAÍS: informe paneuropeo GET_AFN_INVENTORY_DATA_BY_COUNTRY. Parseo
+// defensivo (los nombres de columna pueden variar) + diagnóstico para verificar.
+async function ingestaInventarioPais(env) {
+  const diag = { filas: 0, muestra: [], columnas: [] };
+  const tsv = await pedirInforme(env, 'GET_AFN_INVENTORY_DATA_BY_COUNTRY', null, null, [MARKETPLACES.ES]);
+  const filas = parseTSV(tsv);
+  if (filas[0]) diag.columnas = Object.keys(filas[0]).slice(0, 25);
+  const byKey = {};
+  for (const r of filas) {
+    const sku = r['seller-sku'] || r['sku'] || r['msku'] || r['MSKU'] || '';
+    const pais = String(r['country'] || r['Country'] || r['país'] || r['pais'] || r['store'] || '').trim().toUpperCase();
+    const q = +(r['quantity-for-local-fulfillment'] || r['quantity'] || r['afn-fulfillable-quantity'] ||
+                r['ending-warehouse-balance'] || r['Quantity'] || 0) || 0;
+    if (!sku || !pais || pais.length > 3) continue;   // país en código de 2-3 letras
+    const k = sku + '|' + pais;
+    byKey[k] = (byKey[k] || 0) + q;
+  }
+  const rows = Object.keys(byKey).map(k => {
+    const i = k.lastIndexOf('|');
+    return { sku: k.slice(0, i), pais: k.slice(i + 1), unidades: byKey[k], actualizado: new Date().toISOString() };
+  });
+  if (rows.length) await upsertSupabase(env, 'inventario_pais', rows);
+  diag.filas = rows.length;
+  diag.muestra = rows.slice(0, 8);
+  return diag;
+}
+
 async function traerInventarioFBA(env, marketplaceId) {
   const inv = {}, cat = {};
   let nextToken = null, pag = 0;
@@ -1358,6 +1392,13 @@ async function ingestaDiaria(env, origen) {
     if (Object.keys(cat).length) await upsertSupabase(env, 'productos_catalogo', Object.values(cat));
     resultado.pasos.push({ inventario: Object.keys(inv).length });
   } catch (e) { resultado.pasos.push({ inventario_error: e.message }); }
+
+  // 3d. Stock POR PAÍS (informe paneuropeo GET_AFN_INVENTORY_DATA_BY_COUNTRY) →
+  //     dónde está almacenado cada SKU. Para el detector de sobrecostes y stock por país.
+  if (planCompleto) try {
+    const r = await ingestaInventarioPais(env);
+    resultado.pasos.push({ inventario_pais: r.filas || 0 });
+  } catch (e) { resultado.pasos.push({ inventario_pais_error: e.message }); }
 
   // 3b. Keywords reales de Amazon (Brand Analytics — requiere Brand Registry y rol aprobado)
   //     Solo lunes: gasta subrequests y suele fallar sin Brand Registry; no hace falta a diario.
