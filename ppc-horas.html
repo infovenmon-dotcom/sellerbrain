@@ -605,8 +605,8 @@ function demo(){
 // rellena el campo de margen, para que la calculadora analice IGUAL que el resto.
 (function autoBreakeven(){
   try{
-    var base=(localStorage.getItem('sb_api_base')||'').replace(/\/$/,'');
-    var tok=null; try{ tok=sessionStorage.getItem('fba_token'); }catch(e){}
+    var base=(localStorage.getItem('sb_api_base')||'https://sellerbrain-api.info-venmon.workers.dev').replace(/\/$/,'');
+    var tok=null; try{ tok=localStorage.getItem('sb_api_key')||sessionStorage.getItem('fba_token'); }catch(e){}
     if(!base || !tok) return;               // sin sesión → se queda el campo manual
     var hoy=new Date();
     var desde=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1)).toISOString().slice(0,10);
@@ -636,8 +636,9 @@ var PPH = { base:'', tok:'', total:[], campanas:[] };
 
 function pphBase(){
   try{
-    PPH.base = (localStorage.getItem('sb_api_base')||'').replace(/\/$/,'');
-    PPH.tok  = sessionStorage.getItem('fba_token') || '';
+    PPH.base = (localStorage.getItem('sb_api_base')||'https://sellerbrain-api.info-venmon.workers.dev').replace(/\/$/,'');
+    // Credencial: clave admin si la hay, si no el token de login del miembro (igual que el dashboard).
+    PPH.tok  = localStorage.getItem('sb_api_key') || sessionStorage.getItem('fba_token') || '';
   }catch(e){ PPH.base=''; PPH.tok=''; }
   return !!(PPH.base && PPH.tok);
 }

@@ -633,12 +633,14 @@ var SB_CONFIG = {
   apiKey: localStorage.getItem('sb_api_key') || ''
 };
 
-// Miembro autenticado: usa su token de login (fba_token) para leer SUS datos
-// reales vía API. Si no hay token, se queda en demo hasta que suba CSV o conecte.
+// Autenticado: usa el token de login (fba_token) del miembro o la clave admin
+// para leer los datos reales vía API. Arranca EN VIVO si hay CUALQUIER credencial
+// (token de sesión o clave admin). Sin credencial → demo hasta subir CSV o conectar.
 (function(){
   try{
     var tok = sessionStorage.getItem('fba_token');
-    if(tok && !SB_CONFIG.apiKey){ SB_CONFIG.mode='api'; SB_CONFIG.apiKey=tok; }
+    if(tok && !SB_CONFIG.apiKey){ SB_CONFIG.apiKey=tok; }   // miembro sin clave admin
+    if(SB_CONFIG.apiKey){ SB_CONFIG.mode='api'; }           // hay credencial → datos reales
   }catch(e){}
 })();
 
@@ -2318,10 +2320,11 @@ function calcRegion(r){
 function cargarPPC(){
   if(SB_CONFIG.mode==='api' || SB_CONFIG.apiKey){
     var H={'Authorization':'Bearer '+SB_CONFIG.apiKey};
+    var js=function(u){ return fetch(u,{headers:H}).then(function(r){return r.ok?r.json():{datos:[]};}).catch(function(){return {datos:[]};}); };
     Promise.all([
-      fetch(SB_CONFIG.apiBase+'/v1/ppc?days=30',{headers:H}).then(function(r){return r.json();}),
-      fetch(SB_CONFIG.apiBase+'/v1/ppc/campanas?days=30',{headers:H}).then(function(r){return r.json();}),
-      fetch(SB_CONFIG.apiBase+'/v1/ppc/terminos',{headers:H}).then(function(r){return r.json();})
+      js(SB_CONFIG.apiBase+'/v1/ppc?days=30'),
+      js(SB_CONFIG.apiBase+'/v1/ppc/campanas?days=30'),
+      js(SB_CONFIG.apiBase+'/v1/ppc/terminos')
     ]).then(function(res){
       var dias=res[0].datos||[], camp=res[1].datos||[], term=res[2].datos||[];
       if(!dias.length && !camp.length && !term.length){ PPC_DATA=PPC_DEMO; renderPPC('demo — conecta y sincroniza para ver tus datos'); return; }
