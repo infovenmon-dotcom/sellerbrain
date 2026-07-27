@@ -971,7 +971,7 @@ function renderProds(){
     // desglose de "Amazon" (comisión + FBA + devoluciones) en el tooltip
     var det='Comisión '+f(p.comision||0,2)+'€ · FBA '+f(p.fba||0,2)+'€'+((p.devol)?' · Devol '+f(p.devol,2)+'€':'')+(p.real?'':' (estimado, aún sin liquidar)');
     var pmed=p.uds>0?(p.ventas/p.uds):0;
-    h+='<tr title="Precio medio '+f(pmed,2)+'€/ud · '+det+'">'+
+    h+='<tr data-sku="'+String(p.sku).replace(/"/g,'&quot;')+'" title="Precio medio '+f(pmed,2)+'€/ud · '+det+'">'+
       '<td><div class="prod"><div class="img">'+img+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+(coste?'':' · sin coste')+' <a href="https://sellercentral.amazon.es/skucentral?mSku='+encodeURIComponent(p.sku)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir este producto en Seller Central" style="color:#4A9EDE;text-decoration:none">↗ Amazon</a></div></div></div></td>'+
       '<td>'+p.uds+'</td>'+
       '<td>'+f(p.ventas,2)+'€</td>'+
@@ -1776,8 +1776,10 @@ function csvConstruirPayload(){
 /* Pinchar un producto abre el DETALLE (operaciones reales de Amazon). */
 document.addEventListener('click',function(ev){
   var tr=ev.target.closest('#prods tr'); if(!tr)return;
-  var skuEl=tr.querySelector('.sku'); if(!skuEl)return;
-  var sku=skuEl.textContent.replace(' · sin coste','').trim();
+  // SKU limpio desde el atributo (el texto de .sku incluye el enlace "↗ Amazon").
+  var sku=tr.getAttribute('data-sku');
+  if(!sku){ var skuEl=tr.querySelector('.sku'); if(!skuEl)return; sku=skuEl.textContent.replace(' · sin coste','').replace('↗ Amazon','').trim(); }
+  if(!sku)return;
   if(SB_CONFIG.mode==='csv'){ editarCoste(sku); return; }  // en CSV, edición directa
   abrirDetalle(sku);
 });
