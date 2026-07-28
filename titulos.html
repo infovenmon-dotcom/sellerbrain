@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Títulos SEO · Generador que cumple las reglas de Amazon</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:30px 0 12px;text-align:center}
+.hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1.25}
+.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:720px;margin:10px auto 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}
+.inf b{color:rgba(255,255,255,.75)}
+.btn{display:inline-block;padding:11px 18px;background:var(--or);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+.chip{padding:6px 11px;border-radius:99px;border:1.5px solid var(--bd2);background:none;color:var(--mu2);font-size:11.5px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.chip:hover,.chip.on{border-color:var(--or);color:var(--or2);background:rgba(46,230,160,.08)}
+label.f{display:block;font-size:11px;color:var(--mu);margin-bottom:4px}
+input.n,select.n{width:100%;padding:9px 10px;background:#111;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-size:12.5px;font-family:'DM Sans',sans-serif}
+input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:none}
+textarea.n{width:100%;padding:11px 12px;background:#111;border:1.5px solid var(--bd);border-radius:10px;color:var(--tx);font-size:14px;line-height:1.5;font-family:'DM Sans',sans-serif;resize:vertical;min-height:74px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.drop{border:2px dashed rgba(46,230,160,.4);border-radius:12px;padding:16px;text-align:center;cursor:pointer;background:rgba(46,230,160,.03);font-size:12.5px;color:var(--mu2)}
+.drop:hover{background:rgba(46,230,160,.08)}
+.kwpool{display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto;margin-top:8px}
+.kw{padding:5px 9px;border-radius:99px;border:1.5px solid var(--bd2);background:none;color:var(--mu2);font-size:11px;cursor:pointer}
+.kw.on{border-color:var(--or);color:#fff;background:rgba(46,230,160,.15)}
+.kw small{color:var(--mu);margin-left:5px}
+.meter{height:8px;border-radius:99px;background:#111;overflow:hidden;margin-top:6px}
+.meter>div{height:100%;border-radius:99px;transition:width .2s}
+.check{display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.check .ico{flex-shrink:0;width:18px}
+.check.ok{color:var(--mu2)}
+.check.bad{color:var(--rd)}
+.check.warn{color:var(--am)}
+.rule{font-size:12px;color:var(--mu2);padding:5px 0 5px 20px;position:relative;line-height:1.5}
+.rule:before{content:"•";position:absolute;left:6px;color:var(--or)}
+.rule b{color:#fff}
+.err{display:none;margin-top:10px;padding:12px;border-radius:10px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.25);font-size:12px;color:var(--rd)}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:760px;margin-left:auto;margin-right:auto}
+.small{font-size:11px;color:var(--mu)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Seller<b>Brain</b></div>
+  <div class="badge">🏷️ Títulos SEO</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>Genera títulos que <span>posicionan</span> y que Amazon <span>no rechaza</span></h1>
+  <p>Amazon cambió las reglas de los títulos (efectivo 21 ene 2025). Aquí ves si tu título actual las incumple, metes las palabras clave que Amazon te da o un CSV de <b>Cerebro (Helium&nbsp;10)</b>, y generas un título optimizado que cumple la normativa — con validación en vivo.</p>
+</div>
+
+<!-- REGLAS NUEVAS DE AMAZON -->
+<div class="card" style="border-color:rgba(74,158,222,.3);background:rgba(74,158,222,.05)">
+  <div class="ct"><span class="ci" style="background:rgba(74,158,222,.15)">📋</span> Las reglas nuevas de Amazon (2025) que aplica este generador</div>
+  <div class="rule"><b>Longitud:</b> máx. <b>200 caracteres</b> (algunas categorías de ropa, 125). Recomendado <b>≤ 80</b> para móvil — lo que se ve en el buscador.</div>
+  <div class="rule"><b>Símbolos prohibidos:</b> <code>! $ ? _ { } ^ ¬ ¦</code> y emojis (salvo que formen parte de la marca). Permitidos: <code>|</code> y <code>-</code> para separar.</div>
+  <div class="rule"><b>Palabras repetidas:</b> ninguna palabra puede aparecer más de <b>2 veces</b> (excepto preposiciones, artículos y conjunciones).</div>
+  <div class="rule"><b>Nada promocional:</b> prohibido “oferta”, “envío gratis”, “el mejor”, “100%”, “garantía”, “más vendido”… (van en otros campos, no en el título).</div>
+  <div class="rule"><b>Estructura recomendada:</b> <b>Marca + Tipo de producto + Características clave + Tamaño/Color/Cantidad</b>. Palabra clave principal lo antes posible.</div>
+  <div class="small" style="margin-top:8px">Amazon avisa al dueño de marca y da <b>14 días</b> para corregir antes de cambiar el título automáticamente.</div>
+</div>
+
+<!-- 1 · PRODUCTO -->
+<div class="card">
+  <div class="ct"><span class="ci">1️⃣</span> Elige el producto (opcional)</div>
+  <div class="inf">Trae tus productos para ver y <b>validar el título actual</b> que tienes en Amazon, y partir de ahí. Si prefieres, escribe el título a mano abajo.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+    <button class="btn-sec" id="btn-prod" onclick="traerProductos()">📥 Traer mis productos</button>
+    <div style="flex:1;min-width:220px">
+      <label class="f">Producto</label>
+      <select class="n" id="sel-prod" onchange="elegirProducto()"><option value="">— (escribo el título a mano) —</option></select>
+    </div>
+  </div>
+  <div class="err" id="err-prod"></div>
+</div>
+
+<!-- 2 · PALABRAS CLAVE -->
+<div class="card">
+  <div class="ct"><span class="ci">2️⃣</span> Palabras clave</div>
+  <div class="inf">Dos fuentes. Puedes usar las dos a la vez — se combinan y se ordenan por volumen/relevancia.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+    <button class="chip on" id="tab-cerebro" onclick="tabKw('cerebro')">📄 CSV de Cerebro (Helium 10)</button>
+    <button class="chip" id="tab-amazon" onclick="tabKw('amazon')">🅰️ Términos que me da Amazon</button>
+  </div>
+
+  <div id="pane-cerebro">
+    <label class="f">Pega el CSV de Cerebro o suéltalo aquí</label>
+    <div class="drop" id="drop" onclick="document.getElementById('file').click()">📄 Arrastra tu <b>Cerebro_*.csv</b> o pega el contenido en el cuadro de abajo.</div>
+    <input type="file" id="file" accept=".csv,text/csv" style="display:none">
+    <textarea class="n" id="csv-txt" placeholder="Keyword Phrase,Search Volume,...&#10;botella acero inoxidable,54000,...&#10;botella termica,33000,..." style="margin-top:8px;min-height:90px;font-size:12px"></textarea>
+    <div style="margin-top:8px"><button class="btn-sec" onclick="parsearCerebro()">➕ Cargar palabras del CSV</button></div>
+  </div>
+
+  <div id="pane-amazon" style="display:none">
+    <div class="inf" style="margin-bottom:8px">Trae los <b>términos de búsqueda reales</b> por los que te compran (informe de términos de tu Amazon Ads). Es lo más parecido a “las palabras que Amazon te da” sin salir de aquí.</div>
+    <button class="btn-sec" id="btn-amz" onclick="traerTerminosAmazon()">🅰️ Traer mis términos de Amazon</button>
+    <div class="err" id="err-amz"></div>
+  </div>
+
+  <div id="kw-box" style="display:none;margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <label class="f" style="margin:0">Palabras disponibles <span class="small" id="kw-count"></span> — pincha para incluir/excluir</label>
+      <button class="btn-sec" onclick="autoSeleccion()" style="padding:5px 9px">✨ Auto (top volumen)</button>
+    </div>
+    <div class="kwpool" id="kwpool"></div>
+  </div>
+</div>
+
+<!-- 3 · DATOS DEL TÍTULO -->
+<div class="card">
+  <div class="ct"><span class="ci">3️⃣</span> Datos base (para la estructura correcta)</div>
+  <div class="grid">
+    <div><label class="f">Marca</label><input class="n" id="f-marca" placeholder="Ej: Venmon" oninput="generar()"></div>
+    <div><label class="f">Tipo de producto</label><input class="n" id="f-tipo" placeholder="Ej: Botella térmica" oninput="generar()"></div>
+    <div><label class="f">Material / clave</label><input class="n" id="f-mat" placeholder="Ej: acero inoxidable" oninput="generar()"></div>
+    <div><label class="f">Tamaño / capacidad</label><input class="n" id="f-size" placeholder="Ej: 750 ml" oninput="generar()"></div>
+    <div><label class="f">Color</label><input class="n" id="f-color" placeholder="Ej: Negro" oninput="generar()"></div>
+    <div><label class="f">Cantidad / pack</label><input class="n" id="f-qty" placeholder="Ej: Pack 2" oninput="generar()"></div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px">
+    <button class="btn" onclick="generar(true)">⚙️ Generar título optimizado</button>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mu2);cursor:pointer"><input type="checkbox" id="chk-ropa" onchange="validar()"> Categoría de ropa (límite 125)</label>
+  </div>
+</div>
+
+<!-- 4 · EDITOR + VALIDACIÓN -->
+<div class="card" style="border:1.5px solid rgba(46,230,160,.35)">
+  <div class="ct"><span class="ci">✅</span> Tu título — edítalo y comprueba en vivo</div>
+  <textarea class="n" id="titulo" oninput="validar()" placeholder="Aquí sale el título generado. Puedes editarlo libremente; la validación se actualiza sola."></textarea>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px">
+    <div style="flex:1;min-width:200px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu)"><span id="len-lbl">0 caracteres</span><span id="len-max">/ 200</span></div>
+      <div class="meter"><div id="len-bar" style="width:0%;background:var(--gn)"></div></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-sec" onclick="copiar()">📋 Copiar</button>
+      <button class="btn-sec" onclick="limpiar()">🧹 Limpiar</button>
+    </div>
+  </div>
+  <div id="checks" style="margin-top:12px"></div>
+</div>
+
+<div class="disclaimer">
+  SellerBrain aplica las reglas públicas de Amazon para títulos (vigentes desde el 21 de enero de 2025). Algunas categorías tienen límites o requisitos propios: revisa siempre las guías de estilo de tu categoría en Seller Central antes de publicar. El volumen de búsqueda proviene de tu CSV de Helium&nbsp;10; los términos “de Amazon” provienen de tu informe de términos de búsqueda de Amazon Ads.
+</div>
+
+</div>
+
+<script>
+/* ============ CONEXIÓN (igual que el resto del panel) ============ */
+function apiBase(){ return (localStorage.getItem('sb_api_base')||'https://sellerbrain-api.info-venmon.workers.dev').replace(/\/$/,''); }
+function apiCred(){ try{ return localStorage.getItem('sb_api_key')||sessionStorage.getItem('fba_token')||''; }catch(e){ return ''; } }
+function authHdr(){ var c=apiCred(); return c?{'Authorization':'Bearer '+c}:{}; }
+
+/* ============ STOPWORDS (no cuentan para "repetido >2") ============ */
+var STOP = new Set(('de del la el los las un una unos unas y o u a en con por para al sin sobre entre '+
+  'the of and or a an for to in with by on at').split(' '));
+
+/* ============ PALABRAS PROMOCIONALES PROHIBIDAS ============ */
+var PROMO = ['oferta','ofertas','rebaja','rebajas','descuento','envio gratis','envío gratis','gratis',
+  'el mejor','la mejor','mejor precio','mas vendido','más vendido','superventas','100%','garantia','garantía',
+  'nuevo','nueva','barato','barata','calidad premium','best seller','bestseller','free shipping','sale',
+  'cheap','hot','top ventas','oferta especial','liquidacion','liquidación','promocion','promoción'];
+
+/* ============ CARACTERES PROHIBIDOS ============ */
+var BANNED = ['!','$','?','_','{','}','^','¬','¦','~','#','*','%','€','@'];
+function tieneEmoji(s){ return /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/u.test(s); }
+
+/* ============ ESTADO ============ */
+var KW = [];        // {frase, vol, on}
+var PRODS = [];
+
+/* ============ 1 · PRODUCTOS ============ */
+function traerProductos(){
+  var b=document.getElementById('btn-prod'); b.textContent='⏳ Trayendo…'; b.disabled=true;
+  var e=document.getElementById('err-prod'); e.style.display='none';
+  var hoy=new Date(), d1=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1)).toISOString().slice(0,10), d2=hoy.toISOString().slice(0,10);
+  fetch(apiBase()+'/v1/productos?desde='+d1+'&hasta='+d2,{headers:authHdr()})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      PRODS=(d.productos||[]);
+      var sel=document.getElementById('sel-prod');
+      sel.innerHTML='<option value="">— (escribo el título a mano) —</option>'+
+        PRODS.map(function(p,i){ return '<option value="'+i+'">'+(p.nom||p.sku).replace(/</g,'&lt;').slice(0,90)+'</option>'; }).join('');
+      b.textContent='✅ '+PRODS.length+' productos'; b.disabled=false;
+      if(!PRODS.length){ e.textContent='Conectado, pero aún sin productos con ventas en el mes. Escribe el título a mano abajo.'; e.style.display='block'; }
+    })
+    .catch(function(err){ b.textContent='📥 Traer mis productos'; b.disabled=false; e.textContent='No pude traer los productos ('+err.message+'). ¿Sesión iniciada? Puedes trabajar a mano igualmente.'; e.style.display='block'; });
+}
+function elegirProducto(){
+  var i=document.getElementById('sel-prod').value; if(i==='') return;
+  var p=PRODS[+i]; if(!p) return;
+  document.getElementById('titulo').value=p.nom||'';   // título actual → a validar
+  // intenta prellenar la marca con la primera palabra del título
+  if(!document.getElementById('f-marca').value){ var w=(p.nom||'').trim().split(/\s+/)[0]; if(w) document.getElementById('f-marca').value=w; }
+  validar();
+}
+
+/* ============ 2 · PALABRAS CLAVE ============ */
+function tabKw(t){
+  document.getElementById('tab-cerebro').classList.toggle('on',t==='cerebro');
+  document.getElementById('tab-amazon').classList.toggle('on',t==='amazon');
+  document.getElementById('pane-cerebro').style.display=t==='cerebro'?'block':'none';
+  document.getElementById('pane-amazon').style.display=t==='amazon'?'block':'none';
+}
+// Detecta separador y parte una línea CSV respetando comillas.
+function csvLinea(l,sep){ var out=[],cur='',q=false; for(var i=0;i<l.length;i++){ var c=l[i];
+  if(c==='"'){ if(q&&l[i+1]==='"'){cur+='"';i++;} else q=!q; }
+  else if(c===sep&&!q){ out.push(cur); cur=''; } else cur+=c; } out.push(cur); return out; }
+function parsearCerebro(){
+  var txt=document.getElementById('csv-txt').value.trim();
+  if(!txt){ alert('Pega el contenido del CSV de Cerebro (o suéltalo arriba).'); return; }
+  var lineas=txt.split(/\r?\n/).filter(function(x){return x.trim();});
+  if(lineas.length<2){ alert('El CSV no tiene filas de datos.'); return; }
+  var sep=(lineas[0].split(';').length>lineas[0].split(',').length)?';':',';
+  var head=csvLinea(lineas[0],sep).map(function(h){return h.trim().toLowerCase();});
+  var iF=head.findIndex(function(h){return /keyword ?phrase|phrase|palabra|keyword|término|termino/.test(h);});
+  var iV=head.findIndex(function(h){return /search ?volume|volumen|volume|búsquedas|busquedas/.test(h);});
+  if(iF<0) iF=0;
+  var add=0;
+  for(var i=1;i<lineas.length;i++){ var c=csvLinea(lineas[i],sep);
+    var frase=(c[iF]||'').trim().toLowerCase(); if(!frase) continue;
+    var vol=iV>=0?parseInt(String(c[iV]).replace(/[^\d]/g,''),10)||0:0;
+    if(!KW.some(function(k){return k.frase===frase;})){ KW.push({frase:frase,vol:vol,on:false}); add++; }
+  }
+  ordenarKw(); pintarKw();
+  alert('Añadidas '+add+' palabras del CSV. Total: '+KW.length+'.');
+}
+function traerTerminosAmazon(){
+  var b=document.getElementById('btn-amz'); b.textContent='⏳ Trayendo…'; b.disabled=true;
+  var e=document.getElementById('err-amz'); e.style.display='none';
+  fetch(apiBase()+'/v1/ppc/terminos',{headers:authHdr()})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      var rows=d.datos||d.terminos||[]; var add=0;
+      rows.forEach(function(t){
+        var frase=String(t.termino||t.keyword||t.query||'').trim().toLowerCase(); if(!frase) return;
+        // "volumen" aproximado por interés real: pedidos*100 + clics (lo que convierte pesa más)
+        var vol=(+(t.pedidos||t.pedidos_ppc||0))*100 + (+(t.clics||0));
+        var ex=KW.find(function(k){return k.frase===frase;});
+        if(ex){ ex.vol=Math.max(ex.vol,vol); } else { KW.push({frase:frase,vol:vol,on:false}); add++; }
+      });
+      ordenarKw(); pintarKw();
+      b.textContent='✅ '+add+' términos'; b.disabled=false;
+      if(!rows.length){ e.textContent='Conectado, pero aún no hay términos de búsqueda en tu Amazon Ads (necesita días de datos). Usa el CSV de Cerebro mientras.'; e.style.display='block'; }
+    })
+    .catch(function(err){ b.textContent='🅰️ Traer mis términos de Amazon'; b.disabled=false; e.textContent='No pude traer los términos ('+err.message+'). Prueba el CSV de Cerebro.'; e.style.display='block'; });
+}
+function ordenarKw(){ KW.sort(function(a,b){return b.vol-a.vol;}); }
+function pintarKw(){
+  document.getElementById('kw-box').style.display=KW.length?'block':'none';
+  document.getElementById('kw-count').textContent='('+KW.length+')';
+  document.getElementById('kwpool').innerHTML=KW.map(function(k,i){
+    return '<span class="kw'+(k.on?' on':'')+'" onclick="toggleKw('+i+')">'+k.frase.replace(/</g,'&lt;')+(k.vol?'<small>'+(k.vol>=1000?Math.round(k.vol/1000)+'k':k.vol)+'</small>':'')+'</span>';
+  }).join('');
+}
+function toggleKw(i){ KW[i].on=!KW[i].on; pintarKw(); }
+function autoSeleccion(){ // selecciona las de más volumen hasta ~cubrir 200 chars de palabras nuevas
+  KW.forEach(function(k){k.on=false;});
+  var vistas=new Set(), chars=0;
+  for(var i=0;i<KW.length;i++){
+    var nuevas=KW[i].frase.split(/\s+/).filter(function(w){return w.length>2 && !vistas.has(w);});
+    if(!nuevas.length) continue;
+    KW[i].on=true; nuevas.forEach(function(w){vistas.add(w);}); chars+=KW[i].frase.length+1;
+    if(chars>170) break;
+  }
+  pintarKw(); generar();
+}
+
+/* ============ 3 · GENERAR ============ */
+function limpio(s){ // aplica reglas de caracteres
+  var t=s;
+  BANNED.forEach(function(c){ t=t.split(c).join(''); });
+  t=t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu,'');
+  return t.replace(/\s+/g,' ').replace(/\s+([|,-])/g,' $1').trim();
+}
+function capFrase(s){ return s.replace(/\b([a-záéíóúñ])/g,function(m){return m.toUpperCase();}); }
+function generar(force){
+  var marca=document.getElementById('f-marca').value.trim();
+  var tipo=document.getElementById('f-tipo').value.trim();
+  var mat=document.getElementById('f-mat').value.trim();
+  var size=document.getElementById('f-size').value.trim();
+  var color=document.getElementById('f-color').value.trim();
+  var qty=document.getElementById('f-qty').value.trim();
+  // Si el usuario ya escribió/editó el título y no pulsa "Generar", no lo pisamos.
+  var ta=document.getElementById('titulo');
+  if(!force){ if(ta.value.trim()){ validar(); return; } }
+  if(!marca && !tipo && !KW.some(function(k){return k.on;})){ if(force) alert('Pon al menos la Marca y el Tipo, o selecciona alguna palabra clave.'); return; }
+
+  var max=document.getElementById('chk-ropa').checked?125:200;
+  var wordCount={};                          // control de "máx 2 repeticiones"
+  var parts=[], usedChars=0;
+  function puedo(w){ var k=w.toLowerCase(); if(STOP.has(k)) return true; return (wordCount[k]||0)<2; }
+  function meter(txt){ if(!txt) return; txt=capFrase(limpio(txt));
+    var ws=txt.split(/\s+/), keep=[];
+    ws.forEach(function(w){ var k=w.toLowerCase().replace(/[^a-záéíóúñ0-9]/g,'');
+      if(!k){ keep.push(w); return; }
+      if(puedo(k)){ keep.push(w); if(!STOP.has(k)) wordCount[k]=(wordCount[k]||0)+1; } });
+    if(!keep.length) return;
+    var add=keep.join(' ');
+    if(usedChars+add.length+3>max) { // recorta a lo que quepa por palabras enteras
+      var acc=''; for(var i=0;i<keep.length;i++){ if(usedChars+acc.length+keep[i].length+4>max) break; acc+=(acc?' ':'')+keep[i]; }
+      if(!acc) return; add=acc;
+    }
+    parts.push(add); usedChars+=add.length+3;
+  }
+  // Estructura Amazon: Marca + Tipo + Material + [keywords] + Tamaño/Color/Cantidad
+  meter(marca); meter(tipo); meter(mat);
+  KW.filter(function(k){return k.on;}).forEach(function(k){ meter(k.frase); });
+  meter(size); meter(color); meter(qty);
+
+  var titulo=parts.join(' ');            // sin separadores raros; espacios simples
+  ta.value=titulo;
+  validar();
+}
+
+/* ============ 4 · VALIDAR EN VIVO ============ */
+function validar(){
+  var t=document.getElementById('titulo').value;
+  var max=document.getElementById('chk-ropa').checked?125:200;
+  document.getElementById('len-max').textContent='/ '+max;
+  var len=t.length;
+  document.getElementById('len-lbl').textContent=len+' caracteres';
+  var bar=document.getElementById('len-bar');
+  var pct=Math.min(100,Math.round(len/max*100));
+  bar.style.width=pct+'%';
+  bar.style.background= len>max?'var(--rd)': len>80?'var(--am)':'var(--gn)';
+
+  var checks=[];
+  // longitud
+  if(len===0) checks.push(['warn','⚠️','Vacío — genera o escribe un título.']);
+  else if(len>max) checks.push(['bad','✕','Te pasas del límite: '+len+' / '+max+' caracteres. Amazon lo recortará.']);
+  else if(len>80) checks.push(['ok','✓','Dentro del límite ('+len+'/'+max+'). Nota: en móvil solo se ven ~80 — pon lo importante al principio.']);
+  else checks.push(['ok','✓','Longitud ideal ('+len+'/'+max+'), se ve entero en móvil.']);
+
+  // caracteres prohibidos
+  var malos=BANNED.filter(function(c){return t.indexOf(c)>=0;});
+  if(tieneEmoji(t)) malos.push('emoji');
+  if(malos.length) checks.push(['bad','✕','Símbolos no permitidos: '+malos.join(' ')+'  → quítalos (solo se permiten | y -).']);
+  else checks.push(['ok','✓','Sin símbolos prohibidos.']);
+
+  // palabras repetidas >2
+  var wc={}; t.toLowerCase().split(/\s+/).forEach(function(w){ w=w.replace(/[^a-záéíóúñ0-9]/g,''); if(!w||STOP.has(w)) return; wc[w]=(wc[w]||0)+1; });
+  var rep=Object.keys(wc).filter(function(w){return wc[w]>2;});
+  if(rep.length) checks.push(['bad','✕','Palabras repetidas más de 2 veces: '+rep.join(', ')+'.']);
+  else checks.push(['ok','✓','Ninguna palabra se repite más de 2 veces.']);
+
+  // promocional
+  var lo=' '+t.toLowerCase()+' ';
+  var promo=PROMO.filter(function(p){ return lo.indexOf(' '+p+' ')>=0 || lo.indexOf(' '+p)>=0 && p.length>4; });
+  if(promo.length) checks.push(['bad','✕','Lenguaje promocional prohibido: “'+promo.join('”, “')+'”. Va en viñetas/A+, no en el título.']);
+  else checks.push(['ok','✓','Sin lenguaje promocional.']);
+
+  // TODO EN MAYÚSCULAS
+  var letras=t.replace(/[^a-záéíóúñ]/gi,'');
+  if(letras.length>8 && t===t.toUpperCase()) checks.push(['warn','⚠️','Está TODO EN MAYÚSCULAS — usa Mayúscula Inicial En Cada Palabra.']);
+
+  // marca al principio (recomendación)
+  var marca=document.getElementById('f-marca').value.trim().toLowerCase();
+  if(marca && t.toLowerCase().indexOf(marca)>0) checks.push(['warn','⚠️','La marca debería ir al principio del título.']);
+
+  var bad=checks.some(function(c){return c[0]==='bad';});
+  var html=checks.map(function(c){ return '<div class="check '+c[0]+'"><span class="ico">'+c[1]+'</span><span>'+c[2]+'</span></div>'; }).join('');
+  html+='<div style="margin-top:8px;font-weight:800;font-family:Syne,sans-serif;color:'+(bad?'var(--rd)':'var(--gn)')+'">'+(len===0?'':(bad?'✕ Aún no cumple — corrige lo marcado en rojo':'✓ Cumple las reglas de Amazon'))+'</div>';
+  document.getElementById('checks').innerHTML=html;
+}
+
+function copiar(){ var t=document.getElementById('titulo'); t.select();
+  try{ navigator.clipboard.writeText(t.value); }catch(e){ document.execCommand('copy'); }
+  var b=event.target; var o=b.textContent; b.textContent='✅ Copiado'; setTimeout(function(){b.textContent=o;},1200); }
+function limpiar(){ document.getElementById('titulo').value=''; validar(); }
+
+/* ============ Drag & drop CSV ============ */
+(function(){
+  var drop=document.getElementById('drop'), file=document.getElementById('file');
+  function leer(f){ var r=new FileReader(); r.onload=function(){ document.getElementById('csv-txt').value=r.result; parsearCerebro(); }; r.readAsText(f); }
+  file.addEventListener('change',function(){ if(file.files[0]) leer(file.files[0]); });
+  ;['dragover','dragenter'].forEach(function(ev){ drop.addEventListener(ev,function(e){e.preventDefault();drop.style.background='rgba(46,230,160,.12)';}); });
+  ;['dragleave','drop'].forEach(function(ev){ drop.addEventListener(ev,function(e){e.preventDefault();drop.style.background='';}); });
+  drop.addEventListener('drop',function(e){ var f=e.dataTransfer.files[0]; if(f) leer(f); });
+})();
+
+validar();
+</script>
+</body>
+</html>
