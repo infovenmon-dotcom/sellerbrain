@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v37-ledger-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v38-refresco-horario'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -75,7 +75,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/ingest-ventas';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -514,6 +514,14 @@ export default {
         return json(res, cors);
       }
 
+      // --- Refresco LIGERO de ventas del día (solo pedidos). Barato: lo llama el
+      //     cron cada hora y el dashboard puede llamarlo al abrir para ver el día
+      //     al momento sin la ingesta completa. ---
+      if (url.pathname === '/v1/ingest-ventas') {
+        const res = await ingestaVentasHoy(env);
+        return json(res, cors);
+      }
+
       // --- Ingesta PPC (Ads API) en invocación separada (límite subrequests).
       //     ?pais=ES procesa UN país (para no pasar el límite en plan gratis).
       if (url.pathname === '/v1/ingest-ppc' && request.method === 'POST') {
@@ -742,6 +750,11 @@ export default {
       // Recoger informes async listos CADA hora (antes solo a las 3 UTC → un
       // informe que no estaba listo esperaba 24h). Ahora entra en la hora siguiente.
       try { await recogerPendientesPPC(env); } catch (_) {}
+      // Refresco LIGERO de las ventas del día CADA hora (aprovecha esta misma
+      // pasada del cron; solo pedidos → coste mínimo). Así el dashboard está al
+      // día sin lanzar la ingesta a mano. A las 03:00 no hace falta porque la
+      // ingesta completa de abajo ya trae los pedidos.
+      if (hora !== 3) { try { await ingestaVentasHoy(env); } catch (_) {} }
       if (hora === 3) {
         await ingestaDiaria(env, 'cron');
         try { await ingestaPPC(env, {}); } catch (_) {}
@@ -1443,6 +1456,28 @@ async function ingestaDiaria(env, origen) {
   } catch (e) { /* si falla el log, no rompe la ingesta */ }
 
   return resultado;
+}
+
+/* =====================================================================
+ * REFRESCO LIGERO HORARIO — solo los PEDIDOS de ayer + hoy, que es lo único
+ * que cambia intradía. Es barato (1 informe de pedidos, como la foto de PPC),
+ * así el dashboard muestra las ventas del día al momento SIN lanzar la ingesta
+ * completa a mano. El histórico pesado (settlements, devoluciones, inventario,
+ * stock por país) sigue una vez al día en ingestaDiaria (03:00 UTC).
+ * =================================================================== */
+async function ingestaVentasHoy(env) {
+  const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+  if (!planCompleto) return { saltado: 'sin SP-API' };
+  const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const tsv = await pedirInforme(env,
+    'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
+    ayer + 'T00:00:00Z', new Date().toISOString(),
+    [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
+  const filas = parseTSV(tsv);
+  await upsertSupabase(env, 'pedidos_dia', agregarPedidosPorDia(filas));
+  await upsertSupabase(env, 'ventas_sku_pais_dia', agregarVentasSkuPais(filas));
+  await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas));
+  return { pedidos: filas.length };
 }
 
 /* =====================================================================

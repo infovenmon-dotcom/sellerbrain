@@ -654,6 +654,19 @@ var SB_PROVIDERS = {
   demo: function(){ return Promise.resolve(SB_DEMO); },
   api: function(){
     window._apiFallo=false;
+    // Refresco ligero de las ventas del día al abrir (solo pedidos), como máximo
+    // 1 vez por hora para no gastar de más. El cron ya lo hace cada hora igual;
+    // esto solo asegura que al abrir veas el día al momento. No bloquea la carga.
+    try{
+      var ult=+(localStorage.getItem('sb_ult_refresco')||0);
+      if(Date.now()-ult > 3600000){
+        localStorage.setItem('sb_ult_refresco', Date.now());
+        fetch(SB_CONFIG.apiBase+'/v1/ingest-ventas',{method:'POST',headers:authHdr()})
+          .then(function(r){return r.json();})
+          .then(function(){ if(SB_CONFIG.mode==='api'){ cargarDatos().then(aplicarDatos); } })
+          .catch(function(){});
+      }
+    }catch(e){}
     return fetch(SB_CONFIG.apiBase + '/v1/dashboard', {
       headers: SB_CONFIG.apiKey ? {'Authorization':'Bearer '+SB_CONFIG.apiKey} : {}
     }).then(function(r){
