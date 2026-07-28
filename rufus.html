@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Rufus · Auditor de atributos para la IA de Amazon</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:30px 0 12px;text-align:center}
+.hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1.25}
+.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:720px;margin:10px auto 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}
+.inf b{color:rgba(255,255,255,.75)}
+.btn{display:inline-block;padding:11px 18px;background:var(--or);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;cursor:pointer}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+label.f{display:block;font-size:11px;color:var(--mu);margin-bottom:4px}
+input.n,select.n,textarea.n{width:100%;padding:10px 11px;background:#111;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-size:13px;font-family:'DM Sans',sans-serif}
+textarea.n{resize:vertical;line-height:1.5}
+input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.rule{font-size:12px;color:var(--mu2);padding:5px 0 5px 20px;position:relative;line-height:1.5}
+.rule:before{content:"•";position:absolute;left:6px;color:var(--or)}
+.rule b{color:#fff}
+.score{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.ring{--p:0;width:96px;height:96px;border-radius:50%;background:conic-gradient(var(--or) calc(var(--p)*1%), #222 0);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ring>div{width:76px;height:76px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .n{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1}
+.ring .l{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em}
+.attr{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.attr .ico{flex-shrink:0;width:18px}
+.attr.ok{color:var(--mu2)}
+.attr.no{color:var(--tx)}
+.attr small{color:var(--mu);display:block;font-size:11px;margin-top:1px}
+.q{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.q .ico{flex-shrink:0;width:18px}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:10.5px;font-weight:700}
+.pill.gn{background:rgba(46,204,113,.14);color:var(--gn)}
+.pill.am{background:rgba(245,166,35,.14);color:var(--am)}
+.pill.rd{background:rgba(232,64,64,.14);color:var(--rd)}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:760px;margin-left:auto;margin-right:auto}
+.err{display:none;margin-top:10px;padding:12px;border-radius:10px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.25);font-size:12px;color:var(--rd)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Seller<b>Brain</b></div>
+  <div class="badge">🤖 Rufus · Atributos IA</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>¿Tu ficha está lista para <span>Rufus</span>, la IA de compra de Amazon?</h1>
+  <p>Rufus ya media el <b>15-20%</b> de las búsquedas en móvil y responde al comprador leyendo los <b>atributos estructurados</b> de tu ficha. Si un dato no está, Rufus no lo puede decir y recomienda a la competencia. Aquí puntúas la cobertura de tu ficha y ves qué atributos rellenar.</p>
+</div>
+
+<div class="card" style="border-color:rgba(74,158,222,.3);background:rgba(74,158,222,.05)">
+  <div class="ct"><span class="ci" style="background:rgba(74,158,222,.15)">💡</span> Por qué importa (2026)</div>
+  <div class="rule">Rufus responde preguntas del comprador (“¿es apto para lavavajillas?”, “¿sirve para viajar?”) con los <b>atributos backend</b> — no con el marketing.</div>
+  <div class="rule">Amazon prioriza fichas con <b>90%+ de atributos rellenos</b> (material, uso, certificaciones…) por encima del “keyword stuffing”.</div>
+  <div class="rule">Con el nuevo límite de <b>75 caracteres</b> en el título, los atributos e Item Highlights pasan a ser el sitio donde vive el SEO. Rellenarlos es doblemente rentable.</div>
+</div>
+
+<!-- 1 · FUENTE -->
+<div class="card">
+  <div class="ct"><span class="ci">1️⃣</span> Pega el contenido de tu ficha</div>
+  <div class="inf">Trae un producto para cargar su título, o pega a mano el <b>título + viñetas + descripción</b>. Cuanto más completo, mejor analiza.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+    <button class="btn-sec" id="btn-prod" onclick="traerProductos()">📥 Traer mis productos</button>
+    <div style="flex:1;min-width:220px">
+      <label class="f">Producto</label>
+      <select class="n" id="sel-prod" onchange="elegirProducto()"><option value="">— (pego a mano) —</option></select>
+    </div>
+    <div style="min-width:150px">
+      <label class="f">Categoría (para las preguntas)</label>
+      <select class="n" id="sel-cat" onchange="analizar()">
+        <option value="generico">Genérico</option>
+        <option value="cocina">Cocina / hogar</option>
+        <option value="belleza">Belleza / cuidado</option>
+        <option value="deporte">Deporte / aire libre</option>
+        <option value="electronica">Electrónica / accesorios</option>
+        <option value="bebe">Bebé / infantil</option>
+        <option value="mascotas">Mascotas</option>
+        <option value="ropa">Ropa / textil</option>
+      </select>
+    </div>
+  </div>
+  <label class="f">Título</label>
+  <input class="n" id="f-tit" placeholder="Título del producto" oninput="analizar()" style="margin-bottom:10px">
+  <label class="f">Viñetas + descripción (pega todo)</label>
+  <textarea class="n" id="f-desc" rows="6" placeholder="Pega aquí las 5 viñetas y la descripción del producto. También el material, medidas, usos, certificaciones..." oninput="analizar()"></textarea>
+  <div class="err" id="err-prod"></div>
+  <div style="margin-top:12px"><button class="btn" onclick="analizar(true)">🤖 Analizar para Rufus</button></div>
+</div>
+
+<!-- 2 · RESULTADO -->
+<div class="card" id="card-res" style="display:none;border:1.5px solid rgba(46,230,160,.35)">
+  <div class="ct"><span class="ci">📊</span> Preparación para Rufus</div>
+  <div class="score">
+    <div class="ring" id="ring"><div><div class="n" id="score-n">0%</div><div class="l">cobertura</div></div></div>
+    <div style="flex:1;min-width:200px">
+      <div id="score-txt" style="font-family:'Syne',sans-serif;font-weight:800;font-size:16px"></div>
+      <div id="score-sub" style="font-size:12px;color:var(--mu);margin-top:4px"></div>
+    </div>
+  </div>
+  <div style="margin-top:16px;font-weight:700;font-size:13px">Atributos que Rufus busca</div>
+  <div id="attrs" style="margin-top:6px"></div>
+</div>
+
+<!-- 3 · PREGUNTAS -->
+<div class="card" id="card-q" style="display:none">
+  <div class="ct"><span class="ci">💬</span> Preguntas que hará el comprador a Rufus</div>
+  <div class="inf">Simulamos las dudas típicas de tu categoría. Verde = tu ficha ya lo responde; rojo = Rufus no lo sabe y te puede penalizar.</div>
+  <div id="qs"></div>
+</div>
+
+<div class="disclaimer">
+El análisis es orientativo: detecta la presencia de cada atributo por palabras clave en el texto que pegas. Lo ideal es rellenar además los <b>campos de atributos del backend</b> en Seller Central (pestaña del listado), no solo el texto — es lo que lee Rufus con más fiabilidad. SellerBrain procesa todo en tu navegador.
+</div>
+
+</div>
+
+<script>
+function apiBase(){ return (localStorage.getItem('sb_api_base')||'https://sellerbrain-api.info-venmon.workers.dev').replace(/\/$/,''); }
+function apiCred(){ try{ return localStorage.getItem('sb_api_key')||sessionStorage.getItem('fba_token')||''; }catch(e){ return ''; } }
+function authHdr(){ var c=apiCred(); return c?{'Authorization':'Bearer '+c}:{}; }
+var PRODS=[];
+
+/* Atributos que Rufus/Amazon valoran. det: regex de detección en el texto. */
+var ATTRS = [
+  {k:'material',  nom:'Material',              ej:'acero inox, algodón, silicona sin BPA', det:/\b(acero|inox|aluminio|plástico|plastico|silicona|algod[oó]n|poli[eé]ster|madera|bamb[uú]|vidrio|cristal|cer[aá]mica|cuero|nylon|metal|goma|lana)\b/i},
+  {k:'medidas',   nom:'Medidas / capacidad',   ej:'750 ml, 30x20 cm, 1,5 L',              det:/\b(\d+[.,]?\d*)\s?(ml|l\b|litros?|cm|mm|m\b|cl|g\b|gr|kg|oz|pulgadas?|"|talla|cap)/i},
+  {k:'uso',       nom:'Uso / ocasión',         ej:'para viaje, oficina, deporte, regalo', det:/\b(para|ideal|uso|apto para|perfecto para|pensado para|viaje|oficina|casa|cocina|deporte|gimnasio|regalo|exterior|interior|diario)\b/i},
+  {k:'publico',   nom:'Público objetivo',      ej:'hombre, mujer, niño, unisex, mascota',  det:/\b(hombre|mujer|ni[ñn]o|ni[ñn]a|beb[eé]|unisex|adulto|infantil|mascota|perro|gato|senior)\b/i},
+  {k:'cantidad',  nom:'Cantidad / pack',       ej:'pack de 2, set de 6, 500 uds',          det:/\b(pack|set|juego|lote|unidades|uds|piezas|x\s?\d+|\d+\s?(uds|piezas|unidades))\b/i},
+  {k:'color',     nom:'Color',                 ej:'negro, azul, transparente',             det:/\b(negro|blanco|azul|rojo|verde|gris|rosa|amarillo|marr[oó]n|beige|transparente|plateado|dorado|multicolor|colores)\b/i},
+  {k:'cert',      nom:'Certificaciones / seguridad', ej:'CE, sin BPA, apto alimentario',   det:/\b(ce\b|sin bpa|bpa[- ]?free|libre de bpa|apto (para )?aliment|homologado|certificad|iso\b|fda|fsc|ecol[oó]gico|hipoalerg)/i},
+  {k:'cuidado',   nom:'Cuidado / mantenimiento', ej:'apto lavavajillas, lavable a máquina', det:/\b(lavavajillas|lavable|lavadora|a mano|reutilizable|f[aá]cil de limpiar|mantenimiento|no requiere)\b/i},
+  {k:'compat',    nom:'Compatibilidad',        ej:'compatible con Thermomix TM6',          det:/\b(compatible|encaja|para modelo|para (el|la)?\s?[A-Z0-9]|válido para|sirve para el)\b/i},
+  {k:'benef',     nom:'Beneficio / problema que resuelve', ej:'mantiene frío 24h, ahorra espacio', det:/\b(mantiene|conserva|ahorra|evita|reduce|protege|antigoteo|antideslizante|hermétic|duradero|resistente|ligero|plegable|ergon[oó]mic)/i}
+];
+
+var QBANK = {
+  generico:['¿De qué material está hecho?','¿Qué medidas / capacidad tiene?','¿Para qué se usa?','¿Cómo se limpia o se cuida?','¿Cuántas unidades incluye?'],
+  cocina:['¿Es apto para lavavajillas?','¿Se puede usar en el horno o microondas?','¿Está libre de BPA / es apto alimentario?','¿Qué capacidad tiene en ml/L?','¿De qué material está hecho?'],
+  belleza:['¿Para qué tipo de piel/cabello es?','¿Lleva ingredientes libres de parabenos/sulfatos?','¿Es apto para piel sensible?','¿Qué cantidad/ml trae?','¿Está testado dermatológicamente?'],
+  deporte:['¿Para qué deporte o actividad sirve?','¿Qué talla/medidas tiene?','¿Es resistente al agua o al sudor?','¿De qué material es?','¿Es unisex o específico?'],
+  electronica:['¿Con qué dispositivos es compatible?','¿Qué conexión/entrada usa?','¿Qué potencia o capacidad tiene?','¿Incluye cable/accesorios?','¿Tiene certificación CE?'],
+  bebe:['¿A partir de qué edad es adecuado?','¿Está libre de BPA y es seguro?','¿Se puede lavar / esterilizar?','¿Qué normativa de seguridad cumple?','¿De qué material está hecho?'],
+  mascotas:['¿Para qué tamaño/raza de mascota es?','¿De qué material está hecho?','¿Es resistente a mordeduras?','¿Se puede lavar?','¿Qué medidas tiene?'],
+  ropa:['¿Qué tallas hay disponibles?','¿De qué tejido/material es?','¿Cómo se lava?','¿Es para hombre, mujer o unisex?','¿Encoge al lavar?']
+};
+
+function traerProductos(){
+  var b=document.getElementById('btn-prod'); b.textContent='⏳ Trayendo…'; b.disabled=true;
+  var e=document.getElementById('err-prod'); e.style.display='none';
+  var hoy=new Date(), d1=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1)).toISOString().slice(0,10), d2=hoy.toISOString().slice(0,10);
+  fetch(apiBase()+'/v1/productos?desde='+d1+'&hasta='+d2,{headers:authHdr()})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      PRODS=(d.productos||[]);
+      document.getElementById('sel-prod').innerHTML='<option value="">— (pego a mano) —</option>'+
+        PRODS.map(function(p,i){ return '<option value="'+i+'">'+(p.nom||p.sku).replace(/</g,'&lt;').slice(0,90)+'</option>'; }).join('');
+      b.textContent='✅ '+PRODS.length+' productos'; b.disabled=false;
+    })
+    .catch(function(err){ b.textContent='📥 Traer mis productos'; b.disabled=false; e.textContent='No pude traer los productos ('+err.message+'). Pega el contenido a mano.'; e.style.display='block'; });
+}
+function elegirProducto(){ var i=document.getElementById('sel-prod').value; if(i==='')return; var p=PRODS[+i]; if(!p)return;
+  document.getElementById('f-tit').value=p.nom||''; analizar(); }
+
+function analizar(force){
+  var tit=document.getElementById('f-tit').value||'';
+  var desc=document.getElementById('f-desc').value||'';
+  var txt=(tit+' \n '+desc);
+  if(!txt.trim()){ if(force) alert('Pega al menos el título (y a poder ser las viñetas).'); return; }
+  document.getElementById('card-res').style.display='block';
+  document.getElementById('card-q').style.display='block';
+
+  // Cobertura de atributos
+  var hechos=0;
+  var html=ATTRS.map(function(a){
+    var ok=a.det.test(txt);
+    if(ok) hechos++;
+    return '<div class="attr '+(ok?'ok':'no')+'"><span class="ico">'+(ok?'✅':'⬜')+'</span><span><b>'+a.nom+'</b> '+(ok?'<span class="pill gn">detectado</span>':'<span class="pill rd">falta</span>')+'<small>'+(ok?'Presente en tu ficha.':'Añádelo. Ej: '+a.ej)+'</small></span></div>';
+  }).join('');
+  document.getElementById('attrs').innerHTML=html;
+  var pct=Math.round(hechos/ATTRS.length*100);
+  var ring=document.getElementById('ring'); ring.style.setProperty('--p',pct);
+  ring.style.background='conic-gradient('+(pct>=80?'var(--gn)':pct>=50?'var(--am)':'var(--rd)')+' calc('+pct+'*1%), #222 0)';
+  document.getElementById('score-n').textContent=pct+'%';
+  var st=document.getElementById('score-txt'), ss=document.getElementById('score-sub');
+  if(pct>=80){ st.textContent='✓ Ficha lista para Rufus'; st.style.color='var(--gn)'; ss.textContent='Rufus puede responder casi cualquier duda del comprador.'; }
+  else if(pct>=50){ st.textContent='⚠️ A medias'; st.style.color='var(--am)'; ss.textContent='Faltan atributos: Rufus dejará preguntas sin responder. Objetivo Amazon: 90%+.'; }
+  else { st.textContent='✕ Ficha pobre para la IA'; st.style.color='var(--rd)'; ss.textContent='Rufus apenas tiene datos: recomendará a la competencia. Rellena los atributos que faltan.'; }
+
+  // Preguntas de la categoría
+  var cat=document.getElementById('sel-cat').value;
+  var qs=(QBANK[cat]||QBANK.generico);
+  document.getElementById('qs').innerHTML=qs.map(function(q){
+    var resp=respondible(q,txt);
+    return '<div class="q"><span class="ico">'+(resp?'✅':'❌')+'</span><span>'+q+' '+(resp?'<span class="pill gn">respondible</span>':'<span class="pill rd">Rufus no lo sabe</span>')+'</span></div>';
+  }).join('');
+}
+
+// Heurística: ¿el texto tiene con qué responder esta pregunta?
+function respondible(q,txt){
+  var ql=q.toLowerCase();
+  function has(re){ return re.test(txt); }
+  if(/material|hecho|tejido/.test(ql)) return ATTRS[0].det.test(txt);
+  if(/medida|capacidad|talla|ml|potencia/.test(ql)) return ATTRS[1].det.test(txt);
+  if(/lavavajillas|lava|limpia|esteriliz|encoge/.test(ql)) return ATTRS[7].det.test(txt);
+  if(/bpa|apto aliment|seguro|parabenos|sulfatos|normativa|certificaci|dermatol|testad/.test(ql)) return ATTRS[6].det.test(txt);
+  if(/compatible|dispositiv|conexi|entrada|cable|accesorio/.test(ql)) return ATTRS[8].det.test(txt) || ATTRS[9].det.test(txt);
+  if(/edad|hombre|mujer|unisex|raza|tamaño de/.test(ql)) return ATTRS[3].det.test(txt);
+  if(/deporte|actividad|sirve|se usa|para qu[eé]/.test(ql)) return ATTRS[2].det.test(txt);
+  if(/agua|sudor|resistente|mordedura/.test(ql)) return ATTRS[9].det.test(txt);
+  if(/unidad|incluye|cuánt|cuant/.test(ql)) return ATTRS[4].det.test(txt);
+  return ATTRS[2].det.test(txt);
+}
+</script>
+</body>
+</html>
