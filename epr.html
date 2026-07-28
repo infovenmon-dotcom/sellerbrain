@@ -61,7 +61,7 @@ input.gr:focus{border-color:var(--or);outline:none}
 
 <div class="topbar">
   <div class="logo">Seller<b>Brain</b></div>
-  <div class="badge">EPR · Envases Europa</div>
+  <div class="badge">Cumplimiento UE · EPR + GPSR</div>
 </div>
 
 <div class="wrap">
@@ -124,8 +124,36 @@ input.gr:focus{border-color:var(--or);outline:none}
   </div>
 </div>
 
+<!-- ===== GPSR ===== -->
+<div style="margin-top:34px;border-top:1px solid var(--bd);padding-top:8px"></div>
+<div class="hero" style="padding:20px 0 6px">
+  <div class="badge" style="margin-bottom:10px">🛡️ GPSR · Seguridad del producto</div>
+  <h1>¿Cumples el <span>GPSR</span> (seguridad general de producto) en la UE?</h1>
+  <p>El Reglamento (UE) 2023/988 está en vigor desde el <b>13 dic 2024</b>. Amazon puede <b>desactivar tus listados</b> si no hay un <b>Responsable en la UE</b> con nombre y dirección en la ficha, más etiquetado de seguridad correcto.</p>
+</div>
+
+<!-- Responsable UE -->
+<div class="card">
+  <div class="ct"><span class="ci">🧑‍⚖️</span> Tu Responsable en la UE (Responsible Person)</div>
+  <div class="inf">Amazon exige el <b>nombre y la dirección</b> de un Responsable establecido en la UE en cada ficha (sección "Información de cumplimiento"). <b>Buena noticia:</b> como VENMON es una empresa <b>establecida en España (UE)</b>, en la mayoría de casos <b>podéis ser vuestro propio Responsable</b> — no necesitáis contratar uno externo (eso solo hace falta si el fabricante/importador está fuera de la UE). Guárdalo aquí y pégalo en Seller Central.</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:4px">Nombre / razón social</label><input id="gp-nom" class="gr" style="width:100%;text-align:left" placeholder="VENMON Naturalmente SL" oninput="gpSave()"></div>
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:4px">Email de contacto</label><input id="gp-email" class="gr" style="width:100%;text-align:left" placeholder="cumplimiento@..." oninput="gpSave()"></div>
+    <div style="grid-column:1/-1"><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:4px">Dirección completa en la UE</label><input id="gp-dir" class="gr" style="width:100%;text-align:left" placeholder="Calle, nº, CP, ciudad, España" oninput="gpSave()"></div>
+  </div>
+  <div style="margin-top:10px"><button class="btn-sec" onclick="gpCopiar()">📋 Copiar datos del Responsable</button> <span id="gp-copiado" style="font-size:11px;color:var(--gn)"></span></div>
+</div>
+
+<!-- Checklist GPSR -->
+<div class="card">
+  <div class="ct"><span class="ci">✅</span> Checklist GPSR — márcalo según lo vayas cumpliendo</div>
+  <div class="inf">Se guarda en tu navegador. Aplica a <b>cada producto</b> que vendes en la UE.</div>
+  <div id="gp-checklist"></div>
+  <div id="gp-progreso" style="margin-top:12px;font-weight:800;font-family:'Syne',sans-serif"></div>
+</div>
+
 <div class="disclaimer">
-⚠️ Herramienta orientativa de cálculo y organización — no constituye asesoría legal ni fiscal. <b>Alcance:</b> aplica a los marketplaces de la <b>UE</b> (Reglamento PPWR); cada país tiene su propio eco-organismo y calendario (anual o, en algunos, trimestral) y trata los materiales de forma distinta. En <b>EE. UU. no existe todavía un EPR de envases exigido por Amazon</b> (varios estados —California SB 54, Oregón, Colorado, Minnesota…— lo están implantando de forma escalonada entre 2025 y 2027). Los umbrales y tarifas cambian con frecuencia: confirma siempre importes y regímenes con el organismo o representante de cada país antes de declarar. SellerBrain procesa todo en tu navegador; tus datos no salen de tu equipo.
+⚠️ Herramienta orientativa de cálculo y organización — no constituye asesoría legal ni fiscal. <b>EPR/PPWR:</b> aplica a los marketplaces de la <b>UE</b>; cada país tiene su propio eco-organismo y calendario. En <b>EE. UU. no existe todavía un EPR de envases exigido por Amazon</b> (varios estados —California SB 54, Oregón, Colorado, Minnesota…— lo están implantando entre 2025 y 2027). <b>GPSR:</b> Reglamento (UE) 2023/988 en vigor desde el 13 dic 2024; los requisitos concretos de etiquetado y Responsable dependen de la categoría — confirma con tu asesor antes de publicar. SellerBrain procesa todo en tu navegador; tus datos no salen de tu equipo.
 </div>
 
 </div>
@@ -446,6 +474,52 @@ function copiarResumen(){
   try{document.execCommand('copy');alert('✓ Resumen copiado — pégalo en un email a tu gestor o eco-organismo.');}catch(e){}
   document.body.removeChild(ta);
 }
+
+/* ================= GPSR (seguridad general del producto) ================= */
+var GP = JSON.parse(localStorage.getItem('sb_gpsr')||'{}');
+var GP_ITEMS = [
+  ['rp',        'Responsable en la UE designado (podéis ser vosotros mismos al estar en España)'],
+  ['rp_ficha',  'Nombre + dirección del Responsable puestos en la ficha de Amazon (Información de cumplimiento)'],
+  ['fab',       'Nombre y dirección del fabricante/importador en el producto o su embalaje'],
+  ['ident',     'Identificador del producto (modelo, referencia o nº de lote) visible para trazabilidad'],
+  ['avisos',    'Advertencias e instrucciones de seguridad traducidas al idioma de cada país donde vendes'],
+  ['tecnica',   'Documentación técnica / análisis de riesgos del producto guardada (por si te la piden)'],
+  ['ce',        'Marcado CE y certificados aplicables a la categoría (si tu producto lo requiere)'],
+  ['incidencia','Procedimiento para actuar ante incidencias de seguridad o retiradas del mercado']
+];
+function gpSave(){
+  GP.nom=(document.getElementById('gp-nom')||{}).value||'';
+  GP.email=(document.getElementById('gp-email')||{}).value||'';
+  GP.dir=(document.getElementById('gp-dir')||{}).value||'';
+  localStorage.setItem('sb_gpsr',JSON.stringify(GP));
+}
+function gpToggle(k){ GP[k]=!GP[k]; localStorage.setItem('sb_gpsr',JSON.stringify(GP)); gpPintar(); }
+function gpPintar(){
+  var box=document.getElementById('gp-checklist'); if(!box) return;
+  box.innerHTML=GP_ITEMS.map(function(it){
+    var on=!!GP[it[0]];
+    return '<label class="reg" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;margin:0;border:0;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)">'+
+      '<input type="checkbox" '+(on?'checked':'')+' onchange="gpToggle(\''+it[0]+'\')" style="margin-top:2px;accent-color:var(--or)">'+
+      '<span style="font-size:12.5px;color:'+(on?'var(--mu)':'var(--tx)')+';'+(on?'text-decoration:line-through':'')+'">'+it[1]+'</span></label>';
+  }).join('');
+  var hechos=GP_ITEMS.filter(function(it){return !!GP[it[0]];}).length;
+  var pr=document.getElementById('gp-progreso');
+  var todo=hechos===GP_ITEMS.length;
+  pr.style.color=todo?'var(--gn)':'var(--am)';
+  pr.textContent=(todo?'✓ ':'')+hechos+' / '+GP_ITEMS.length+' completado'+(todo?' — GPSR en regla 🎉':'');
+}
+function gpCopiar(){
+  gpSave();
+  var t='Responsable en la UE (GPSR):\n'+(GP.nom||'')+'\n'+(GP.dir||'')+'\n'+(GP.email||'');
+  var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+  var s=document.getElementById('gp-copiado'); s.textContent='✓ copiado'; setTimeout(function(){s.textContent='';},1500);
+}
+(function gpInit(){
+  var n=document.getElementById('gp-nom'); if(n){ n.value=GP.nom||''; document.getElementById('gp-email').value=GP.email||''; document.getElementById('gp-dir').value=GP.dir||''; }
+  gpPintar();
+})();
 </script>
 </body>
 </html>
