@@ -67,18 +67,19 @@ textarea.n{width:100%;padding:11px 12px;background:#111;border:1.5px solid var(-
 
 <div class="hero">
   <h1>Genera títulos que <span>posicionan</span> y que Amazon <span>no rechaza</span></h1>
-  <p>Amazon cambió las reglas de los títulos (efectivo 21 ene 2025). Aquí ves si tu título actual las incumple, metes las palabras clave que Amazon te da o un CSV de <b>Cerebro (Helium&nbsp;10)</b>, y generas un título optimizado que cumple la normativa — con validación en vivo.</p>
+  <p>Desde el <b>27 de julio de 2026</b> Amazon limita los títulos a <b>75 caracteres</b> (antes 200) y añade el campo <b>Item Highlights</b> (125 caracteres). Aquí ves si tu título actual se pasa, metes las palabras clave de Amazon o de un CSV de <b>Cerebro (Helium&nbsp;10)</b>, y generas título + highlights que cumplen la norma — con validación en vivo.</p>
 </div>
 
 <!-- REGLAS NUEVAS DE AMAZON -->
-<div class="card" style="border-color:rgba(74,158,222,.3);background:rgba(74,158,222,.05)">
-  <div class="ct"><span class="ci" style="background:rgba(74,158,222,.15)">📋</span> Las reglas nuevas de Amazon (2025) que aplica este generador</div>
-  <div class="rule"><b>Longitud:</b> máx. <b>200 caracteres</b> (algunas categorías de ropa, 125). Recomendado <b>≤ 80</b> para móvil — lo que se ve en el buscador.</div>
-  <div class="rule"><b>Símbolos prohibidos:</b> <code>! $ ? _ { } ^ ¬ ¦</code> y emojis (salvo que formen parte de la marca). Permitidos: <code>|</code> y <code>-</code> para separar.</div>
-  <div class="rule"><b>Palabras repetidas:</b> ninguna palabra puede aparecer más de <b>2 veces</b> (excepto preposiciones, artículos y conjunciones).</div>
-  <div class="rule"><b>Nada promocional:</b> prohibido “oferta”, “envío gratis”, “el mejor”, “100%”, “garantía”, “más vendido”… (van en otros campos, no en el título).</div>
-  <div class="rule"><b>Estructura recomendada:</b> <b>Marca + Tipo de producto + Características clave + Tamaño/Color/Cantidad</b>. Palabra clave principal lo antes posible.</div>
-  <div class="small" style="margin-top:8px">Amazon avisa al dueño de marca y da <b>14 días</b> para corregir antes de cambiar el título automáticamente.</div>
+<div class=”card” style=”border-color:rgba(74,158,222,.3);background:rgba(74,158,222,.05)”>
+  <div class=”ct”><span class=”ci” style=”background:rgba(74,158,222,.15)”>📋</span> Las reglas de Amazon que aplica este generador (última: 27 jul 2026)</div>
+  <div class=”rule”><b>Longitud (NUEVO):</b> máx. <b>75 caracteres</b> incluyendo espacios y marca, en todas las categorías <b>excepto Media</b> (libros, música, vídeo, que siguen en 200). Antes eran 200.</div>
+  <div class=”rule”><b>Item Highlights (NUEVO):</b> campo aparte de <b>125 caracteres buscables</b> para lo que ya no cabe en el título. <b>Ojo:</b> solo se muestra si el título está por debajo de 75 — hasta que no recortes, tus highlights quedan ocultos.</div>
+  <div class=”rule”><b>Símbolos prohibidos:</b> <code>! $ ? _ { } ^ ¬ ¦</code> y emojis (salvo que formen parte de la marca). Permitidos: <code>|</code> y <code>-</code> para separar.</div>
+  <div class=”rule”><b>Palabras repetidas:</b> ninguna palabra más de <b>2 veces</b> (excepto preposiciones, artículos y conjunciones).</div>
+  <div class=”rule”><b>Nada promocional:</b> prohibido “oferta”, “envío gratis”, “el mejor”, “100%”, “garantía”, “más vendido”… (van en otros campos, no en el título).</div>
+  <div class=”rule”><b>Estructura:</b> <b>Marca + Tipo + Característica clave</b> en el título (75); el resto de keywords y atributos, en Item Highlights. Palabra clave principal lo antes posible.</div>
+  <div class=”small” style=”margin-top:8px”><b>Cómo lo aplica Amazon:</b> a partir del 27 jul reescribe con IA los títulos que pasen de 75. Si tienes Marca Registrada, tienes <b>14 días</b> en “Revisar cambios del listado” para editar o aprobar antes de que se publiquen.</div>
 </div>
 
 <!-- 1 · PRODUCTO -->
@@ -139,8 +140,8 @@ textarea.n{width:100%;padding:11px 12px;background:#111;border:1.5px solid var(-
     <div><label class="f">Cantidad / pack</label><input class="n" id="f-qty" placeholder="Ej: Pack 2" oninput="generar()"></div>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px">
-    <button class="btn" onclick="generar(true)">⚙️ Generar título optimizado</button>
-    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mu2);cursor:pointer"><input type="checkbox" id="chk-ropa" onchange="validar()"> Categoría de ropa (límite 125)</label>
+    <button class="btn" onclick="generar(true)">⚙️ Generar título + highlights</button>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mu2);cursor:pointer"><input type="checkbox" id="chk-media" onchange="validar()"> Categoría Media (libros/música/vídeo) — exenta, límite 200</label>
   </div>
 </div>
 
@@ -150,15 +151,28 @@ textarea.n{width:100%;padding:11px 12px;background:#111;border:1.5px solid var(-
   <textarea class="n" id="titulo" oninput="validar()" placeholder="Aquí sale el título generado. Puedes editarlo libremente; la validación se actualiza sola."></textarea>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px">
     <div style="flex:1;min-width:200px">
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu)"><span id="len-lbl">0 caracteres</span><span id="len-max">/ 200</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu)"><span id="len-lbl">0 caracteres</span><span id="len-max">/ 75</span></div>
       <div class="meter"><div id="len-bar" style="width:0%;background:var(--gn)"></div></div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn-sec" onclick="copiar()">📋 Copiar</button>
+      <button class="btn-sec" onclick="copiar('titulo')">📋 Copiar título</button>
       <button class="btn-sec" onclick="limpiar()">🧹 Limpiar</button>
     </div>
   </div>
   <div id="checks" style="margin-top:12px"></div>
+
+  <!-- ITEM HIGHLIGHTS -->
+  <div style="margin-top:18px;border-top:1px solid var(--bd);padding-top:14px">
+    <label class="f" style="font-size:12px;color:var(--mu2)"><b>Item Highlights</b> — 125 caracteres buscables (lo que no cabe en el título). Solo se muestra en Amazon si el título está por debajo de 75.</label>
+    <textarea class="n" id="highlights" oninput="validarHl()" placeholder="Ej: acero inoxidable sin BPA · mantiene frío 24h y calor 12h · tapa antigoteo · 750 ml" style="min-height:56px;font-size:13px"></textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;flex-wrap:wrap;gap:8px">
+      <div style="flex:1;min-width:200px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu)"><span id="hl-lbl">0 caracteres</span><span>/ 125</span></div>
+        <div class="meter"><div id="hl-bar" style="width:0%;background:var(--gn)"></div></div>
+      </div>
+      <button class="btn-sec" onclick="copiar('highlights')">📋 Copiar highlights</button>
+    </div>
+  </div>
 </div>
 
 <div class="disclaimer">
@@ -308,51 +322,63 @@ function generar(force){
   if(!force){ if(ta.value.trim()){ validar(); return; } }
   if(!marca && !tipo && !KW.some(function(k){return k.on;})){ if(force) alert('Pon al menos la Marca y el Tipo, o selecciona alguna palabra clave.'); return; }
 
-  var max=document.getElementById('chk-ropa').checked?125:200;
-  var wordCount={};                          // control de "máx 2 repeticiones"
-  var parts=[], usedChars=0;
+  var esMedia=document.getElementById('chk-media').checked;
+  var maxT=esMedia?200:75;               // límite del TÍTULO (75 desde 27 jul 2026)
+  var maxH=125;                          // límite de ITEM HIGHLIGHTS
+  var wordCount={};                      // control de "máx 2 repeticiones" (global título+highlights)
   function puedo(w){ var k=w.toLowerCase(); if(STOP.has(k)) return true; return (wordCount[k]||0)<2; }
-  function meter(txt){ if(!txt) return; txt=capFrase(limpio(txt));
+  // Mete texto en un acumulador con tope; devuelve lo que NO cupo para el siguiente campo.
+  function empujar(acc, txt, tope){
+    if(!txt) return acc;
+    txt=capFrase(limpio(txt));
     var ws=txt.split(/\s+/), keep=[];
     ws.forEach(function(w){ var k=w.toLowerCase().replace(/[^a-záéíóúñ0-9]/g,'');
       if(!k){ keep.push(w); return; }
       if(puedo(k)){ keep.push(w); if(!STOP.has(k)) wordCount[k]=(wordCount[k]||0)+1; } });
-    if(!keep.length) return;
+    if(!keep.length) return acc;
     var add=keep.join(' ');
-    if(usedChars+add.length+3>max) { // recorta a lo que quepa por palabras enteras
-      var acc=''; for(var i=0;i<keep.length;i++){ if(usedChars+acc.length+keep[i].length+4>max) break; acc+=(acc?' ':'')+keep[i]; }
-      if(!acc) return; add=acc;
+    var sep=acc.txt?' ':'';
+    if(acc.txt.length+sep.length+add.length>tope){    // recorta por palabras enteras
+      var partial=''; for(var i=0;i<keep.length;i++){ var s2=(partial||acc.txt)?' ':''; if(acc.txt.length+(partial?partial.length+1:0)+s2.length+keep[i].length>tope) break; partial+=(partial?' ':'')+keep[i]; }
+      if(!partial) return acc;   // no cabe nada
+      acc.txt+=(acc.txt?' ':'')+partial; return acc;
     }
-    parts.push(add); usedChars+=add.length+3;
+    acc.txt+=sep+add; return acc;
   }
-  // Estructura Amazon: Marca + Tipo + Material + [keywords] + Tamaño/Color/Cantidad
-  meter(marca); meter(tipo); meter(mat);
-  KW.filter(function(k){return k.on;}).forEach(function(k){ meter(k.frase); });
-  meter(size); meter(color); meter(qty);
-
-  var titulo=parts.join(' ');            // sin separadores raros; espacios simples
-  ta.value=titulo;
-  validar();
+  // TÍTULO: Marca + Tipo + Material + top keywords (hasta llenar 75).
+  var t={txt:''};
+  empujar(t,marca,maxT); empujar(t,tipo,maxT); empujar(t,mat,maxT);
+  var sel=KW.filter(function(k){return k.on;});
+  sel.forEach(function(k){ empujar(t,k.frase,maxT); });
+  ta.value=t.txt;
+  // ITEM HIGHLIGHTS: el resto de keywords + atributos. La regla de "máx 2 repeticiones"
+  // es POR CAMPO en Amazon → contador nuevo para no vaciar los highlights.
+  wordCount={};
+  var h={txt:''};
+  sel.forEach(function(k){ empujar(h,k.frase,maxH); });
+  empujar(h,size,maxH); empujar(h,color,maxH); empujar(h,qty,maxH); empujar(h,mat,maxH);
+  document.getElementById('highlights').value=h.txt;
+  validar(); validarHl();
 }
 
 /* ============ 4 · VALIDAR EN VIVO ============ */
 function validar(){
   var t=document.getElementById('titulo').value;
-  var max=document.getElementById('chk-ropa').checked?125:200;
+  var max=document.getElementById('chk-media').checked?200:75;
   document.getElementById('len-max').textContent='/ '+max;
   var len=t.length;
   document.getElementById('len-lbl').textContent=len+' caracteres';
   var bar=document.getElementById('len-bar');
   var pct=Math.min(100,Math.round(len/max*100));
   bar.style.width=pct+'%';
-  bar.style.background= len>max?'var(--rd)': len>80?'var(--am)':'var(--gn)';
+  bar.style.background= len>max?'var(--rd)': len>max*0.93?'var(--am)':'var(--gn)';
 
   var checks=[];
-  // longitud
+  // longitud (75 desde 27 jul 2026, salvo Media = 200)
   if(len===0) checks.push(['warn','⚠️','Vacío — genera o escribe un título.']);
-  else if(len>max) checks.push(['bad','✕','Te pasas del límite: '+len+' / '+max+' caracteres. Amazon lo recortará.']);
-  else if(len>80) checks.push(['ok','✓','Dentro del límite ('+len+'/'+max+'). Nota: en móvil solo se ven ~80 — pon lo importante al principio.']);
-  else checks.push(['ok','✓','Longitud ideal ('+len+'/'+max+'), se ve entero en móvil.']);
+  else if(len>max) checks.push(['bad','✕','Te pasas del límite: '+len+' / '+max+' caracteres. Desde el 27 jul 2026 Amazon lo reescribe con IA. Pasa lo que sobra a Item Highlights.']);
+  else if(len>max*0.93) checks.push(['warn','⚠️','Al límite ('+len+'/'+max+'). Te queda poco margen.']);
+  else checks.push(['ok','✓','Dentro del límite nuevo ('+len+'/'+max+').']);
 
   // caracteres prohibidos
   var malos=BANNED.filter(function(c){return t.indexOf(c)>=0;});
@@ -380,16 +406,28 @@ function validar(){
   var marca=document.getElementById('f-marca').value.trim().toLowerCase();
   if(marca && t.toLowerCase().indexOf(marca)>0) checks.push(['warn','⚠️','La marca debería ir al principio del título.']);
 
+  // recordatorio Item Highlights: solo se muestra si el título < 75
+  if(!document.getElementById('chk-media').checked && len>0 && len>=75) checks.push(['warn','⚠️','Mientras el título no baje de 75, Amazon oculta tus Item Highlights.']);
+
   var bad=checks.some(function(c){return c[0]==='bad';});
   var html=checks.map(function(c){ return '<div class="check '+c[0]+'"><span class="ico">'+c[1]+'</span><span>'+c[2]+'</span></div>'; }).join('');
   html+='<div style="margin-top:8px;font-weight:800;font-family:Syne,sans-serif;color:'+(bad?'var(--rd)':'var(--gn)')+'">'+(len===0?'':(bad?'✕ Aún no cumple — corrige lo marcado en rojo':'✓ Cumple las reglas de Amazon'))+'</div>';
   document.getElementById('checks').innerHTML=html;
 }
 
-function copiar(){ var t=document.getElementById('titulo'); t.select();
+// Validación del campo Item Highlights (125 caracteres, mismas reglas de caracteres).
+function validarHl(){
+  var t=document.getElementById('highlights').value, len=t.length, max=125;
+  document.getElementById('hl-lbl').textContent=len+' caracteres';
+  var bar=document.getElementById('hl-bar');
+  bar.style.width=Math.min(100,Math.round(len/max*100))+'%';
+  bar.style.background= len>max?'var(--rd)': len>max*0.93?'var(--am)':'var(--gn)';
+}
+
+function copiar(id){ var t=document.getElementById(id||'titulo'); t.select();
   try{ navigator.clipboard.writeText(t.value); }catch(e){ document.execCommand('copy'); }
   var b=event.target; var o=b.textContent; b.textContent='✅ Copiado'; setTimeout(function(){b.textContent=o;},1200); }
-function limpiar(){ document.getElementById('titulo').value=''; validar(); }
+function limpiar(){ document.getElementById('titulo').value=''; document.getElementById('highlights').value=''; validar(); validarHl(); }
 
 /* ============ Drag & drop CSV ============ */
 (function(){
@@ -401,7 +439,7 @@ function limpiar(){ document.getElementById('titulo').value=''; validar(); }
   drop.addEventListener('drop',function(e){ var f=e.dataTransfer.files[0]; if(f) leer(f); });
 })();
 
-validar();
+validar(); validarHl();
 </script>
 </body>
 </html>
