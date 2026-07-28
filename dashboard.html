@@ -1401,7 +1401,7 @@ function filaFuga(x, hecho){
     : '<button class="chip" style="cursor:pointer" onclick="copiarCasoI('+i+')">📋 Mensaje</button> <button class="chip" style="cursor:pointer;border-color:rgba(46,230,160,.45);color:var(--or2)" onclick="marcarFugaI('+i+')">✓ Hecho</button>';
   return '<tr style="border-top:1px solid rgba(255,255,255,.06)'+(hecho?';opacity:.5':'')+'">'+
     '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
-    '<td style="padding:7px 8px">'+(x.pais||'')+'</td>'+
+    '<td style="padding:7px 8px" title="'+(x.por_pais?('Stock por país (Libro Mayor): '+x.por_pais):'Sube el stock por país para verlo')+'">'+(x.pais||x.por_pais||'—')+'</td>'+
     '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
     '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
     '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
@@ -2116,7 +2116,10 @@ async function cargarStockPais(){
     if(d.error){ box.innerHTML='<span style="color:var(--rd)">❌ '+d.error+'</span>'; }
     else {
       var m=(d.muestra||[]).map(function(x){return x.sku+' · '+x.pais+' · '+x.unidades+' uds';}).join('<br>');
-      box.innerHTML='<div style="color:var(--gn)">✅ '+(d.filas||0)+' filas guardadas.</div>'+
+      var errs=[d.error_DAILY?'DAILY: '+d.error_DAILY:'',d.error_MONTHLY?'MONTHLY: '+d.error_MONTHLY:''].filter(Boolean).join(' · ');
+      box.innerHTML='<div style="color:'+((d.filas||0)>0?'var(--gn)':'var(--am)')+'">'+((d.filas||0)>0?'✅':'⚠️')+' '+(d.filas||0)+' filas guardadas.</div>'+
+        '<div style="color:var(--mu);margin-top:6px">Vista: '+(d.periodo||'?')+' · Rango: '+(d.rango||'?')+'</div>'+
+        (errs?'<div style="color:var(--rd);margin-top:4px">'+errs+'</div>':'')+
         '<div style="color:var(--mu);margin-top:6px">Columnas: '+((d.columnas||[]).join(', ')||'—')+'</div>'+
         '<div style="color:var(--mu);margin-top:4px">Líneas crudas: '+(d.lineas_crudas!=null?d.lineas_crudas:'?')+' · parseadas: '+(d.filas_parseadas!=null?d.filas_parseadas:'?')+'</div>'+
         (d.crudo?'<div style="color:var(--mu2);margin-top:6px;white-space:pre-wrap;font-size:10.5px;max-height:180px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:8px">'+(d.crudo||'').replace(/</g,'&lt;')+'</div>':'')+

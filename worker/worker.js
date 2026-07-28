@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v38-refresco-horario'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v39-ledger-diario'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -397,10 +397,13 @@ export default {
       if (url.pathname === '/v1/fugas') {
         const filas = await selSafe(env, 'v_fuga_tarifa?order=sobrecoste_mes.desc', []);
         const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin'))) cat[c.sku] = c; } catch (_) {}
+        // Dónde tiene stock cada SKU (Libro Mayor por país) → sustituye el "?" de país.
+        const invp = {}; try { for (const r of (await selectSupabase(env, 'v_inventario_pais?select=sku,por_pais'))) invp[r.sku] = r.por_pais; } catch (_) {}
         const datos = (filas || []).map(f => ({
           ...f,
           nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku,
-          asin: (cat[f.sku] && cat[f.sku].asin) || ''
+          asin: (cat[f.sku] && cat[f.sku].asin) || '',
+          por_pais: invp[f.sku] || null   // p.ej. "ES:120, FR:18" (de dónde se sirve)
         }));
         const total_mes = +(datos.reduce((a, x) => a + (+x.sobrecoste_mes || 0), 0)).toFixed(2);
         return json({ datos, total_mes }, cors);
@@ -850,11 +853,28 @@ async function spapiCall(env, path, opts = {}) {
 async function ingestaInventarioPais(env) {
   const diag = { filas: 0, muestra: [], columnas: [] };
   // Libro Mayor de Inventario agregado POR PAÍS (saldo final = stock actual por país).
-  const desde = new Date(Date.now() - 32 * 86400000).toISOString();
-  const hasta = new Date().toISOString();
-  const tsv = await pedirInforme(env, 'GET_LEDGER_SUMMARY_VIEW_DATA', desde, hasta,
-    [MARKETPLACES.ES], { aggregateByLocation: 'COUNTRY', aggregatedByTimePeriod: 'MONTHLY' });
-  const filas = parseTSV(tsv);
+  // OJO (bug conocido de este informe): con timestamps con hora y pidiendo hasta
+  // "ahora" devuelve vacío por desfase horario, y la vista MENSUAL sobre ventana a
+  // mitad de mes también. Solución: vista DIARIA, rango alineado a días completos y
+  // terminando AYER (el ledger no tiene el día en curso). Nos quedamos con el saldo
+  // del día MÁS RECIENTE por sku|país = el stock actual en cada país.
+  const hoy = new Date();
+  const fin = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate() - 1)); // ayer 00:00Z
+  const ini = new Date(fin.getTime() - 30 * 86400000);
+  const desde = ini.toISOString().slice(0, 10) + 'T00:00:00Z';
+  const hasta = fin.toISOString().slice(0, 10) + 'T23:59:59Z';
+  const pedir = async (periodo) => {
+    try {
+      return await pedirInforme(env, 'GET_LEDGER_SUMMARY_VIEW_DATA', desde, hasta,
+        [MARKETPLACES.ES], { aggregateByLocation: 'COUNTRY', aggregatedByTimePeriod: periodo });
+    } catch (e) { diag['error_' + periodo] = e.message; return ''; }
+  };
+  let periodo = 'DAILY';
+  let tsv = await pedir('DAILY');
+  let filas = parseTSV(tsv);
+  if (!filas.length) { periodo = 'MONTHLY'; tsv = await pedir('MONTHLY'); filas = parseTSV(tsv); } // respaldo
+  diag.periodo = periodo;
+  diag.rango = desde + ' → ' + hasta;
   if (filas[0]) diag.columnas = Object.keys(filas[0]).slice(0, 30);
   // Diagnóstico en crudo: ver qué devuelve Amazon exactamente (vacío, cabeceras, otro formato…)
   diag.lineas_crudas = (tsv || '').split('\n').length;
@@ -863,12 +883,13 @@ async function ingestaInventarioPais(env) {
   const byKey = {};   // sku|pais -> { bal, date }
   for (const r of filas) {
     const sku = r['MSKU'] || r['msku'] || r['seller-sku'] || r['sku'] || '';
-    const pais = String(r['Country'] || r['country'] || r['Location'] || r['location'] || '').trim().toUpperCase();
-    const bal = +(r['Ending Warehouse Balance'] || r['ending-warehouse-balance'] || r['Ending Balance'] || 0) || 0;
+    // Con aggregateByLocation=COUNTRY el país viene en "Location" (código ISO de 2 letras).
+    const pais = String(r['Location'] || r['location'] || r['Country'] || r['country'] || '').trim().toUpperCase();
+    const bal = +(r['Ending Warehouse Balance'] || r['ending-warehouse-balance'] || r['Ending Balance'] || r['ending_warehouse_balance'] || 0) || 0;
     const date = String(r['Date'] || r['date'] || '');
-    if (!sku || !pais || pais.length > 3) continue;    // país en código de 2 letras (no el FC completo)
+    if (!sku || pais.length !== 2) continue;    // país = código ISO de 2 letras (no el FC completo)
     const k = sku + '|' + pais;
-    if (!byKey[k] || date > byKey[k].date) byKey[k] = { bal, date };   // el saldo del mes más reciente
+    if (!byKey[k] || date > byKey[k].date) byKey[k] = { bal, date };   // el saldo del día más reciente
   }
   const rows = Object.keys(byKey).map(k => {
     const i = k.lastIndexOf('|');
