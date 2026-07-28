@@ -30,9 +30,10 @@
  *   wrangler secret put SUPABASE_SERVICE_KEY
  *   wrangler deploy
  *
- * CRON (wrangler.toml):
+ * CRON (wrangler.toml) — HORARIO, no diario:
  *   [triggers]
- *   crons = ["0 3 * * *"]   # ingesta diaria 03:00 UTC
+ *   crons = ["0 * * * *"]   # cada hora: foto PPC + refresco de ventas; 03:00 ingesta completa
+ *   (Si pegas el worker a mano, cambia el Cron Trigger en el panel de Cloudflare a "0 * * * *".)
  * =====================================================================
  */
 

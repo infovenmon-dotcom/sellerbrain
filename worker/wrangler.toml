@@ -3,9 +3,13 @@ name = "sellerbrain-api"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# Cron de ingesta diaria 03:00 UTC
+# Cron HORARIO ("0 * * * *"): cada hora hace la foto de PPC + refresco ligero de
+# ventas; a las 03:00 UTC corre la ingesta completa; a las 04:00 el cierre de PPC.
+# IMPORTANTE: si pegas el worker a mano en Cloudflare, este archivo NO se aplica —
+# cambia el disparador en el panel: Workers & Pages → tu worker → Settings →
+# Triggers → Cron Triggers → deja "0 * * * *" (borra "0 3 * * *").
 [triggers]
-crons = ["0 3 * * *"]
+crons = ["0 * * * *"]
 
 # Los SECRETOS no van aquí — se ponen con:  wrangler secret put NOMBRE
 # o en el panel de Cloudflare. Secretos necesarios:
