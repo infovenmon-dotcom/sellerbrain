@@ -36,7 +36,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v39-ledger-diario'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v40-ledger-comillas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -880,13 +880,17 @@ async function ingestaInventarioPais(env) {
   diag.lineas_crudas = (tsv || '').split('\n').length;
   diag.crudo = (tsv || '').slice(0, 700);
   diag.filas_parseadas = filas.length;
+  // parseTSV pone las claves en minúscula (y ya quita comillas). "Location" es el
+  // país (COUNTRY); "ending warehouse balance" el saldo; fecha en MM/DD/YYYY.
+  const fSort = s => { const m = String(s).match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + m[1] + m[2] : String(s); };
   const byKey = {};   // sku|pais -> { bal, date }
   for (const r of filas) {
-    const sku = r['MSKU'] || r['msku'] || r['seller-sku'] || r['sku'] || '';
-    // Con aggregateByLocation=COUNTRY el país viene en "Location" (código ISO de 2 letras).
-    const pais = String(r['Location'] || r['location'] || r['Country'] || r['country'] || '').trim().toUpperCase();
-    const bal = +(r['Ending Warehouse Balance'] || r['ending-warehouse-balance'] || r['Ending Balance'] || r['ending_warehouse_balance'] || 0) || 0;
-    const date = String(r['Date'] || r['date'] || '');
+    const disp = (r['disposition'] || '').toUpperCase();
+    if (disp && disp !== 'SELLABLE') continue;   // solo stock VENDIBLE (no dañado/perdido)
+    const sku = r['msku'] || r['seller-sku'] || r['sku'] || '';
+    const pais = String(r['location'] || r['country'] || '').trim().toUpperCase();
+    const bal = +(r['ending warehouse balance'] || r['ending-warehouse-balance'] || 0) || 0;
+    const date = fSort(r['date']);
     if (!sku || pais.length !== 2) continue;    // país = código ISO de 2 letras (no el FC completo)
     const k = sku + '|' + pais;
     if (!byKey[k] || date > byKey[k].date) byKey[k] = { bal, date };   // el saldo del día más reciente
@@ -894,7 +898,7 @@ async function ingestaInventarioPais(env) {
   const rows = Object.keys(byKey).map(k => {
     const i = k.lastIndexOf('|');
     return { sku: k.slice(0, i), pais: k.slice(i + 1), unidades: byKey[k].bal, actualizado: new Date().toISOString() };
-  });
+  }).filter(r => r.unidades > 0);   // solo donde queda stock
   if (rows.length) await upsertSupabase(env, 'inventario_pais', rows);
   diag.filas = rows.length;
   diag.muestra = rows.slice(0, 8);
@@ -2010,11 +2014,19 @@ function aISO(s) {
 function parseTSV(texto) {
   const lineas = texto.split('\n').filter(l => l.trim());
   if (!lineas.length) return [];
-  const headers = lineas[0].split('\t').map(h => h.trim().toLowerCase());
+  // Algunos informes (p.ej. el Libro Mayor) vienen con CADA campo entre comillas
+  // dobles: "Date"\t"Location"… Quitamos un par de comillas envolventes si las hay
+  // (los informes sin comillas, como los pedidos, quedan igual).
+  const unq = s => {
+    s = (s || '').trim();
+    if (s.length >= 2 && s[0] === '"' && s[s.length - 1] === '"') s = s.slice(1, -1).replace(/""/g, '"');
+    return s;
+  };
+  const headers = lineas[0].split('\t').map(h => unq(h).toLowerCase());
   return lineas.slice(1).map(l => {
     const vals = l.split('\t');
     const o = {};
-    headers.forEach((h, i) => o[h] = (vals[i] || '').trim());
+    headers.forEach((h, i) => o[h] = unq(vals[i]));
     return o;
   });
 }
