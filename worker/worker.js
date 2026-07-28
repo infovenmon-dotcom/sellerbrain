@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v40-ledger-comillas'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v41-reembolsos'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -76,7 +76,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/ingest-ventas';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -410,6 +410,22 @@ export default {
         return json({ datos, total_mes }, cors);
       }
 
+      // --- Reembolsos FBA pendientes (Amazon te debe): perdido/dañado − ya reembolsado,
+      //     valorado a tu coste, con fecha límite de la ventana de 60 días. ---
+      if (url.pathname === '/v1/reembolsos') {
+        const filas = await selSafe(env, 'v_reembolsos_pendientes', []);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin'))) cat[c.sku] = c; } catch (_) {}
+        const hoy = new Date();
+        const datos = (filas || []).map(f => {
+          const lim = f.limite_reclamacion ? new Date(f.limite_reclamacion + 'T00:00:00Z') : null;
+          const dias = lim ? Math.round((lim - hoy) / 86400000) : null;
+          return { ...f, nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku, asin: (cat[f.sku] && cat[f.sku].asin) || '', dias_restantes: dias };
+        });
+        const total = +(datos.reduce((a, x) => a + (+x.importe_pendiente || 0), 0)).toFixed(2);
+        const uds = datos.reduce((a, x) => a + (+x.uds_pendientes || 0), 0);
+        return json({ datos, total, uds }, cors);
+      }
+
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
       if (url.pathname === '/v1/ads/profiles') {
         if (!env.ADS_REFRESH_TOKEN) return json({ error: 'Falta el secreto ADS_REFRESH_TOKEN' }, cors, 400);
@@ -540,6 +556,8 @@ export default {
       //     diagnóstico (columnas + muestra) para verificar que llega bien. ---
       if (url.pathname === '/v1/inventario-pais') {
         const diag = await ingestaInventarioPais(env);
+        // Aprovechamos para traer también los reembolsos ya recibidos (mismo botón).
+        try { const rr = await ingestaReembolsos(env); diag.reembolsos = rr.reembolsos; } catch (e) { diag.reembolsos_error = e.message; }
         return json({ ok: true, ...diag }, cors);
       }
 
@@ -903,7 +921,61 @@ async function ingestaInventarioPais(env) {
   if (rows.length) await upsertSupabase(env, 'inventario_pais', rows);
   diag.filas = rows.length;
   diag.muestra = rows.slice(0, 8);
+
+  // AJUSTES para el detector de reembolsos: unidades perdidas/dañadas/encontradas
+  // por Amazon (columnas Lost/Damaged/Found del mismo Libro Mayor). Agregamos por
+  // sku|país|día; el upsert conserva el histórico (clave sku,pais,fecha).
+  try {
+    const ajMap = {};
+    for (const r of filas) {
+      const sku = r['msku'] || r['seller-sku'] || r['sku'] || '';
+      const pais = String(r['location'] || r['country'] || '').trim().toUpperCase();
+      if (!sku || pais.length !== 2) continue;
+      const perdido = +(r['lost'] || 0) || 0;
+      const danado = +(r['damaged'] || 0) || 0;
+      const encontrado = +(r['found'] || 0) || 0;
+      if (!perdido && !danado && !encontrado) continue;
+      const m = String(r['date']).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      const fecha = m ? m[3] + '-' + m[1] + '-' + m[2] : null;
+      if (!fecha) continue;
+      const k = sku + '|' + pais + '|' + fecha;
+      if (!ajMap[k]) ajMap[k] = { sku, pais, fecha, perdido: 0, danado: 0, encontrado: 0 };
+      ajMap[k].perdido += perdido; ajMap[k].danado += danado; ajMap[k].encontrado += encontrado;
+    }
+    const aj = Object.values(ajMap);
+    if (aj.length) await upsertSupabase(env, 'inventario_ajustes', aj);
+    diag.ajustes = aj.length;
+  } catch (e) { diag.ajustes_error = e.message; }
   return diag;
+}
+
+// Reembolsos que Amazon YA te ha hecho (para restarlos de lo reclamable). Informe
+// GET_FBA_REIMBURSEMENTS_DATA de los últimos ~180 días.
+async function ingestaReembolsos(env) {
+  const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+  if (!planCompleto) return { saltado: 'sin SP-API' };
+  const desde = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10) + 'T00:00:00Z';
+  const hasta = new Date().toISOString();
+  const tsv = await pedirInforme(env, 'GET_FBA_REIMBURSEMENTS_DATA', desde, hasta,
+    [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
+  const filas = parseTSV(tsv);
+  const map = {};
+  for (const r of filas) {
+    const id = r['reimbursement-id'] || r['reimbursement_id'] || '';
+    if (!id) continue;
+    const sku = r['sku'] || r['merchant-sku'] || r['seller-sku'] || '';
+    const uds = +(r['quantity-reimbursed-total'] || r['quantity-reimbursed-cash'] || 0) || 0;
+    const importe = +((r['amount-total'] || '0').toString().replace(',', '.')) || 0;
+    const fechaRaw = r['approval-date'] || r['reimbursement-date'] || r['date'] || '';
+    const fecha = (String(fechaRaw).slice(0, 10)) || null;
+    // Una reimbursement-id puede tener varias líneas (una por sku); las juntamos por id+sku.
+    const k = id + '|' + sku;
+    if (!map[k]) map[k] = { reembolso_id: k, fecha, sku, motivo: r['reason'] || '', uds: 0, importe: 0, moneda: r['currency-unit'] || '' };
+    map[k].uds += uds; map[k].importe += importe;
+  }
+  const rows = Object.values(map);
+  if (rows.length) await upsertSupabase(env, 'reembolsos', rows);
+  return { reembolsos: rows.length };
 }
 
 async function traerInventarioFBA(env, marketplaceId) {
@@ -1445,8 +1517,14 @@ async function ingestaDiaria(env, origen) {
   //     dónde está almacenado cada SKU. Para el detector de sobrecostes y stock por país.
   if (planCompleto) try {
     const r = await ingestaInventarioPais(env);
-    resultado.pasos.push({ inventario_pais: r.filas || 0 });
+    resultado.pasos.push({ inventario_pais: r.filas || 0, ajustes: r.ajustes || 0 });
   } catch (e) { resultado.pasos.push({ inventario_pais_error: e.message }); }
+
+  // 3e. Reembolsos FBA ya recibidos (para el detector "Amazon te debe").
+  if (planCompleto) try {
+    const r = await ingestaReembolsos(env);
+    resultado.pasos.push({ reembolsos: r.reembolsos || 0 });
+  } catch (e) { resultado.pasos.push({ reembolsos_error: e.message }); }
 
   // 3b. Keywords reales de Amazon (Brand Analytics — requiere Brand Registry y rol aprobado)
   //     Solo lunes: gasta subrequests y suele fallar sin Brand Registry; no hace falta a diario.

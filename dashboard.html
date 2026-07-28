@@ -572,6 +572,11 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
   </div>
 
   <div class="card">
+    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleReembolsos()"><h2><span class="ci">💰</span> Reembolsos FBA <span id="reemb-resumen" style="font-size:11px;color:var(--mu);font-weight:400"></span> <span id="reemb-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
+    <div id="reembolsos" style="display:none"></div>
+  </div>
+
+  <div class="card">
     <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleTit75()"><h2><span class="ci">🏷️</span> Títulos a revisar <span id="tit75-resumen" style="font-size:11px;color:var(--mu);font-weight:400"></span> <span id="tit75-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
     <div id="tit75" style="display:none"></div>
   </div>
@@ -1457,6 +1462,54 @@ function cargarFugas(){
     .catch(function(){ if(card)card.style.display='none'; if(full)full.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
 
+/* ===== Reembolsos FBA (Amazon te debe): perdido/dañado − ya reembolsado ===== */
+var REEMB=[];
+function toggleReembolsos(){
+  var b=document.getElementById('reembolsos'), c=document.getElementById('reemb-caret');
+  var ab=b.style.display==='none'; b.style.display=ab?'block':'none'; if(c)c.textContent=ab?'▾ ocultar':'▸ ver';
+}
+function cargarReembolsos(){
+  var box=document.getElementById('reembolsos'), res=document.getElementById('reemb-resumen');
+  if(SB_CONFIG.mode!=='api'){ if(res)res.textContent=''; if(box)box.innerHTML='<div style="color:var(--mu);font-size:13px">Disponible con tus datos reales.</div>'; return; }
+  fetch(SB_CONFIG.apiBase+'/v1/reembolsos',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ REEMB=(d&&d.datos)||[]; pintarReembolsos(d&&d.total||0, d&&d.uds||0); })
+    .catch(function(){ if(box)box.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
+}
+function pintarReembolsos(total, uds){
+  var box=document.getElementById('reembolsos'), res=document.getElementById('reemb-resumen');
+  if(!REEMB.length){ if(res)res.textContent='· nada pendiente ✓'; box.innerHTML='<div style="color:var(--gn);font-size:13px">👍 Sin reembolsos pendientes. Todo lo perdido/dañado ya está reclamado o compensado.</div>'; return; }
+  if(res) res.textContent='· Amazon te debe ≈ '+f(total,2)+'€';
+  var h='<div style="font-size:13px;margin-bottom:8px">Amazon te debe <b style="color:var(--or2)">≈ '+f(total,2)+'€</b> por <b>'+uds+' uds</b> perdidas/dañadas en su almacén y aún no reembolsadas. Valorado a tu coste (política 2025). Reclámalo antes de que caduque la ventana.</div>';
+  if(!(COSTES&&Object.keys(COSTES).length)) h+='<div style="font-size:11px;color:var(--am);margin-bottom:8px">⚠️ Carga tus costes de compra (en "Beneficio por producto") para valorar bien el importe.</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">Producto</th><th style="padding:6px 8px" title="Perdido + Dañado − Encontrado, menos lo ya reembolsado">Uds pend.</th><th style="padding:6px 8px">€ estimado</th><th style="padding:6px 8px" title="Días para reclamar (ventana 60 días)">Plazo</th><th style="padding:6px 8px">Acción</th></tr></thead><tbody>';
+  REEMB.forEach(function(x,i){
+    var dias=x.dias_restantes;
+    var plazo = dias==null?'—':(dias<0?'<span style="color:#ff5c5c">caducado</span>':(dias<=10?'<span style="color:#ff5c5c">'+dias+'d</span>':(dias<=25?'<span style="color:var(--am)">'+dias+'d</span>':dias+'d')));
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+      '<td style="padding:7px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="Perdido '+(x.perdido||0)+' · Dañado '+(x.danado||0)+' · Encontrado '+(x.encontrado||0)+' · Ya reembolsado '+(x.uds_reembolsadas||0)+' uds"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
+      '<td style="padding:7px 8px">'+(x.uds_pendientes||0)+'</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:var(--or2)">'+(x.importe_pendiente!=null?f(x.importe_pendiente,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px;white-space:nowrap">'+plazo+'</td>'+
+      '<td style="padding:7px 8px;white-space:nowrap"><button class="chip" style="cursor:pointer" onclick="copiarReembolsoI('+i+')">📋 Mensaje</button></td></tr>';
+  });
+  box.innerHTML=h+'</tbody></table></div>';
+}
+function msgReembolso(x){
+  return 'Asunto: Reclamación de reembolso por inventario perdido/dañado en el centro logístico (FBA)\n\n'+
+    'Producto: '+(x.nombre||x.sku)+'\nSKU: '+x.sku+(x.asin?('\nASIN: '+x.asin):'')+'\n\n'+
+    'He detectado en mi Libro Mayor de Inventario que '+(x.uds_pendientes||0)+' unidades constan como perdidas ('+(x.perdido||0)+') o dañadas ('+(x.danado||0)+') en el centro logístico y aún no han sido reembolsadas (encontradas: '+(x.encontrado||0)+'; ya reembolsadas: '+(x.uds_reembolsadas||0)+').\n\n'+
+    'Solicito el reembolso correspondiente conforme a la política de FBA. El coste de fabricación de referencia es '+(x.coste!=null?f(x.coste,2)+' € por unidad':'el que consta en mi ficha de producto')+', por lo que el importe estimado es '+(x.importe_pendiente!=null?f(x.importe_pendiente,2)+' €':'el que corresponda')+'.\n\nQuedo a la espera. Gracias.';
+}
+function copiarReembolsoI(i){
+  var x=REEMB[i]; if(!x)return;
+  var ta=document.createElement('textarea'); ta.value=msgReembolso(x); document.body.appendChild(ta); ta.select();
+  try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+  alert('✓ Mensaje copiado. Ábrelo en un caso de Soporte al Vendedor (Gestionar inventario FBA → Reclamaciones).');
+}
+
 function msgCaso(x){
   return 'Asunto: Revisión de tarifas de gestión logística (FBA) — posible cobro cross-border\n\n'+
     'Producto: '+(x.nombre||x.sku)+'\nSKU: '+x.sku+(x.asin?('\nASIN: '+x.asin):'')+'\nMarketplace: '+(x.pais||'')+'\n\n'+
@@ -1491,7 +1544,7 @@ function aplicarDatos(d){
   // Satisfacción del cliente (motivos de devolución). En demo, ejemplo ilustrativo.
   try{ if(SB_CONFIG.mode==='api'){ cargarYoY(); cargarMensual(); } else { var yb=document.getElementById('yoy-chart'); if(yb)yb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; var mb=document.getElementById('mensual-chart'); if(mb)mb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; } }catch(e){}
   try{
-    if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); cargarFugas(); }
+    if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); cargarFugas(); cargarReembolsos(); }
     else{ renderSatisfaccion([
       {sku:'DEMO-1',nombre:'Set de botellas (ejemplo)',estrellas_est:2.6,devoluciones:5,criticas:3,pct_devolucion:8.5,uds_vendidas:59,motivo_top:'DEFECTIVE',senal:'rojo'},
       {sku:'DEMO-2',nombre:'Jabón natural (ejemplo)',estrellas_est:4.3,devoluciones:2,criticas:0,pct_devolucion:1.2,uds_vendidas:168,motivo_top:'FOUND_BETTER_PRICE',senal:'verde'}
