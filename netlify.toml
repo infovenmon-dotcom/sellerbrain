@@ -3,3 +3,9 @@
 # ya no hace falta generar config.js ni variables de entorno.
 [build]
   publish = "."
+  # AHORRO DE CRÉDITO: solo desplegar cuando cambie algo del FRONTEND.
+  # El comando 'ignore' que sale con código 0 => se SALTA el deploy.
+  # git diff --quiet sale 0 (sin cambios) cuando NINGÚN fichero de web cambió
+  # en este commit (worker.js, sql/, docs/ no cuentan) => no despliega.
+  # Si cambia un .html o assets => git diff sale 1 => Netlify SÍ despliega.
+  ignore = "git diff --quiet HEAD^ HEAD -- '*.html' 'assets/**' '_headers' '_redirects' 'favicon.svg' 'favicon.ico' 'netlify.toml'"
