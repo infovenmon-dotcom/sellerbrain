@@ -45,7 +45,7 @@ Cloudflare Worker  (worker/worker.js)                 →  backend/API + cron ho
 | **Cloudflare Workers (Paid)** | Backend + cron | **~5 $/mes** (de pago por el límite de subpeticiones) |
 | **Netlify (Pro)** | Hosting web | **20 $/mes** |
 | **Supabase** | Base de datos | Gratis (plan free) |
-| **Anthropic / Claude API** (dentro del producto) | Plan de la semana + análisis keywords | Pago por uso (bajo; modelo configurable a uno más barato) |
+| **Anthropic / Claude API** (dentro del producto) | Plan de la semana + análisis keywords | Pago por uso — **~0,04 US$ acumulado hasta ahora (despreciable)**; modelo configurable a uno más barato |
 | **Stripe** | Cobros | Comisión por transacción |
 | **Resend** | Email de acceso | Gratis (hasta 3.000/mes) — *pendiente de montar* |
 | **IONOS** | Dominio sellersbrain.io | Anual (dominio) |
