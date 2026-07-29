@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v50-remite-hola'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v51-sin-interrogante'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -205,7 +205,7 @@ export default {
         const rows = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,uds,ventas,pedidos', []);
         const byP = {}; const tot = { uds: 0, ventas: 0, pedidos: 0 };
         for (const r of (rows || [])) {
-          const p = r.pais || '?';
+          const p = r.pais || 'OTROS';
           if (!byP[p]) byP[p] = { pais: p, uds: 0, ventas: 0, pedidos: 0 };
           byP[p].uds += +r.uds || 0; byP[p].ventas += +r.ventas || 0; byP[p].pedidos += +r.pedidos || 0;
           tot.uds += +r.uds || 0; tot.ventas += +r.ventas || 0; tot.pedidos += +r.pedidos || 0;
@@ -429,12 +429,19 @@ export default {
         const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin'))) cat[c.sku] = c; } catch (_) {}
         // Dónde tiene stock cada SKU (Libro Mayor por país) → sustituye el "?" de país.
         const invp = {}; try { for (const r of (await selectSupabase(env, 'v_inventario_pais?select=sku,por_pais'))) invp[r.sku] = r.por_pais; } catch (_) {}
-        const datos = (filas || []).map(f => ({
-          ...f,
-          nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku,
-          asin: (cat[f.sku] && cat[f.sku].asin) || '',
-          por_pais: invp[f.sku] || null   // p.ej. "ES:120, FR:18" (de dónde se sirve)
-        }));
+        const datos = (filas || []).map(f => {
+          const porPais = invp[f.sku] || null;          // p.ej. "ES:120, FR:18" (de dónde se sirve)
+          // El settlement a veces no trae marketplace mapeable y la vista deja pais='?'.
+          // Nunca devolvemos '?': si no se conoce, usamos el stock por país (Libro Mayor)
+          // o lo dejamos vacío para que el front pinte '—'.
+          const pais = (f.pais && f.pais !== '?') ? f.pais : (porPais || '');
+          return {
+            ...f, pais,
+            nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku,
+            asin: (cat[f.sku] && cat[f.sku].asin) || '',
+            por_pais: porPais
+          };
+        });
         const total_mes = +(datos.reduce((a, x) => a + (+x.sobrecoste_mes || 0), 0)).toFixed(2);
         return json({ datos, total_mes }, cors);
       }
