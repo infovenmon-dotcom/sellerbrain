@@ -155,6 +155,15 @@ Ficheros en `sql/`. Los nuevos del multiusuario/onboarding:
 - **Cron Cloudflare:** `0 * * * *` (Workers → Triggers → Cron Triggers).
 - **SQL:** ejecutar los ficheros en Supabase → SQL Editor (idempotentes).
 
+### ⚠️ Netlify es por CRÉDITOS — no desplegar en cada commit
+- Plan Pro = **3.000 créditos/mes** (reinician cada día ~11). **Cada despliegue en
+  producción cuesta ~15 créditos.** Recarga automática **deshabilitada** (si se agotan,
+  Netlify deja de desplegar; NO cobra de más).
+- **Regla:** trabajar en la **rama de trabajo** (no despliega) y empujar a `main`
+  **solo cuando haya que desplegar frontend, agrupando cambios**. Los commits de
+  `worker/`, `sql/`, `docs/` NO deben desplegar (además hay `build.ignore` en netlify.toml).
+- Ejemplo real a evitar: 153 despliegues en un día = 2.295 créditos (76% del mes).
+
 ---
 
 ## 12. Pendiente / próximos pasos
