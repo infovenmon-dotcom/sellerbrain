@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v45-stripe-webhook'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v46-email-test'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -561,6 +561,14 @@ export default {
       if (url.pathname === '/v1/ingest' && request.method === 'POST') {
         const res = await ingestaDiaria(env);
         return json(res, cors);
+      }
+
+      // --- Prueba del email de acceso (admin): /v1/email-test?to=tucorreo ---
+      if (url.pathname === '/v1/email-test') {
+        const to = (url.searchParams.get('to') || '').trim();
+        if (!to) return json({ error: 'falta ?to=email' }, cors, 400);
+        const r = await enviarAccesoEmail(env, to, 'SB-TEST-0000');
+        return json({ enviado: r, nota: r && r.saltado ? 'Falta RESEND_API_KEY en Cloudflare' : 'Revisa tu bandeja (y spam)' }, cors);
       }
 
       // --- Ingesta COMPLETA multicuenta (VENMON + cada vendedor conectado). Admin. ---
