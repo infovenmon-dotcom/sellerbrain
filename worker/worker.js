@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v41-reembolsos'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v42-multicuenta-ventas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -542,6 +542,13 @@ export default {
         return json(res, cors);
       }
 
+      // --- PRUEBA multicuenta: refresco ligero de VENMON + cada vendedor conectado.
+      //     Devuelve el resultado por vendedor (para ver que cada token trae SUS datos). ---
+      if (url.pathname === '/v1/ingest-ventas-todas') {
+        const res = await ingestaVentasTodas(env);
+        return json({ cuentas: res.length, res }, cors);
+      }
+
       // --- Ingesta PPC (Ads API) en invocación separada (límite subrequests).
       //     ?pais=ES procesa UN país (para no pasar el límite en plan gratis).
       if (url.pathname === '/v1/ingest-ppc' && request.method === 'POST') {
@@ -776,7 +783,7 @@ export default {
       // pasada del cron; solo pedidos → coste mínimo). Así el dashboard está al
       // día sin lanzar la ingesta a mano. A las 03:00 no hace falta porque la
       // ingesta completa de abajo ya trae los pedidos.
-      if (hora !== 3) { try { await ingestaVentasHoy(env); } catch (_) {} }
+      if (hora !== 3) { try { await ingestaVentasTodas(env); } catch (_) {} }
       if (hora === 3) {
         await ingestaDiaria(env, 'cron');
         try { await ingestaPPC(env, {}); } catch (_) {}
@@ -824,14 +831,21 @@ async function descifrar(env, dato) {
 /* =====================================================================
  * TOKENS
  * =================================================================== */
-const _tokenCache = {}; // {scope:{token,exp}} — evita pedir token en cada llamada (menos subrequests)
-async function lwaToken(env, scope) {
-  // scope 'spapi' | 'ads'
-  const c = _tokenCache[scope];
+const _tokenCache = {}; // {cacheKey:{token,exp}} — evita pedir token en cada llamada (menos subrequests)
+// ctx (opcional, multicuenta): { seller, spapiToken, adsToken }. Sin ctx → cuenta
+// propia (VENMON) con los secretos del entorno. La caché se separa por vendedor.
+async function lwaToken(env, scope, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const refresh = ctx
+    ? (scope === 'ads' ? ctx.adsToken : ctx.spapiToken)
+    : (scope === 'ads' ? env.ADS_REFRESH_TOKEN : env.SPAPI_REFRESH_TOKEN);
+  const cacheKey = scope + '|' + seller;
+  const c = _tokenCache[cacheKey];
   if (c && c.exp > Date.now() + 60000) return c.token;   // token aún válido (>1 min)
+  if (!refresh) throw new Error('LWA token ' + scope + ': sin refresh_token (' + seller + ')');
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
-    refresh_token: scope === 'ads' ? env.ADS_REFRESH_TOKEN : env.SPAPI_REFRESH_TOKEN,
+    refresh_token: refresh,
     client_id: scope === 'ads' ? env.ADS_CLIENT_ID : env.LWA_CLIENT_ID,
     client_secret: scope === 'ads' ? env.ADS_CLIENT_SECRET : env.LWA_CLIENT_SECRET
   });
@@ -842,16 +856,31 @@ async function lwaToken(env, scope) {
   });
   if (!r.ok) throw new Error('LWA token ' + scope + ': ' + r.status + ' ' + await r.text());
   const j = await r.json();
-  _tokenCache[scope] = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) * 1000) };
+  _tokenCache[cacheKey] = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) * 1000) };
   return j.access_token;
+}
+
+// Helpers multicuenta ------------------------------------------------------
+// Añade el `seller` a cada fila antes de guardar (para el aislamiento por cuenta).
+function conSeller(filas, seller) { return (filas || []).map(f => ({ ...f, seller: seller || 'venmon' })); }
+// Lee las cuentas SP-API conectadas (activas) y descifra su refresh_token.
+async function cuentasSpapiActivas(env) {
+  let filas = [];
+  try { filas = await selectSupabase(env, 'cuentas_spapi?estado=eq.activa&select=seller,refresh_token'); } catch (_) { return []; }
+  const out = [];
+  for (const c of (filas || [])) {
+    if (!c.seller || !c.refresh_token) continue;
+    try { out.push({ seller: c.seller, spapiToken: await descifrar(env, c.refresh_token) }); } catch (_) { /* token ilegible → se omite */ }
+  }
+  return out;
 }
 
 /* =====================================================================
  * SP-API — Reports (2021-06-30)
  * Flujo: createReport → poll → getReportDocument → descargar (gzip)
  * =================================================================== */
-async function spapiCall(env, path, opts = {}) {
-  const token = await lwaToken(env, 'spapi');
+async function spapiCall(env, path, opts = {}, ctx) {
+  const token = await lwaToken(env, 'spapi', ctx);
   const r = await fetch(SPAPI_HOST + path, {
     ...opts,
     headers: {
@@ -1016,9 +1045,10 @@ async function traerInventarioFBA(env, marketplaceId) {
   return { inv, cat };
 }
 
-async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketplaceIds, reportOptions) {
+async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketplaceIds, reportOptions, ctx) {
   // Los informes "snapshot" (p.ej. inventario) NO aceptan rango de fechas:
   // se piden con dataStartTime/dataEndTime a null y solo se manda el tipo.
+  // ctx opcional: multicuenta (usa el token del vendedor).
   const body = { reportType, marketplaceIds };
   if (dataStartTime) body.dataStartTime = dataStartTime;
   if (dataEndTime) body.dataEndTime = dataEndTime;
@@ -1026,12 +1056,12 @@ async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketp
   const { reportId } = await spapiCall(env, '/reports/2021-06-30/reports', {
     method: 'POST',
     body: JSON.stringify(body)
-  });
+  }, ctx);
   // Poll hasta DONE (máx ~4 min; los settlement suelen estar ya generados)
   for (let i = 0; i < 24; i++) {
     await sleep(10000);
-    const rep = await spapiCall(env, '/reports/2021-06-30/reports/' + reportId);
-    if (rep.processingStatus === 'DONE') return descargarDocumento(env, rep.reportDocumentId);
+    const rep = await spapiCall(env, '/reports/2021-06-30/reports/' + reportId, {}, ctx);
+    if (rep.processingStatus === 'DONE') return descargarDocumento(env, rep.reportDocumentId, ctx);
     if (['CANCELLED', 'FATAL'].includes(rep.processingStatus)) {
       throw new Error('Informe ' + reportType + ': ' + rep.processingStatus);
     }
@@ -1050,8 +1080,8 @@ async function listarSettlements(env, desdeISO) {
   return reports || [];
 }
 
-async function descargarDocumento(env, documentId) {
-  const doc = await spapiCall(env, '/reports/2021-06-30/documents/' + documentId);
+async function descargarDocumento(env, documentId, ctx) {
+  const doc = await spapiCall(env, '/reports/2021-06-30/documents/' + documentId, {}, ctx);
   const r = await fetch(doc.url);
   let buf = await r.arrayBuffer();
   if (doc.compressionAlgorithm === 'GZIP') {
@@ -1569,19 +1599,32 @@ async function ingestaDiaria(env, origen) {
  * completa a mano. El histórico pesado (settlements, devoluciones, inventario,
  * stock por país) sigue una vez al día en ingestaDiaria (03:00 UTC).
  * =================================================================== */
-async function ingestaVentasHoy(env) {
-  const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
-  if (!planCompleto) return { saltado: 'sin SP-API' };
+async function ingestaVentasHoy(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  // Con ctx (vendedor conectado) usa su token; sin ctx, la cuenta propia (secretos).
+  const planCompleto = ctx ? !!ctx.spapiToken : !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+  if (!planCompleto) return { seller, saltado: 'sin SP-API' };
   const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const tsv = await pedirInforme(env,
     'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
     ayer + 'T00:00:00Z', new Date().toISOString(),
-    [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
+    [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE], undefined, ctx);
   const filas = parseTSV(tsv);
-  await upsertSupabase(env, 'pedidos_dia', agregarPedidosPorDia(filas));
-  await upsertSupabase(env, 'ventas_sku_pais_dia', agregarVentasSkuPais(filas));
-  await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas));
-  return { pedidos: filas.length };
+  await upsertSupabase(env, 'pedidos_dia', conSeller(agregarPedidosPorDia(filas), seller));
+  await upsertSupabase(env, 'ventas_sku_pais_dia', conSeller(agregarVentasSkuPais(filas), seller));
+  await upsertSupabase(env, 'productos_catalogo', conSeller(catalogoDePedidos(filas), seller));
+  return { seller, pedidos: filas.length };
+}
+
+// Orquestador multicuenta del refresco ligero: VENMON (cuenta propia) + cada
+// vendedor conectado (cuentas_spapi), cada uno con su token y etiquetado por seller.
+async function ingestaVentasTodas(env) {
+  const res = [];
+  try { res.push(await ingestaVentasHoy(env)); } catch (e) { res.push({ seller: 'venmon', error: e.message }); }
+  for (const c of await cuentasSpapiActivas(env)) {
+    try { res.push(await ingestaVentasHoy(env, c)); } catch (e) { res.push({ seller: c.seller, error: e.message }); }
+  }
+  return res;
 }
 
 /* =====================================================================
