@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v46-email-test'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v47-email-detalle'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2561,7 +2561,8 @@ async function enviarAccesoEmail(env, email, codigo) {
     headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from, to: [email], subject: 'Tu acceso a SellerBrain', html })
   });
-  return { ok: r.ok, status: r.status };
+  let detalle = null; try { detalle = await r.json(); } catch (_) {}
+  return { ok: r.ok, status: r.status, from, detalle };   // detalle = motivo exacto si falla
 }
 
 // IDENTIDAD (fase 3, aún SIN activar en la lectura): resuelve QUÉ vendedor está
