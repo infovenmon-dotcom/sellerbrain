@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v47-email-detalle'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v48-email-marca'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2550,19 +2550,101 @@ async function enviarAccesoEmail(env, email, codigo) {
   if (!env.RESEND_API_KEY) return { saltado: 'sin RESEND_API_KEY' };
   const from = env.EMAIL_FROM || 'SellerBrain <acceso@sellersbrain.io>';
   const portal = (env.PORTAL_URL || 'https://sellersbrain.io/portal.html') + '?login=1';
-  const html = '<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto">' +
-    '<h2 style="color:#14663f">Bienvenido a SellerBrain</h2>' +
-    '<p>Gracias por tu compra. Ya puedes entrar con tu email y este código de acceso:</p>' +
-    '<p style="font-size:22px;font-weight:bold;letter-spacing:2px;background:#f2f7f4;padding:12px 16px;border-radius:8px;text-align:center">' + codigo + '</p>' +
-    '<p><a href="' + portal + '" style="display:inline-block;background:#14663f;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none">Entrar en SellerBrain</a></p>' +
-    '<p style="color:#888;font-size:12px">Entra con <b>' + email + '</b> y el código de arriba. Guárdalo: es tu llave de acceso.</p></div>';
+  const soporte = env.EMAIL_SOPORTE || 'info.venmon@gmail.com';
+  const html = emailAccesoHTML({ email, codigo, portal, soporte });
+  // Versión de texto plano (mejora la entregabilidad y sirve si el cliente no pinta HTML)
+  const text =
+    'Bienvenido a SellerBrain\n\n' +
+    'Gracias por tu compra. Ya puedes entrar con tu email y este codigo de acceso:\n\n' +
+    '  ' + codigo + '\n\n' +
+    'Entra aqui: ' + portal + '\n' +
+    'Usuario: ' + email + '  ·  Codigo: ' + codigo + '\n\n' +
+    'Guarda este codigo: es tu llave de acceso.\n' +
+    'Soporte: ' + soporte + '\n\n' +
+    'SellerBrain · VENMON NATURALMENTE SL';
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [email], subject: 'Tu acceso a SellerBrain', html })
+    body: JSON.stringify({
+      from, to: [email], subject: 'Tu acceso a SellerBrain', html, text,
+      reply_to: soporte
+    })
   });
   let detalle = null; try { detalle = await r.json(); } catch (_) {}
   return { ok: r.ok, status: r.status, from, detalle };   // detalle = motivo exacto si falla
+}
+
+// Plantilla del email de bienvenida/acceso. HTML compatible con clientes de correo
+// (tablas + estilos en línea): se ve igual en Gmail, Apple Mail y Outlook.
+function emailAccesoHTML({ email, codigo, portal, soporte }) {
+  const verde = '#14663f', verdeClaro = '#f2f7f4', gris = '#5b6b63', borde = '#e3ece7';
+  const beneficio = (icono, titulo, texto) =>
+    '<tr>' +
+      '<td width="34" valign="top" style="font-size:20px;line-height:24px;padding:6px 10px 6px 0">' + icono + '</td>' +
+      '<td valign="top" style="padding:6px 0">' +
+        '<div style="font-weight:bold;color:#173a2b;font-size:14px">' + titulo + '</div>' +
+        '<div style="color:' + gris + ';font-size:13px;line-height:19px">' + texto + '</div>' +
+      '</td>' +
+    '</tr>';
+  return '' +
+  '<!doctype html><html><body style="margin:0;padding:0;background:#eef2f0">' +
+  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f0;padding:24px 12px">' +
+  '<tr><td align="center">' +
+    '<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + borde + '">' +
+
+      // Cabecera de marca
+      '<tr><td style="background:' + verde + ';padding:26px 28px">' +
+        '<div style="font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:.5px">SellerBrain</div>' +
+        '<div style="font-family:Arial,Helvetica,sans-serif;color:#bfe0cf;font-size:13px;margin-top:2px">Tu beneficio real de Amazon, claro y al día</div>' +
+      '</td></tr>' +
+
+      // Cuerpo
+      '<tr><td style="padding:30px 28px 8px;font-family:Arial,Helvetica,sans-serif">' +
+        '<h1 style="margin:0 0 8px;color:#173a2b;font-size:22px">¡Bienvenido a bordo! 🎉</h1>' +
+        '<p style="margin:0 0 18px;color:' + gris + ';font-size:15px;line-height:22px">Gracias por tu compra. Tu cuenta ya está lista. Entra con tu email y este <b>código de acceso</b>:</p>' +
+
+        // Código destacado
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' +
+          '<tr><td style="background:' + verdeClaro + ';border:1px dashed ' + verde + ';border-radius:10px;padding:16px;text-align:center">' +
+            '<div style="color:' + gris + ';font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Tu código de acceso</div>' +
+            '<div style="font-family:Consolas,Menlo,monospace;font-size:26px;font-weight:bold;letter-spacing:3px;color:' + verde + '">' + codigo + '</div>' +
+          '</td></tr>' +
+        '</table>' +
+
+        // Botón
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 6px"><tr><td align="center">' +
+          '<a href="' + portal + '" style="display:inline-block;background:' + verde + ';color:#ffffff;font-size:16px;font-weight:bold;padding:14px 30px;border-radius:10px;text-decoration:none">Entrar en SellerBrain →</a>' +
+        '</td></tr></table>' +
+        '<p style="margin:0 0 22px;text-align:center;color:#8a9a92;font-size:12px">Usuario: <b>' + email + '</b> · Código: <b>' + codigo + '</b></p>' +
+
+        // Qué puedes hacer
+        '<div style="height:1px;background:' + borde + ';margin:6px 0 18px"></div>' +
+        '<div style="font-weight:bold;color:#173a2b;font-size:15px;margin-bottom:10px">Esto es lo que verás dentro:</div>' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' +
+          beneficio('📊', 'Beneficio real por producto', 'Descuenta comisiones, FBA, PPC y devoluciones. Sabes qué te deja cada referencia.') +
+          beneficio('💸', 'Reembolsos pendientes', 'Detecta stock perdido o dañado por Amazon que te deben abonar.') +
+          beneficio('🌍', 'Stock por país y PPC', 'Inventario por marketplace y control de tus campañas de publicidad.') +
+          beneficio('✅', 'Cumplimiento UE', 'Títulos, EPR/GPSR y avisos de las últimas normas de Amazon.') +
+        '</table>' +
+
+      '</td></tr>' +
+
+      // Ayuda
+      '<tr><td style="padding:18px 28px 0;font-family:Arial,Helvetica,sans-serif">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background:#f7faf8;border:1px solid ' + borde + ';border-radius:10px;padding:14px 16px">' +
+          '<div style="font-size:13px;color:' + gris + ';line-height:20px">💡 <b>Guarda este código</b>, es tu llave de acceso. ¿Dudas o algo no cuadra? Escríbenos a <a href="mailto:' + soporte + '" style="color:' + verde + ';text-decoration:none"><b>' + soporte + '</b></a> y te ayudamos.</div>' +
+        '</td></tr></table>' +
+      '</td></tr>' +
+
+      // Pie
+      '<tr><td style="padding:22px 28px 26px;font-family:Arial,Helvetica,sans-serif;text-align:center">' +
+        '<div style="color:#9aa8a1;font-size:12px;line-height:18px">SellerBrain · VENMON NATURALMENTE SL<br>' +
+        'Este email se ha enviado a ' + email + ' porque tienes una cuenta en SellerBrain.</div>' +
+      '</td></tr>' +
+
+    '</table>' +
+  '</td></tr></table>' +
+  '</body></html>';
 }
 
 // IDENTIDAD (fase 3, aún SIN activar en la lectura): resuelve QUÉ vendedor está
