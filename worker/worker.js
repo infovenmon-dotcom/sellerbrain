@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v43-multicuenta-ingesta'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v44-identidad-seller'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2480,6 +2480,22 @@ async function verificarJWT(env, token) {
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null; // caducado
     return payload;
   } catch (_) { return null; }
+}
+
+// IDENTIDAD (fase 3, aún SIN activar en la lectura): resuelve QUÉ vendedor está
+// viendo, para poder filtrar los datos por su seller.
+//  · admin con SB_API_KEY  → 'venmon' (ve los datos propios).
+//  · miembro con su JWT     → su miembros.seller (por defecto 'venmon' si no consta).
+// El default 'venmon' hace que el equipo de VENMON no se quede sin datos.
+async function sellerDeLogin(env, auth) {
+  if (auth && env.SB_API_KEY && auth === env.SB_API_KEY) return 'venmon';
+  const payload = await verificarJWT(env, auth);
+  if (!payload || !payload.email) return 'venmon';
+  try {
+    const filas = await selectSupabase(env,
+      'miembros?email=eq.' + encodeURIComponent(payload.email) + '&select=seller&limit=1');
+    return (filas && filas[0] && filas[0].seller) || 'venmon';
+  } catch (_) { return 'venmon'; }
 }
 
 /* ===== utils ===== */
