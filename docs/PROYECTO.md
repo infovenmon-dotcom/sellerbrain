@@ -2,7 +2,7 @@
 
 > Fuente única de la verdad: arquitectura, servicios, costes, cuentas, dominios,
 > estado de Amazon, seguridad y tareas pendientes. Se actualiza según avanzamos.
-> **Última actualización:** 2026-07-29 · **Worker:** v46-email-test
+> **Última actualización:** 2026-07-29 · **Worker:** v49-email-logo
 
 ---
 
@@ -132,7 +132,7 @@ Cliente paga (Stripe)
 | Ingesta escritura por `seller` (fases 1-2) | ✅ hecho y validado (todo bajo `venmon`) |
 | Identidad login→seller (columna + helper) | ✅ preparada, **sin activar** el filtro |
 | Webhook de Stripe (alta automática) | ✅ código listo · ⏳ configurar en Stripe + secreto |
-| Email automático (Resend) | ⏳ pendiente (DNS en IONOS cuando toque) |
+| Email automático (Resend) | ✅ funciona (dominio verificado, logo+marca, `hola@sellersbrain.io`) · ⏳ opcional: recepción/reenvío de `hola@` |
 | Lectura aislada (fase 3) | ⏳ al tener un 2º vendedor real |
 | Ads ingesta por vendedor | ⏳ pendiente |
 | Repartir ingesta multicuenta en varios ticks | ⏳ cuando haya muchos vendedores (tope 1.000 subpeticiones) |
