@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v48-email-marca'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v49-email-logo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2549,9 +2549,14 @@ function nuevoCodigo() {
 async function enviarAccesoEmail(env, email, codigo) {
   if (!env.RESEND_API_KEY) return { saltado: 'sin RESEND_API_KEY' };
   const from = env.EMAIL_FROM || 'SellerBrain <acceso@sellersbrain.io>';
-  const portal = (env.PORTAL_URL || 'https://sellersbrain.io/portal.html') + '?login=1';
-  const soporte = env.EMAIL_SOPORTE || 'info.venmon@gmail.com';
-  const html = emailAccesoHTML({ email, codigo, portal, soporte });
+  const portalBase = env.PORTAL_URL || 'https://sellersbrain.io/portal.html';
+  const portal = portalBase + '?login=1';
+  const soporte = env.EMAIL_SOPORTE || 'hola@sellersbrain.io';
+  // Logo del email: PNG absoluto (Gmail/Outlook NO pintan SVG). Por defecto lo sirve
+  // el mismo origen del portal (Netlify hoy, sellersbrain.io el día que migre).
+  let logo = env.EMAIL_LOGO;
+  if (!logo) { try { logo = new URL(portalBase).origin + '/assets/logo.png'; } catch (_) { logo = 'https://sellersbrain.io/assets/logo.png'; } }
+  const html = emailAccesoHTML({ email, codigo, portal, soporte, logo });
   // Versión de texto plano (mejora la entregabilidad y sirve si el cliente no pinta HTML)
   const text =
     'Bienvenido a SellerBrain\n\n' +
@@ -2576,7 +2581,7 @@ async function enviarAccesoEmail(env, email, codigo) {
 
 // Plantilla del email de bienvenida/acceso. HTML compatible con clientes de correo
 // (tablas + estilos en línea): se ve igual en Gmail, Apple Mail y Outlook.
-function emailAccesoHTML({ email, codigo, portal, soporte }) {
+function emailAccesoHTML({ email, codigo, portal, soporte, logo }) {
   const verde = '#14663f', verdeClaro = '#f2f7f4', gris = '#5b6b63', borde = '#e3ece7';
   const beneficio = (icono, titulo, texto) =>
     '<tr>' +
@@ -2592,10 +2597,17 @@ function emailAccesoHTML({ email, codigo, portal, soporte }) {
   '<tr><td align="center">' +
     '<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid ' + borde + '">' +
 
-      // Cabecera de marca
-      '<tr><td style="background:' + verde + ';padding:26px 28px">' +
-        '<div style="font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:.5px">SellerBrain</div>' +
-        '<div style="font-family:Arial,Helvetica,sans-serif;color:#bfe0cf;font-size:13px;margin-top:2px">Tu beneficio real de Amazon, claro y al día</div>' +
+      // Cabecera de marca (logo PNG + wordmark)
+      '<tr><td style="background:' + verde + ';padding:24px 28px">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0"><tr>' +
+          '<td valign="middle" style="padding-right:14px">' +
+            '<img src="' + logo + '" width="46" height="46" alt="SellerBrain" style="display:block;width:46px;height:46px;border:0;border-radius:11px">' +
+          '</td>' +
+          '<td valign="middle">' +
+            '<div style="font-family:Arial,Helvetica,sans-serif;color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:.5px">SellerBrain</div>' +
+            '<div style="font-family:Arial,Helvetica,sans-serif;color:#bfe0cf;font-size:13px;margin-top:2px">Tu beneficio real de Amazon, claro y al día</div>' +
+          '</td>' +
+        '</tr></table>' +
       '</td></tr>' +
 
       // Cuerpo
