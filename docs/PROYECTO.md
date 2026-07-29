@@ -41,15 +41,21 @@ Cloudflare Worker  (worker/worker.js)                 →  backend/API + cron ho
 ## 3. Servicios y costes (reales)
 | Servicio | Para qué | Coste |
 |---|---|---|
+| **Claude (Claude Code)** | Construcción y mantenimiento del producto | **90 $/mes** |
 | **Cloudflare Workers (Paid)** | Backend + cron | **~5 $/mes** (de pago por el límite de subpeticiones) |
 | **Netlify (Pro)** | Hosting web | **20 $/mes** |
 | **Supabase** | Base de datos | Gratis (plan free) |
-| **Anthropic / Claude API** | Plan de la semana + análisis keywords | Pago por uso (bajo; modelo configurable a uno más barato) |
+| **Anthropic / Claude API** (dentro del producto) | Plan de la semana + análisis keywords | Pago por uso (bajo; modelo configurable a uno más barato) |
 | **Stripe** | Cobros | Comisión por transacción |
 | **Resend** | Email de acceso | Gratis (hasta 3.000/mes) — *pendiente de montar* |
 | **IONOS** | Dominio sellersbrain.io | Anual (dominio) |
 
-**Fijo mensual actual:** ~25 $/mes (Cloudflare + Netlify) + uso de Claude + comisiones Stripe.
+**Fijo mensual actual:** **~115 $/mes** = Claude Code (90) + Netlify (20) + Cloudflare (~5).
+Más: uso de la API de Claude dentro del producto (bajo) + comisiones de Stripe + dominio IONOS (anual).
+
+> Nota: hay **dos costes de Claude distintos** — (1) **Claude Code 90 $/mes** = herramienta con la
+> que se construye/mantiene el proyecto; (2) **API de Claude** = la que usa el propio producto para
+> redactar el "plan de la semana" (pago por uso, se puede abaratar cambiando de modelo).
 
 ---
 
