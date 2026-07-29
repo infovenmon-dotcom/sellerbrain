@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v44-identidad-seller'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v45-stripe-webhook'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -109,6 +109,35 @@ export default {
         }
         const token = await firmarJWT(env, { email, plan: m.plan || 'beta' });
         return json({ ok: true, token, plan: m.plan || 'beta', expira: m.expira || null }, cors);
+      }
+
+      // --- WEBHOOK de Stripe: al pagar, crea el miembro solo (y le manda el acceso
+      //     por email si hay proveedor configurado). Público: la firma de Stripe es
+      //     la autenticación. Requiere el secreto STRIPE_WEBHOOK_SECRET. ---
+      if (url.pathname === '/stripe/webhook' && request.method === 'POST') {
+        const raw = await request.text();
+        const firmaOk = await verificarStripe(env.STRIPE_WEBHOOK_SECRET, request.headers.get('stripe-signature'), raw);
+        if (!firmaOk) return new Response('firma invalida', { status: 400 });
+        let evt; try { evt = JSON.parse(raw); } catch (_) { return new Response('json', { status: 400 }); }
+        // Idempotencia: si ya procesamos este evento, no repetir.
+        try { if (evt.id && await existeEnSupabase(env, 'stripe_eventos', 'id', evt.id)) return json({ ok: true, dup: true }, cors); } catch (_) {}
+        let creado = null;
+        if (evt.type === 'checkout.session.completed' || evt.type === 'payment_intent.succeeded') {
+          const o = (evt.data && evt.data.object) || {};
+          const email = ((o.customer_details && o.customer_details.email) || o.customer_email || o.receipt_email || '').trim().toLowerCase();
+          const nombre = (o.customer_details && o.customer_details.name) || '';
+          if (email) {
+            // ¿ya tiene código este email? (evita duplicar si paga dos veces)
+            let ya = [];
+            try { ya = await selectSupabase(env, 'miembros?email=eq.' + encodeURIComponent(email) + '&select=codigo&limit=1'); } catch (_) {}
+            const codigo = (ya && ya[0] && ya[0].codigo) || nuevoCodigo();
+            await upsertSupabase(env, 'miembros', [{ codigo, email, nombre, activo: true, plan: 'beta', seller: email }]);
+            creado = { email, codigo };
+            try { await enviarAccesoEmail(env, email, codigo); } catch (_) {}
+          }
+        }
+        try { await upsertSupabase(env, 'stripe_eventos', [{ id: evt.id, email: creado && creado.email, codigo: creado && creado.codigo, creado: new Date().toISOString() }]); } catch (_) {}
+        return json({ ok: true, creado }, cors);
       }
 
       // --- Costes de producto (COGS) — el margen real depende de esto ---
@@ -2480,6 +2509,51 @@ async function verificarJWT(env, token) {
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null; // caducado
     return payload;
   } catch (_) { return null; }
+}
+
+// Verifica la firma del webhook de Stripe (HMAC-SHA256 sobre "t.body" con el
+// secreto whsec_...). Rechaza si la firma no coincide o el evento es viejo (>5 min).
+async function verificarStripe(secret, sigHeader, rawBody) {
+  if (!secret || !sigHeader) return false;
+  const parts = {};
+  for (const kv of sigHeader.split(',')) { const i = kv.indexOf('='); if (i > 0) parts[kv.slice(0, i).trim()] = kv.slice(i + 1).trim(); }
+  const t = parts.t, v1 = parts.v1;
+  if (!t || !v1) return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - (+t)) > 300) return false;   // anti-replay
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(t + '.' + rawBody));
+  const hex = [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+  // comparación de longitud fija
+  if (hex.length !== v1.length) return false;
+  let dif = 0; for (let i = 0; i < hex.length; i++) dif |= hex.charCodeAt(i) ^ v1.charCodeAt(i);
+  return dif === 0;
+}
+
+// Código de acceso nuevo, no adivinable: SB-XXXX-XXXX.
+function nuevoCodigo() {
+  const b = crypto.getRandomValues(new Uint8Array(8));
+  const s = [...b].map(x => (x % 36).toString(36)).join('').toUpperCase();
+  return 'SB-' + s.slice(0, 4) + '-' + s.slice(4, 8);
+}
+
+// Envía el email de acceso vía Resend (si hay RESEND_API_KEY). Si no, no rompe:
+// el código queda creado en la tabla (lo puedes ver en Supabase o reenviar).
+async function enviarAccesoEmail(env, email, codigo) {
+  if (!env.RESEND_API_KEY) return { saltado: 'sin RESEND_API_KEY' };
+  const from = env.EMAIL_FROM || 'SellerBrain <acceso@sellersbrain.io>';
+  const portal = (env.PORTAL_URL || 'https://sellersbrain.io/portal.html') + '?login=1';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto">' +
+    '<h2 style="color:#14663f">Bienvenido a SellerBrain</h2>' +
+    '<p>Gracias por tu compra. Ya puedes entrar con tu email y este código de acceso:</p>' +
+    '<p style="font-size:22px;font-weight:bold;letter-spacing:2px;background:#f2f7f4;padding:12px 16px;border-radius:8px;text-align:center">' + codigo + '</p>' +
+    '<p><a href="' + portal + '" style="display:inline-block;background:#14663f;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none">Entrar en SellerBrain</a></p>' +
+    '<p style="color:#888;font-size:12px">Entra con <b>' + email + '</b> y el código de arriba. Guárdalo: es tu llave de acceso.</p></div>';
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [email], subject: 'Tu acceso a SellerBrain', html })
+  });
+  return { ok: r.ok, status: r.status };
 }
 
 // IDENTIDAD (fase 3, aún SIN activar en la lectura): resuelve QUÉ vendedor está
