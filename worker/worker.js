@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v51-sin-interrogante'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v52-fundadores-ciclo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -126,18 +126,77 @@ export default {
           const o = (evt.data && evt.data.object) || {};
           const email = ((o.customer_details && o.customer_details.email) || o.customer_email || o.receipt_email || '').trim().toLowerCase();
           const nombre = (o.customer_details && o.customer_details.name) || '';
+          const modo = o.mode || '';                       // 'payment' (fundador) | 'subscription' (renovación)
+          const importe = +o.amount_total || +o.amount || 0; // en céntimos
+          // ¿Es una RENOVACIÓN? suscripción, o importe de mensual/anual (20€/200€).
+          const esRenovacion = modo === 'subscription' || importe === 2000 || importe === 20000;
           if (email) {
             // ¿ya tiene código este email? (evita duplicar si paga dos veces)
             let ya = [];
-            try { ya = await selectSupabase(env, 'miembros?email=eq.' + encodeURIComponent(email) + '&select=codigo&limit=1'); } catch (_) {}
+            try { ya = await selectSupabase(env, 'miembros?email=eq.' + encodeURIComponent(email) + '&select=codigo&fin&limit=1'); } catch (_) {}
             const codigo = (ya && ya[0] && ya[0].codigo) || nuevoCodigo();
-            await upsertSupabase(env, 'miembros', [{ codigo, email, nombre, activo: true, plan: 'beta', seller: email }]);
-            creado = { email, codigo };
-            try { await enviarAccesoEmail(env, email, codigo); } catch (_) {}
+            if (esRenovacion) {
+              // Renovación: se paran los correos, se amplía el acceso. Mensual o anual por importe.
+              const anual = importe >= 20000;
+              const base = (ya && ya[0] && ya[0].fin) ? new Date(ya[0].fin + 'T00:00:00Z') : new Date();
+              const nuevoFin = new Date(base.getTime() + (anual ? 365 : 30) * 86400000).toISOString().slice(0, 10);
+              await upsertSupabase(env, 'miembros', [{ codigo, email, nombre, activo: true,
+                plan: anual ? 'anual' : 'mensual', estado: 'renovado', fin: nuevoFin, seller: email,
+                aviso1: null, aviso2: null, aviso3: null, borrado: null }]);
+              creado = { email, codigo, plan: anual ? 'anual' : 'mensual', renovacion: true };
+            } else {
+              // Alta FUNDADOR: 2 meses (60 días) por 25 €. Fija inicio/fin y manda el acceso.
+              const hoy = new Date();
+              const inicio = hoy.toISOString().slice(0, 10);
+              const fin = new Date(hoy.getTime() + 60 * 86400000).toISOString().slice(0, 10);
+              await upsertSupabase(env, 'miembros', [{ codigo, email, nombre, activo: true,
+                plan: 'fundador', estado: 'activo', inicio, fin, seller: email,
+                aviso1: null, aviso2: null, aviso3: null, borrado: null }]);
+              creado = { email, codigo, plan: 'fundador', inicio, fin };
+              try { await enviarAccesoEmail(env, email, codigo); } catch (_) {}
+            }
           }
         }
         try { await upsertSupabase(env, 'stripe_eventos', [{ id: evt.id, email: creado && creado.email, codigo: creado && creado.codigo, creado: new Date().toISOString() }]); } catch (_) {}
         return json({ ok: true, creado }, cors);
+      }
+
+      // --- FUNDADORES: listar el estado del ciclo de vida (admin). ---
+      if (url.pathname === '/v1/fundadores') {
+        const filas = await selSafe(env, 'miembros?plan=eq.fundador&select=email,codigo,estado,inicio,fin,aviso1,aviso2,aviso3,borrado&order=fin.asc', []);
+        const hoy = new Date();
+        const datos = (filas || []).map(m => {
+          const d = m.fin ? Math.round((new Date(m.fin + 'T00:00:00Z') - new Date(hoy.toISOString().slice(0, 10) + 'T00:00:00Z')) / 86400000) : null;
+          let fase = 'activo';
+          if (m.borrado) fase = 'borrado';
+          else if (m.estado === 'baja') fase = 'baja (pendiente de borrar)';
+          else if (d != null && d <= 0) fase = 'vencido (renovar)';
+          else if (d != null && d <= 15) fase = 'por vencer (' + d + ' días)';
+          return { email: m.email, estado: m.estado, inicio: m.inicio, fin: m.fin, dias_para_fin: d, fase };
+        });
+        return json({ total: datos.length, fundadores: datos }, cors);
+      }
+
+      // --- FUNDADORES: fijar/editar la fecha de inicio a mano (admin).
+      //     POST /v1/fundador/fecha  {email, inicio:"YYYY-MM-DD"}  (inicio opcional = hoy) ---
+      if (url.pathname === '/v1/fundador/fecha' && request.method === 'POST') {
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const email = (b.email || '').trim().toLowerCase();
+        if (!email) return json({ ok: false, error: 'falta_email' }, cors, 400);
+        const inicio = (b.inicio || new Date().toISOString().slice(0, 10)).slice(0, 10);
+        const fin = new Date(new Date(inicio + 'T00:00:00Z').getTime() + 60 * 86400000).toISOString().slice(0, 10);
+        let ya = [];
+        try { ya = await selectSupabase(env, 'miembros?email=eq.' + encodeURIComponent(email) + '&select=codigo&limit=1'); } catch (_) {}
+        const codigo = (ya && ya[0] && ya[0].codigo) || nuevoCodigo();
+        await upsertSupabase(env, 'miembros', [{ codigo, email, activo: true, plan: 'fundador',
+          estado: 'activo', inicio, fin, seller: email, aviso1: null, aviso2: null, aviso3: null, borrado: null }]);
+        return json({ ok: true, email, codigo, inicio, fin }, cors);
+      }
+
+      // --- FUNDADORES: lanzar el barrido AHORA (admin, para probar sin esperar al cron). ---
+      if (url.pathname === '/v1/fundadores/run') {
+        const r = await procesarFundadores(env);
+        return json({ ok: true, resultado: r }, cors);
       }
 
       // --- Costes de producto (COGS) — el margen real depende de esto ---
@@ -845,6 +904,9 @@ export default {
         try { await corregirCierrePPCHora(env); } catch (_) {}
         try { await traerPresupuestosAds(env); } catch (_) {}
       }
+      // A las 08:00 UTC (~10:00 España): ciclo de vida de fundadores — correos de
+      // seguimiento/renovación/último aviso, bajas y (si BORRADO_AUTO=1) borrado.
+      if (hora === 8) { try { await procesarFundadores(env); } catch (_) {} }
     })());
   }
 };
@@ -2668,6 +2730,184 @@ function emailAccesoHTML({ email, codigo, portal, soporte, logo }) {
     '</table>' +
   '</td></tr></table>' +
   '</body></html>';
+}
+
+/* =====================================================================
+ * FUNDADORES — ciclo de vida: correos de seguimiento/renovación/último aviso,
+ * baja al no renovar y (si BORRADO_AUTO=1) borrado de datos. Barrido diario
+ * desde el cron (procesarFundadores). Ver sql/fundadores.sql.
+ * =================================================================== */
+
+// Config común de email (remite, soporte, logo, enlaces de pago).
+function cfgEmail(env) {
+  const from = env.EMAIL_FROM || 'SellerBrain <hola@sellersbrain.io>';
+  const soporte = env.EMAIL_SOPORTE || 'hola@sellersbrain.io';
+  const replyTo = env.EMAIL_REPLYTO || soporte;
+  const portalBase = env.PORTAL_URL || 'https://sellersbrain.io/portal.html';
+  let logo = env.EMAIL_LOGO;
+  if (!logo) { try { logo = new URL(portalBase).origin + '/assets/logo.png'; } catch (_) { logo = 'https://sellersbrain.io/assets/logo.png'; } }
+  return { from, soporte, replyTo, logo, portal: portalBase + '?login=1',
+    linkMensual: env.STRIPE_LINK_MENSUAL || '', linkAnual: env.STRIPE_LINK_ANUAL || '' };
+}
+
+// Envío genérico por Resend. Devuelve {ok,status,detalle}.
+async function enviarResend(env, to, subject, html, text) {
+  if (!env.RESEND_API_KEY) return { saltado: 'sin RESEND_API_KEY' };
+  const c = cfgEmail(env);
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: c.from, to: [to], subject, html, text, reply_to: c.replyTo })
+  });
+  let detalle = null; try { detalle = await r.json(); } catch (_) {}
+  return { ok: r.ok, status: r.status, detalle };
+}
+
+// Shell de marca compartido (cabecera con logo + pie). `cuerpo` es HTML.
+function shellEmail({ logo, soporte, titulo, cuerpo }) {
+  const verde = '#14663f', borde = '#e3ece7';
+  return '<!doctype html><html><body style="margin:0;padding:0;background:#eef2f0">' +
+  '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f0;padding:24px 12px"><tr><td align="center">' +
+    '<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#fff;border-radius:14px;overflow:hidden;border:1px solid ' + borde + '">' +
+      '<tr><td style="background:' + verde + ';padding:22px 28px">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0"><tr>' +
+          '<td valign="middle" style="padding-right:12px"><img src="' + logo + '" width="40" height="40" alt="SellerBrain" style="display:block;width:40px;height:40px;border:0;border-radius:10px"></td>' +
+          '<td valign="middle"><div style="font-family:Arial,Helvetica,sans-serif;color:#fff;font-size:20px;font-weight:bold">SellerBrain</div></td>' +
+        '</tr></table>' +
+      '</td></tr>' +
+      '<tr><td style="padding:28px;font-family:Arial,Helvetica,sans-serif">' +
+        '<h1 style="margin:0 0 12px;color:#173a2b;font-size:21px">' + titulo + '</h1>' + cuerpo +
+      '</td></tr>' +
+      '<tr><td style="padding:6px 28px 26px;font-family:Arial,Helvetica,sans-serif;text-align:center">' +
+        '<div style="color:#9aa8a1;font-size:12px;line-height:18px">SellerBrain · VENMON NATURALMENTE SL<br>¿Dudas? <a href="mailto:' + soporte + '" style="color:' + verde + '">' + soporte + '</a></div>' +
+      '</td></tr>' +
+    '</table>' +
+  '</td></tr></table></body></html>';
+}
+
+function botonHTML(url, texto, color) {
+  return '<a href="' + url + '" style="display:inline-block;background:' + (color || '#14663f') + ';color:#fff;font-size:15px;font-weight:bold;padding:12px 22px;border-radius:9px;text-decoration:none">' + texto + '</a>';
+}
+
+// Preguntas del correo de seguimiento (configurables por env, separadas por '|').
+function preguntasSeguimiento(env) {
+  const ls = (env.PREGUNTAS_SEGUIMIENTO || '').split('|').map(s => s.trim()).filter(Boolean);
+  return ls.length ? ls : [
+    '¿Qué es lo que más te ha ayudado hasta ahora?',
+    '¿Qué te falta o qué mejorarías?',
+    '¿Has recuperado dinero con los avisos (reembolsos, sobrecostes, PPC)?'
+  ];
+}
+
+// Días desde hoy hasta una fecha YYYY-MM-DD (positivo = futuro, negativo = pasado).
+function diasHasta(fechaISO) {
+  if (!fechaISO) return null;
+  const f = new Date(fechaISO + 'T00:00:00Z');
+  const hoy = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+  return Math.round((f - hoy) / 86400000);
+}
+
+async function enviarSeguimiento(env, m) {
+  const c = cfgEmail(env);
+  const dias = diasHasta(m.fin);
+  const preguntas = preguntasSeguimiento(env).map(p => '<li style="margin:6px 0;color:#173a2b">' + p + '</li>').join('');
+  const cuerpo =
+    '<p style="color:#5b6b63;font-size:15px;line-height:22px">Llevas unas semanas con SellerBrain y nos encantaría saber cómo te va. Tu acceso fundador termina en <b>' + dias + ' días</b>.</p>' +
+    '<p style="color:#5b6b63;font-size:15px;margin-bottom:4px">Cuéntanos, respondiendo a este correo:</p>' +
+    '<ul style="font-size:15px;line-height:22px;padding-left:20px">' + preguntas + '</ul>' +
+    '<p style="color:#5b6b63;font-size:14px">Gracias por ser de los primeros. Leemos todas las respuestas.</p>';
+  const html = shellEmail({ logo: c.logo, soporte: c.soporte, titulo: '¿Qué tal tus primeras semanas? 👀', cuerpo });
+  const text = 'Tu acceso fundador termina en ' + dias + ' días. Cuéntanos respondiendo a este correo:\n- ' + preguntasSeguimiento(env).join('\n- ');
+  return enviarResend(env, m.email, '¿Cómo te va con SellerBrain? (2 min)', html, text);
+}
+
+async function enviarRenovacion(env, m) {
+  const c = cfgEmail(env);
+  const opciones =
+    (c.linkMensual ? '<tr><td style="padding:6px 0">' + botonHTML(c.linkMensual, 'Seguir por 20 €/mes (sin permanencia) →') + '</td></tr>' : '') +
+    (c.linkAnual ? '<tr><td style="padding:6px 0">' + botonHTML(c.linkAnual, 'Pagar el año: 200 € (2 meses de regalo) →', '#0f4e30') + '</td></tr>' : '');
+  const cuerpo =
+    '<p style="color:#5b6b63;font-size:15px;line-height:22px">Hoy termina tu acceso fundador. Si SellerBrain te está ayudando, elige cómo seguir — <b>sin permanencia</b>, te das de baja cuando quieras:</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0">' + opciones + '</table>' +
+    '<p style="color:#5b6b63;font-size:14px;line-height:21px;margin-top:14px">Como fundador, tu precio queda <b>bloqueado</b>. Si no renuevas, en unos días cerraremos tu cuenta y borraremos tus datos.</p>';
+  const html = shellEmail({ logo: c.logo, soporte: c.soporte, titulo: 'Tu acceso fundador termina hoy', cuerpo });
+  const text = 'Hoy termina tu acceso fundador. Renueva:\n- 20 €/mes (sin permanencia): ' + (c.linkMensual || '(enlace)') + '\n- 200 €/año (2 meses gratis): ' + (c.linkAnual || '(enlace)');
+  return enviarResend(env, m.email, 'Tu acceso a SellerBrain termina hoy', html, text);
+}
+
+async function enviarUltimoAviso(env, m) {
+  const c = cfgEmail(env);
+  const opciones =
+    (c.linkMensual ? '<tr><td style="padding:6px 0">' + botonHTML(c.linkMensual, 'Reactivar por 20 €/mes →') + '</td></tr>' : '') +
+    (c.linkAnual ? '<tr><td style="padding:6px 0">' + botonHTML(c.linkAnual, 'Reactivar el año: 200 € →', '#0f4e30') + '</td></tr>' : '');
+  const cuerpo =
+    '<p style="color:#5b6b63;font-size:15px;line-height:22px">Tu acceso terminó hace 7 días y hemos <b>pausado tu cuenta</b>. Aún estás a tiempo de reactivarla y conservar tus datos y tu precio de fundador:</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0">' + opciones + '</table>' +
+    '<p style="color:#a23;font-size:14px;line-height:21px;margin-top:14px">⚠️ Si no reactivas, tu cuenta y tus datos se borrarán definitivamente en los próximos días.</p>';
+  const html = shellEmail({ logo: c.logo, soporte: c.soporte, titulo: 'Última oportunidad para conservar tu cuenta', cuerpo });
+  const text = 'Tu cuenta está pausada. Reactívala:\n- 20 €/mes: ' + (c.linkMensual || '(enlace)') + '\n- 200 €/año: ' + (c.linkAnual || '(enlace)') + '\nSi no, tus datos se borrarán en unos días.';
+  return enviarResend(env, m.email, 'Última oportunidad — tu cuenta de SellerBrain', html, text);
+}
+
+// Barrido diario del ciclo de vida de fundadores (lo llama el cron a las 08:00 UTC).
+async function procesarFundadores(env) {
+  const gracia = +(env.GRACIA_BORRADO_DIAS || 14);          // días tras la baja antes de borrar
+  const borradoAuto = String(env.BORRADO_AUTO || '') === '1';
+  const res = { seguimiento: 0, renovacion: 0, ultimo: 0, bajas: 0, borrados: 0, pendientes_borrado: 0 };
+  let socios = [];
+  try { socios = await selectSupabase(env, 'miembros?plan=eq.fundador&estado=in.(activo,baja)&select=codigo,email,seller,fin,estado,aviso1,aviso2,aviso3,borrado'); } catch (_) { return res; }
+  for (const m of (socios || [])) {
+    const d = diasHasta(m.fin);
+    if (d == null) continue;
+    try {
+      if (!m.aviso1 && d <= 15 && d >= 1) {                 // E-15: seguimiento (antes del fin)
+        await enviarSeguimiento(env, m);
+        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso1: new Date().toISOString() }]);
+        await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'seguimiento', fin: m.fin }]);
+        res.seguimiento++;
+      }
+      if (!m.aviso2 && d <= 0) {                            // E: renovación con enlaces
+        await enviarRenovacion(env, m);
+        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso2: new Date().toISOString() }]);
+        await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'renovacion', fin: m.fin }]);
+        res.renovacion++;
+      }
+      if (!m.aviso3 && d <= -7) {                           // E+7: último aviso + BAJA
+        await enviarUltimoAviso(env, m);
+        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso3: new Date().toISOString(), estado: 'baja', activo: false }]);
+        await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'ultimo_aviso', fin: m.fin }]);
+        m.estado = 'baja';
+        res.bajas++;
+      }
+      if (m.estado === 'baja' && !m.borrado && d <= -(7 + gracia)) {   // E+7+gracia: borrado
+        if (borradoAuto) {
+          const tablas = await borrarDatosSeller(env, m.seller || m.email);
+          await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, borrado: new Date().toISOString() }]);
+          await upsertSupabase(env, 'fundador_bajas', [{ seller: m.seller || m.email, email: m.email, motivo: 'no_renovado', tablas: tablas.join(',') }]);
+          res.borrados++;
+        } else {
+          res.pendientes_borrado++;                          // BORRADO_AUTO apagado → solo se marca
+        }
+      }
+    } catch (_) { /* un fallo en un socio no corta el barrido */ }
+  }
+  return res;
+}
+
+// Borra los DATOS de negocio de un seller (RGPD). No borra la fila de miembro
+// (queda como histórico con estado='baja' y fecha de borrado).
+async function borrarDatosSeller(env, seller) {
+  const tablas = ['pedidos_dia', 'ventas_sku_pais_dia', 'settlement_lineas', 'settlements',
+    'devoluciones', 'inventario_pais', 'inventario_ajustes', 'reembolsos',
+    'ppc_dia', 'ppc_campanas', 'ppc_terminos', 'ppc_horas', 'productos',
+    'productos_catalogo', 'costes_producto', 'busquedas_marca', 'ingestas',
+    'cuentas_spapi', 'cuentas_ads'];
+  const hechas = [];
+  for (const t of tablas) {
+    try { await deleteSupabase(env, t + '?seller=eq.' + encodeURIComponent(seller)); hechas.push(t); }
+    catch (_) { /* la tabla puede no tener columna seller o no existir → se ignora */ }
+  }
+  return hechas;
 }
 
 // IDENTIDAD (fase 3, aún SIN activar en la lectura): resuelve QUÉ vendedor está

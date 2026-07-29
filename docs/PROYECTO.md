@@ -2,7 +2,7 @@
 
 > Fuente única de la verdad: arquitectura, servicios, costes, cuentas, dominios,
 > estado de Amazon, seguridad y tareas pendientes. Se actualiza según avanzamos.
-> **Última actualización:** 2026-07-29 · **Worker:** v49-email-logo
+> **Última actualización:** 2026-07-29 · **Worker:** v52-fundadores-ciclo
 
 ---
 
@@ -102,16 +102,33 @@ Más: uso de la API de Claude dentro del producto (bajo) + comisiones de Stripe 
   Política de Contraseñas y Accesos, Mapa de respuestas del cuestionario de Amazon.
 - Tokens de vendedor **cifrados (AES-GCM)** en la base de datos; secretos solo en Cloudflare.
 
-### Secretos configurados en Cloudflare (solo nombres, nunca valores)
+### Secretos/variables configurados en Cloudflare (solo nombres, nunca valores)
 `SB_API_KEY`, `SB_JWT_SECRET`, `TOKEN_ENC_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
 `LWA_CLIENT_ID`, `LWA_CLIENT_SECRET`, `SPAPI_REFRESH_TOKEN`, `SPAPI_APP_ID`,
 `ADS_CLIENT_ID`, `ADS_CLIENT_SECRET`, `ADS_REFRESH_TOKEN`, `ANTHROPIC_API_KEY`,
-`STRIPE_WEBHOOK_SECRET` *(pendiente)*, `RESEND_API_KEY` *(pendiente)*, `EMAIL_FROM`,
-`PORTAL_URL`, `SPAPI_APP_BETA`, `SPAPI_CONSENT_URL`, `CORS_ORIGIN`.
+`STRIPE_WEBHOOK_SECRET` *(pendiente)*, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLYTO`,
+`EMAIL_SOPORTE`, `EMAIL_LOGO`, `PORTAL_URL`, `SPAPI_APP_BETA`, `SPAPI_CONSENT_URL`, `CORS_ORIGIN`.
+
+**Fundadores (ciclo de vida):** `STRIPE_LINK_MENSUAL` (20 €/mes), `STRIPE_LINK_ANUAL`
+(200 €/año), `PREGUNTAS_SEGUIMIENTO` (opcional, separadas por `|`), `GRACIA_BORRADO_DIAS`
+(por defecto 14), `BORRADO_AUTO` (`1` para activar el borrado real; **apagado** por defecto).
 
 ---
 
-## 8. Flujo de alta de un cliente (onboarding)
+## 8. Modelo fundador y ciclo de vida (automático)
+- **Acceso fundador: 25 € por 2 meses** (`inicio` = pago, `fin` = inicio + 60 días).
+- Al terminar decide, **sin permanencia**: **20 €/mes** o **200 €/año** (2 meses de regalo).
+- **Correos automáticos** (barrido diario del cron, 08:00 UTC, `procesarFundadores`):
+  - **E−15 días:** seguimiento con preguntas (editables por `PREGUNTAS_SEGUIMIENTO`).
+  - **E (mismo día):** renovación con enlaces de pago (mensual/anual).
+  - **E+7 días:** último aviso + **baja** (se corta el acceso, `activo=false`).
+- **Si renueva** (paga suscripción → webhook): `estado='renovado'`, se paran los correos, se amplía `fin`.
+- **Si no renueva:** baja en E+7 y **borrado de datos** en E+7+`GRACIA_BORRADO_DIAS` (14) —
+  **solo si `BORRADO_AUTO=1`**. Por defecto el borrado está **apagado** (se listan los pendientes).
+- Admin: `GET /v1/fundadores` (estado), `POST /v1/fundador/fecha` (fijar fecha a mano),
+  `GET /v1/fundadores/run` (lanzar el barrido para probar). SQL: `sql/fundadores.sql`.
+
+## 8b. Flujo de alta de un cliente (onboarding)
 ```
 Cliente paga (Stripe)
    → webhook /stripe/webhook crea el miembro (código SB-XXXX-XXXX) + seller = su email
