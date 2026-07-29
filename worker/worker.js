@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v42-multicuenta-ventas'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v43-multicuenta-ingesta'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -534,6 +534,12 @@ export default {
         return json(res, cors);
       }
 
+      // --- Ingesta COMPLETA multicuenta (VENMON + cada vendedor conectado). Admin. ---
+      if (url.pathname === '/v1/ingest-todas' && request.method === 'POST') {
+        const res = await ingestaDiariaTodas(env, 'manual');
+        return json({ cuentas: res.length, res }, cors);
+      }
+
       // --- Refresco LIGERO de ventas del día (solo pedidos). Barato: lo llama el
       //     cron cada hora y el dashboard puede llamarlo al abrir para ver el día
       //     al momento sin la ingesta completa. ---
@@ -785,7 +791,7 @@ export default {
       // ingesta completa de abajo ya trae los pedidos.
       if (hora !== 3) { try { await ingestaVentasTodas(env); } catch (_) {} }
       if (hora === 3) {
-        await ingestaDiaria(env, 'cron');
+        await ingestaDiariaTodas(env, 'cron');   // VENMON + cada vendedor conectado
         try { await ingestaPPC(env, {}); } catch (_) {}
       }
       // A las 04:00 UTC, con el día de ayer ya cerrado, corrige el gasto de las
@@ -898,7 +904,8 @@ async function spapiCall(env, path, opts = {}, ctx) {
 // los SKUs de un marketplace, paginado.
 // Stock POR PAÍS: informe paneuropeo GET_AFN_INVENTORY_DATA_BY_COUNTRY. Parseo
 // defensivo (los nombres de columna pueden variar) + diagnóstico para verificar.
-async function ingestaInventarioPais(env) {
+async function ingestaInventarioPais(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
   const diag = { filas: 0, muestra: [], columnas: [] };
   // Libro Mayor de Inventario agregado POR PAÍS (saldo final = stock actual por país).
   // OJO (bug conocido de este informe): con timestamps con hora y pidiendo hasta
@@ -914,7 +921,7 @@ async function ingestaInventarioPais(env) {
   const pedir = async (periodo) => {
     try {
       return await pedirInforme(env, 'GET_LEDGER_SUMMARY_VIEW_DATA', desde, hasta,
-        [MARKETPLACES.ES], { aggregateByLocation: 'COUNTRY', aggregatedByTimePeriod: periodo });
+        [MARKETPLACES.ES], { aggregateByLocation: 'COUNTRY', aggregatedByTimePeriod: periodo }, ctx);
     } catch (e) { diag['error_' + periodo] = e.message; return ''; }
   };
   let periodo = 'DAILY';
@@ -947,7 +954,7 @@ async function ingestaInventarioPais(env) {
     const i = k.lastIndexOf('|');
     return { sku: k.slice(0, i), pais: k.slice(i + 1), unidades: byKey[k].bal, actualizado: new Date().toISOString() };
   }).filter(r => r.unidades > 0);   // solo donde queda stock
-  if (rows.length) await upsertSupabase(env, 'inventario_pais', rows);
+  if (rows.length) await upsertSupabase(env, 'inventario_pais', conSeller(rows, seller));
   diag.filas = rows.length;
   diag.muestra = rows.slice(0, 8);
 
@@ -972,7 +979,7 @@ async function ingestaInventarioPais(env) {
       ajMap[k].perdido += perdido; ajMap[k].danado += danado; ajMap[k].encontrado += encontrado;
     }
     const aj = Object.values(ajMap);
-    if (aj.length) await upsertSupabase(env, 'inventario_ajustes', aj);
+    if (aj.length) await upsertSupabase(env, 'inventario_ajustes', conSeller(aj, seller));
     diag.ajustes = aj.length;
   } catch (e) { diag.ajustes_error = e.message; }
   return diag;
@@ -980,13 +987,14 @@ async function ingestaInventarioPais(env) {
 
 // Reembolsos que Amazon YA te ha hecho (para restarlos de lo reclamable). Informe
 // GET_FBA_REIMBURSEMENTS_DATA de los últimos ~180 días.
-async function ingestaReembolsos(env) {
-  const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+async function ingestaReembolsos(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const planCompleto = ctx ? !!ctx.spapiToken : !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
   if (!planCompleto) return { saltado: 'sin SP-API' };
   const desde = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10) + 'T00:00:00Z';
   const hasta = new Date().toISOString();
   const tsv = await pedirInforme(env, 'GET_FBA_REIMBURSEMENTS_DATA', desde, hasta,
-    [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
+    [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE], undefined, ctx);
   const filas = parseTSV(tsv);
   const map = {};
   for (const r of filas) {
@@ -998,8 +1006,10 @@ async function ingestaReembolsos(env) {
     const fechaRaw = r['approval-date'] || r['reimbursement-date'] || r['date'] || '';
     const fecha = (String(fechaRaw).slice(0, 10)) || null;
     // Una reimbursement-id puede tener varias líneas (una por sku); las juntamos por id+sku.
-    const k = id + '|' + sku;
-    if (!map[k]) map[k] = { reembolso_id: k, fecha, sku, motivo: r['reason'] || '', uds: 0, importe: 0, moneda: r['currency-unit'] || '' };
+    // El reembolso_id lleva el seller delante para que no colisione entre vendedores
+    // (su PK es reembolso_id, no lleva seller).
+    const k = seller + '|' + id + '|' + sku;
+    if (!map[k]) map[k] = { reembolso_id: k, fecha, sku, motivo: r['reason'] || '', uds: 0, importe: 0, moneda: r['currency-unit'] || '', seller };
     map[k].uds += uds; map[k].importe += importe;
   }
   const rows = Object.values(map);
@@ -1007,7 +1017,7 @@ async function ingestaReembolsos(env) {
   return { reembolsos: rows.length };
 }
 
-async function traerInventarioFBA(env, marketplaceId) {
+async function traerInventarioFBA(env, marketplaceId, ctx) {
   const inv = {}, cat = {};
   let nextToken = null, pag = 0;
   do {
@@ -1018,7 +1028,7 @@ async function traerInventarioFBA(env, marketplaceId) {
     if (pag > 0) await sleep(2000);
     let j = null;
     for (let intento = 0; intento < 4; intento++) {
-      try { j = await spapiCall(env, '/fba/inventory/v1/summaries?' + qs.toString()); break; }
+      try { j = await spapiCall(env, '/fba/inventory/v1/summaries?' + qs.toString(), {}, ctx); break; }
       catch (e) {
         if (String(e.message || '').indexOf('429') > -1 && intento < 3) { await sleep(3000 * (intento + 1)); continue; }
         throw e;
@@ -1070,13 +1080,13 @@ async function pedirInforme(env, reportType, dataStartTime, dataEndTime, marketp
 }
 
 // Los settlement NO se piden: Amazon los genera solo. Se listan y descargan.
-async function listarSettlements(env, desdeISO) {
+async function listarSettlements(env, desdeISO, ctx) {
   const q = new URLSearchParams({
     reportTypes: 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2',
     processingStatuses: 'DONE',
     createdSince: desdeISO
   });
-  const { reports } = await spapiCall(env, '/reports/2021-06-30/reports?' + q);
+  const { reports } = await spapiCall(env, '/reports/2021-06-30/reports?' + q, {}, ctx);
   return reports || [];
 }
 
@@ -1470,10 +1480,11 @@ async function corregirCierrePPCHora(env) {
 /* =====================================================================
  * INGESTA DIARIA → Supabase
  * =================================================================== */
-async function ingestaDiaria(env, origen) {
+async function ingestaDiaria(env, origen, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
   const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-  const planCompleto = !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN); // Plan 2
-  const resultado = { fecha: ayer, origen: origen || 'manual', plan: planCompleto ? 'completo' : 'analisis(ads-only)', pasos: [] };
+  const planCompleto = ctx ? !!ctx.spapiToken : !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN); // Plan 2
+  const resultado = { fecha: ayer, seller, origen: origen || 'manual', plan: planCompleto ? 'completo' : 'analisis(ads-only)', pasos: [] };
 
   // 1. Pedidos — AYER + HOY (parcial) por día real, para que el día en curso no
   //    salga siempre vacío en el dashboard. agregarPedidosPorDia agrupa por la
@@ -1482,11 +1493,11 @@ async function ingestaDiaria(env, origen) {
     const tsv = await pedirInforme(env,
       'GET_FLAT_FILE_ALL_ORDERS_DATA_BY_ORDER_DATE_GENERAL',
       ayer + 'T00:00:00Z', new Date().toISOString(),
-      [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
+      [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE], undefined, ctx);
     const filas = parseTSV(tsv);
-    await upsertSupabase(env, 'pedidos_dia', agregarPedidosPorDia(filas));
-    await upsertSupabase(env, 'ventas_sku_pais_dia', agregarVentasSkuPais(filas)); // total y por país
-    await upsertSupabase(env, 'productos_catalogo', catalogoDePedidos(filas)); // nombres
+    await upsertSupabase(env, 'pedidos_dia', conSeller(agregarPedidosPorDia(filas), seller));
+    await upsertSupabase(env, 'ventas_sku_pais_dia', conSeller(agregarVentasSkuPais(filas), seller)); // total y por país
+    await upsertSupabase(env, 'productos_catalogo', conSeller(catalogoDePedidos(filas), seller)); // nombres
     resultado.pasos.push({ pedidos: filas.length });
   } catch (e) { resultado.pasos.push({ pedidos_error: e.message }); }
 
@@ -1497,18 +1508,18 @@ async function ingestaDiaria(env, origen) {
   //    ejecución (existeEnSupabase salta los ya hechos).
   if (planCompleto) try {
     const hace15d = new Date(Date.now() - 15 * 86400000).toISOString();
-    const reps = await listarSettlements(env, hace15d);
+    const reps = await listarSettlements(env, hace15d, ctx);
     const topeSettle = 4;
     let procS = 0;
     for (const rep of reps) {
       if (procS >= topeSettle) break;
       const yaProcesado = await existeEnSupabase(env, 'settlements', 'report_id', rep.reportId);
       if (yaProcesado) continue;
-      const tsv = await descargarDocumento(env, rep.reportDocumentId);
+      const tsv = await descargarDocumento(env, rep.reportDocumentId, ctx);
       const lineas = parseTSV(tsv);
       // La CABECERA primero (settlement_lineas tiene FK a settlements).
-      await upsertSupabase(env, 'settlements', [{ report_id: rep.reportId, procesado: new Date().toISOString() }]);
-      await upsertSupabase(env, 'settlement_lineas', mapearSettlement(lineas, rep.reportId));
+      await upsertSupabase(env, 'settlements', [{ report_id: rep.reportId, procesado: new Date().toISOString(), seller }]);
+      await upsertSupabase(env, 'settlement_lineas', mapearSettlement(lineas, rep.reportId, seller));
       procS++;
     }
     resultado.pasos.push({ settlements: procS + (procS >= topeSettle ? ' (quedan más para la próxima)' : '') });
@@ -1518,7 +1529,7 @@ async function ingestaDiaria(env, origen) {
   if (planCompleto) try {
     const hace30d = new Date(Date.now() - 30 * 86400000).toISOString();
     const tsv = await pedirInforme(env, 'GET_FBA_FULFILLMENT_CUSTOMER_RETURNS_DATA',
-      hace30d, ayer + 'T23:59:59Z', [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE]);
+      hace30d, ayer + 'T23:59:59Z', [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE], undefined, ctx);
     const devMap = {};
     for (const r of parseTSV(tsv)) {
       if (!r['sku'] && !r['return-date']) continue;
@@ -1530,29 +1541,29 @@ async function ingestaDiaria(env, origen) {
       const k = [d.fecha, d.sku, d.asin, d.motivo, d.estado, d.disposicion].join('|');
       if (devMap[k]) devMap[k].cantidad += d.cantidad; else devMap[k] = d; // agrupa duplicados
     }
-    const nDev = await guardarDevoluciones(env, Object.values(devMap));
+    const nDev = await guardarDevoluciones(env, Object.values(devMap), seller);
     resultado.pasos.push({ devoluciones: nDev });
   } catch (e) { resultado.pasos.push({ devoluciones_error: e.message }); }
 
   // 3c. Inventario FBA (tiempo real, FBA Inventory API — sin informe → sin FATAL).
   //     Trae stock + nombre + ASIN de TODOS los SKUs (hayan vendido o no).
   if (planCompleto) try {
-    const { inv, cat } = await traerInventarioFBA(env, MARKETPLACES.ES);
-    if (Object.keys(inv).length) await upsertSupabase(env, 'inventario', Object.values(inv));
-    if (Object.keys(cat).length) await upsertSupabase(env, 'productos_catalogo', Object.values(cat));
+    const { inv, cat } = await traerInventarioFBA(env, MARKETPLACES.ES, ctx);
+    if (Object.keys(inv).length) await upsertSupabase(env, 'inventario', conSeller(Object.values(inv), seller));
+    if (Object.keys(cat).length) await upsertSupabase(env, 'productos_catalogo', conSeller(Object.values(cat), seller));
     resultado.pasos.push({ inventario: Object.keys(inv).length });
   } catch (e) { resultado.pasos.push({ inventario_error: e.message }); }
 
   // 3d. Stock POR PAÍS (informe paneuropeo GET_AFN_INVENTORY_DATA_BY_COUNTRY) →
   //     dónde está almacenado cada SKU. Para el detector de sobrecostes y stock por país.
   if (planCompleto) try {
-    const r = await ingestaInventarioPais(env);
+    const r = await ingestaInventarioPais(env, ctx);
     resultado.pasos.push({ inventario_pais: r.filas || 0, ajustes: r.ajustes || 0 });
   } catch (e) { resultado.pasos.push({ inventario_pais_error: e.message }); }
 
   // 3e. Reembolsos FBA ya recibidos (para el detector "Amazon te debe").
   if (planCompleto) try {
-    const r = await ingestaReembolsos(env);
+    const r = await ingestaReembolsos(env, ctx);
     resultado.pasos.push({ reembolsos: r.reembolsos || 0 });
   } catch (e) { resultado.pasos.push({ reembolsos_error: e.message }); }
 
@@ -1561,7 +1572,7 @@ async function ingestaDiaria(env, origen) {
   if (planCompleto && new Date().getUTCDay() === 1) try {
     const iniSemana = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     const tsv = await pedirInforme(env, 'GET_BRAND_ANALYTICS_SEARCH_TERMS_REPORT',
-      iniSemana + 'T00:00:00Z', ayer + 'T23:59:59Z', [MARKETPLACES.ES]);
+      iniSemana + 'T00:00:00Z', ayer + 'T23:59:59Z', [MARKETPLACES.ES], undefined, ctx);
     // Este informe llega en JSON dentro del documento; si es TSV el parser genérico también sirve
     let filas;
     try { filas = JSON.parse(tsv).dataByDepartmentAndSearchTerm || []; }
@@ -1570,7 +1581,8 @@ async function ingestaDiaria(env, origen) {
       semana: iniSemana,
       termino: r.searchTerm || r['search-term'] || '',
       ranking: +(r.searchFrequencyRank || r['search-frequency-rank'] || 0),
-      asin1: r.clickedAsin || r['#1-clicked-asin'] || ''
+      asin1: r.clickedAsin || r['#1-clicked-asin'] || '',
+      seller
     })));
     resultado.pasos.push({ brand_analytics: filas.length });
   } catch (e) { resultado.pasos.push({ brand_analytics_error: e.message }); }
@@ -1585,11 +1597,23 @@ async function ingestaDiaria(env, origen) {
       ejecutada: new Date().toISOString(),
       origen: resultado.origen,
       plan: resultado.plan,
-      resumen: JSON.stringify(resultado.pasos).slice(0, 2000)
+      resumen: JSON.stringify(resultado.pasos).slice(0, 2000),
+      seller
     }]);
   } catch (e) { /* si falla el log, no rompe la ingesta */ }
 
   return resultado;
+}
+
+// Orquestador de la ingesta COMPLETA multicuenta: VENMON (cuenta propia) + cada
+// vendedor conectado, cada uno con su token y sus datos etiquetados por seller.
+async function ingestaDiariaTodas(env, origen) {
+  const res = [];
+  try { res.push(await ingestaDiaria(env, origen)); } catch (e) { res.push({ seller: 'venmon', error: e.message }); }
+  for (const c of await cuentasSpapiActivas(env)) {
+    try { res.push(await ingestaDiaria(env, origen, c)); } catch (e) { res.push({ seller: c.seller, error: e.message }); }
+  }
+  return res;
 }
 
 /* =====================================================================
@@ -2183,17 +2207,19 @@ function catalogoDePedidos(filas) {
 // Guarda devoluciones tolerando el constraint real de la tabla: si choca
 // (error 21000 = dos filas del lote comparten la clave única), reagrupa por
 // una clave más gruesa y reintenta. Así funciona sea cual sea el constraint.
-async function guardarDevoluciones(env, rows) {
+async function guardarDevoluciones(env, rows, seller) {
   if (!rows || !rows.length) return 0;
+  seller = seller || 'venmon';
   const reagrupar = (arr, campos) => {
     const m = {};
     for (const d of arr) {
       const k = campos.map(c => d[c]).join('|');
       if (m[k]) m[k].cantidad += d.cantidad;
-      else m[k] = { fecha: d.fecha, sku: d.sku, asin: d.asin, motivo: d.motivo, estado: d.estado, disposicion: d.disposicion, cantidad: d.cantidad };
+      else m[k] = { fecha: d.fecha, sku: d.sku, asin: d.asin, motivo: d.motivo, estado: d.estado, disposicion: d.disposicion, cantidad: d.cantidad, seller };
     }
     return Object.values(m);
   };
+  rows = rows.map(d => ({ ...d, seller }));
   const intentos = [
     rows,
     () => reagrupar(rows, ['fecha', 'sku', 'motivo']),
@@ -2392,7 +2418,7 @@ function paisDeMarketplace(nombre) {
   return '';
 }
 
-function mapearSettlement(lineas, reportId) {
+function mapearSettlement(lineas, reportId, seller) {
   return lineas
     .filter(l => l['transaction-type'])
     .map(l => ({
@@ -2404,7 +2430,8 @@ function mapearSettlement(lineas, reportId) {
       pais: paisDeMarketplace(l['marketplace-name']),
       concepto: l['amount-type'] + '/' + l['amount-description'],
       importe: +(l['amount'] || '0').replace(',', '.'),
-      cantidad: +l['quantity-purchased'] || 0
+      cantidad: +l['quantity-purchased'] || 0,
+      seller: seller || 'venmon'
     }));
 }
 
