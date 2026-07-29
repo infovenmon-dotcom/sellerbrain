@@ -202,6 +202,13 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
     <a href="#" onclick="document.getElementById('cx-admin').style.display='grid';document.getElementById('cx-admin-actions').style.display='block';this.style.display='none';return false" style="color:var(--mu);margin-left:6px">Opciones avanzadas (admin)</a>
   </div>
 
+  <!-- Onboarding de vendedor: conectar SU cuenta de Amazon vía OAuth (se activa al publicar la app) -->
+  <div id="cx-conectar" style="padding:12px 14px;background:rgba(74,158,222,.06);border:1px solid rgba(74,158,222,.3);border-radius:10px;margin-bottom:14px;font-size:12.5px;color:var(--mu2);line-height:1.5">
+    <b style="color:#4A9EDE">🔗 ¿Vendes en Amazon con otra cuenta?</b> Conéctala para ver tus datos aquí.
+    <div style="margin-top:8px"><button class="chip" style="cursor:pointer;border-color:rgba(74,158,222,.5);color:#8fc4f0" onclick="conectarAmazon()">Conectar mi cuenta de Amazon</button></div>
+    <div id="cx-conectar-nota" style="font-size:11px;color:var(--mu);margin-top:6px"></div>
+  </div>
+
   <div id="cx-admin" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
     <div>
       <label style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px">URL de tu backend (Worker)</label>
@@ -1048,6 +1055,18 @@ function ymdUTC(d){return d.toISOString().slice(0,10);}
 var PROD_RANGE={desde:'',hasta:'',lab:'este mes'};
 var PROD_PAIS='';
 function authHdr(){var tok=(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return null;}})();var a=SB_CONFIG.apiKey||tok||'';return a?{'Authorization':'Bearer '+a}:{};}
+// Onboarding: lleva al vendedor al consentimiento OAuth de Amazon (start del worker).
+// Requiere que la app SP-API esté publicada (mientras está en Borrador, Amazon no
+// permite OAuth de terceros y devolverá error — por eso avisamos).
+function conectarAmazon(){
+  var email=(function(){try{return sessionStorage.getItem('fba_email')||'';}catch(e){return '';}})();
+  if(!email){ email=prompt('¿Con qué email quieres conectar tu cuenta de Amazon?')||''; }
+  if(!email){ return; }
+  var url=SB_CONFIG.apiBase+'/auth/spapi/start?email='+encodeURIComponent(email);
+  var nota=document.getElementById('cx-conectar-nota');
+  if(nota) nota.textContent='Abriendo el consentimiento de Amazon… Si sale un error de "autorización no permitida", es que la app aún está pendiente de publicar.';
+  window.open(url,'_blank','noopener');
+}
 var BANDERA={ES:'🇪🇸',FR:'🇫🇷',IT:'🇮🇹',BE:'🇧🇪',DE:'🇩🇪',NL:'🇳🇱','?':'🏳️'};
 
 function prodPeriodo(id){
