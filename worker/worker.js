@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v49-email-logo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v50-remite-hola'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2548,10 +2548,14 @@ function nuevoCodigo() {
 // el código queda creado en la tabla (lo puedes ver en Supabase o reenviar).
 async function enviarAccesoEmail(env, email, codigo) {
   if (!env.RESEND_API_KEY) return { saltado: 'sin RESEND_API_KEY' };
-  const from = env.EMAIL_FROM || 'SellerBrain <acceso@sellersbrain.io>';
+  const from = env.EMAIL_FROM || 'SellerBrain <hola@sellersbrain.io>';
   const portalBase = env.PORTAL_URL || 'https://sellersbrain.io/portal.html';
   const portal = portalBase + '?login=1';
   const soporte = env.EMAIL_SOPORTE || 'hola@sellersbrain.io';
+  // A dónde llegan las RESPUESTAS del cliente. Ojo: Resend solo ENVÍA; para que
+  // hola@ reciba de verdad hay que montar reenvío en el DNS. Hasta entonces,
+  // pon EMAIL_REPLYTO a un buzón que sí leas (p.ej. tu Gmail) y no se pierde nada.
+  const replyTo = env.EMAIL_REPLYTO || soporte;
   // Logo del email: PNG absoluto (Gmail/Outlook NO pintan SVG). Por defecto lo sirve
   // el mismo origen del portal (Netlify hoy, sellersbrain.io el día que migre).
   let logo = env.EMAIL_LOGO;
@@ -2572,7 +2576,7 @@ async function enviarAccesoEmail(env, email, codigo) {
     headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from, to: [email], subject: 'Tu acceso a SellerBrain', html, text,
-      reply_to: soporte
+      reply_to: replyTo
     })
   });
   let detalle = null; try { detalle = await r.json(); } catch (_) {}
