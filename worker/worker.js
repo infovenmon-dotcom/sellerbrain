@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v53-fundadores-form'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v54-webhook-robusto'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -122,14 +122,16 @@ export default {
         // Idempotencia: si ya procesamos este evento, no repetir.
         try { if (evt.id && await existeEnSupabase(env, 'stripe_eventos', 'id', evt.id)) return json({ ok: true, dup: true }, cors); } catch (_) {}
         let creado = null;
-        if (evt.type === 'checkout.session.completed' || evt.type === 'payment_intent.succeeded') {
+        // Solo el checkout.session.completed decide alta/renovación (trae `mode`).
+        // El fundador (25€ único) y el mensual (~20€) se PARECEN en importe: la única
+        // señal fiable es el TIPO de pago → 'payment' = fundador, 'subscription' = renovación.
+        if (evt.type === 'checkout.session.completed') {
           const o = (evt.data && evt.data.object) || {};
           const email = ((o.customer_details && o.customer_details.email) || o.customer_email || o.receipt_email || '').trim().toLowerCase();
           const nombre = (o.customer_details && o.customer_details.name) || '';
           const modo = o.mode || '';                       // 'payment' (fundador) | 'subscription' (renovación)
           const importe = +o.amount_total || +o.amount || 0; // en céntimos
-          // ¿Es una RENOVACIÓN? suscripción, o importe de mensual/anual (20€/200€).
-          const esRenovacion = modo === 'subscription' || importe === 2000 || importe === 20000;
+          const esRenovacion = modo === 'subscription';    // suscripción = renovación
           if (email) {
             // ¿ya tiene código este email? (evita duplicar si paga dos veces)
             let ya = [];
@@ -137,7 +139,8 @@ export default {
             const codigo = (ya && ya[0] && ya[0].codigo) || nuevoCodigo();
             if (esRenovacion) {
               // Renovación: se paran los correos, se amplía el acceso. Mensual o anual por importe.
-              const anual = importe >= 20000;
+              // Corte en 50€: separa mensual (~20€) de anual (~199-200€) sea cual sea el precio.
+              const anual = importe >= 5000;
               const base = (ya && ya[0] && ya[0].fin) ? new Date(ya[0].fin + 'T00:00:00Z') : new Date();
               const nuevoFin = new Date(base.getTime() + (anual ? 365 : 30) * 86400000).toISOString().slice(0, 10);
               await upsertSupabase(env, 'miembros', [{ codigo, email, nombre, activo: true,
