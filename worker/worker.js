@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v54-webhook-robusto'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v55-cancelacion'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -145,7 +145,8 @@ export default {
               const nuevoFin = new Date(base.getTime() + (anual ? 365 : 30) * 86400000).toISOString().slice(0, 10);
               await upsertSupabase(env, 'miembros', [{ codigo, email, nombre, activo: true,
                 plan: anual ? 'anual' : 'mensual', estado: 'renovado', fin: nuevoFin, seller: email,
-                aviso1: null, aviso2: null, aviso3: null, borrado: null }]);
+                stripe_customer: o.customer || null,           // para reconocerle si cancela
+                aviso1: null, aviso2: null, aviso3: null, baja: null, borrado: null }]);
               creado = { email, codigo, plan: anual ? 'anual' : 'mensual', renovacion: true };
             } else {
               // Alta FUNDADOR: 2 meses (60 días) por 25 €. Fija inicio/fin y manda el acceso.
@@ -160,22 +161,46 @@ export default {
             }
           }
         }
+        // CANCELACIÓN de suscripción. Los eventos de suscripción NO traen email:
+        // localizamos al miembro por su stripe_customer (guardado al renovar).
+        if (evt.type === 'customer.subscription.updated' || evt.type === 'customer.subscription.deleted') {
+          const s = (evt.data && evt.data.object) || {};
+          const prev = (evt.data && evt.data.previous_attributes) || {};
+          const custId = s.customer || '';
+          const cancelYa = evt.type === 'customer.subscription.deleted';                        // ya terminó
+          const cancelProgramada = evt.type === 'customer.subscription.updated' &&
+            s.cancel_at_period_end === true && prev.cancel_at_period_end !== true;               // acaba de cancelar
+          if (custId && (cancelYa || cancelProgramada)) {
+            let mm = [];
+            try { mm = await selectSupabase(env, 'miembros?stripe_customer=eq.' + encodeURIComponent(custId) + '&select=codigo,email,seller&limit=1'); } catch (_) {}
+            const mem = mm && mm[0];
+            if (mem) {
+              const periodoFin = s.current_period_end ? new Date(s.current_period_end * 1000).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+              const finAcceso = cancelYa ? new Date().toISOString().slice(0, 10) : periodoFin;   // sigue hasta fin del periodo pagado
+              await upsertSupabase(env, 'miembros', [{ codigo: mem.codigo, estado: 'cancelado', fin: finAcceso }]);
+              try { await enviarCancelacion(env, mem, finAcceso); } catch (_) {}
+              creado = { email: mem.email, cancelado: true, fin: finAcceso };
+            }
+          }
+        }
         try { await upsertSupabase(env, 'stripe_eventos', [{ id: evt.id, email: creado && creado.email, codigo: creado && creado.codigo, creado: new Date().toISOString() }]); } catch (_) {}
         return json({ ok: true, creado }, cors);
       }
 
       // --- FUNDADORES: listar el estado del ciclo de vida (admin). ---
       if (url.pathname === '/v1/fundadores') {
-        const filas = await selSafe(env, 'miembros?plan=eq.fundador&select=email,codigo,estado,inicio,fin,aviso1,aviso2,aviso3,borrado&order=fin.asc', []);
+        const filas = await selSafe(env, 'miembros?estado=in.(activo,cancelado,baja,renovado)&select=email,codigo,plan,estado,inicio,fin,aviso1,aviso2,aviso3,baja,borrado&order=fin.asc', []);
         const hoy = new Date();
         const datos = (filas || []).map(m => {
           const d = m.fin ? Math.round((new Date(m.fin + 'T00:00:00Z') - new Date(hoy.toISOString().slice(0, 10) + 'T00:00:00Z')) / 86400000) : null;
-          let fase = 'activo';
+          let fase = m.estado || 'activo';
           if (m.borrado) fase = 'borrado';
           else if (m.estado === 'baja') fase = 'baja (pendiente de borrar)';
+          else if (m.estado === 'cancelado') fase = 'cancelado (acceso hasta ' + (m.fin || '?') + ')';
+          else if (m.estado === 'renovado') fase = 'suscriptor al día';
           else if (d != null && d <= 0) fase = 'vencido (renovar)';
           else if (d != null && d <= 15) fase = 'por vencer (' + d + ' días)';
-          return { email: m.email, estado: m.estado, inicio: m.inicio, fin: m.fin, dias_para_fin: d, fase };
+          return { email: m.email, plan: m.plan, estado: m.estado, inicio: m.inicio, fin: m.fin, dias_para_fin: d, fase };
         });
         return json({ total: datos.length, fundadores: datos }, cors);
       }
@@ -2863,44 +2888,87 @@ async function enviarUltimoAviso(env, m) {
   return enviarResend(env, m.email, 'Última oportunidad — tu cuenta de SellerBrain', html, text);
 }
 
+// Cancelación de suscripción: agradece la confianza y explica el proceso
+// (acceso hasta el fin de lo pagado, luego borrado tras el margen de gracia).
+async function enviarCancelacion(env, m, finAcceso) {
+  const c = cfgEmail(env);
+  const gracia = +(env.GRACIA_BORRADO_DIAS || 14);
+  const reactivar =
+    (c.linkMensual ? '<tr><td style="padding:6px 0">' + botonHTML(c.linkMensual, 'Reactivar por 20 €/mes →') + '</td></tr>' : '') +
+    (c.linkAnual ? '<tr><td style="padding:6px 0">' + botonHTML(c.linkAnual, 'Reactivar el año: 200 € →', '#0f4e30') + '</td></tr>' : '');
+  const cuerpo =
+    '<p style="color:#5b6b63;font-size:15px;line-height:22px">Hemos recibido tu cancelación. Ante todo, <b>gracias por confiar en SellerBrain</b> durante este tiempo — ha sido un placer acompañarte. 🙏</p>' +
+    '<div style="background:#f7faf8;border:1px solid #e3ece7;border-radius:10px;padding:14px 16px;margin:14px 0">' +
+      '<div style="font-weight:bold;color:#173a2b;font-size:14px;margin-bottom:6px">Qué pasa ahora</div>' +
+      '<ul style="margin:0;padding-left:18px;color:#5b6b63;font-size:14px;line-height:21px">' +
+        '<li>Mantienes el acceso hasta el <b>' + finAcceso + '</b> (lo que ya has pagado).</li>' +
+        '<li>Después, tu cuenta se cierra y, pasados <b>' + gracia + ' días</b>, se borran tus datos (PPC, histórico, etc.).</li>' +
+        '<li>Si vuelves antes de esa fecha, lo recuperas todo. Después, habría que reconectar y empezar de nuevo.</li>' +
+      '</ul>' +
+    '</div>' +
+    '<p style="color:#5b6b63;font-size:15px;line-height:22px">Si cambias de idea, reactivar es un clic — y conservas tus datos:</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0">' + reactivar + '</table>' +
+    '<p style="color:#5b6b63;font-size:14px;line-height:21px;margin-top:14px">Y si te vas: gracias de corazón. Nos encantaría saber en qué podemos mejorar — puedes responder a este correo. Te deseamos muchas ventas. 🚀</p>';
+  const html = shellEmail({ logo: c.logo, soporte: c.soporte, titulo: 'Gracias por estos meses juntos', cuerpo });
+  const text = 'Hemos recibido tu cancelacion. Gracias por confiar en SellerBrain.\n' +
+    'Mantienes el acceso hasta el ' + finAcceso + '. Despues se cierra la cuenta y, pasados ' + gracia + ' dias, se borran tus datos.\n' +
+    'Si vuelves antes, lo recuperas todo. Reactivar:\n- 20 €/mes: ' + (c.linkMensual || '(enlace)') + '\n- 200 €/año: ' + (c.linkAnual || '(enlace)');
+  return enviarResend(env, m.email, 'Gracias por estos meses — tu cancelación en SellerBrain', html, text);
+}
+
 // Barrido diario del ciclo de vida de fundadores (lo llama el cron a las 08:00 UTC).
 async function procesarFundadores(env) {
   const gracia = +(env.GRACIA_BORRADO_DIAS || 14);          // días tras la baja antes de borrar
   const borradoAuto = String(env.BORRADO_AUTO || '') === '1';
   const res = { seguimiento: 0, renovacion: 0, ultimo: 0, bajas: 0, borrados: 0, pendientes_borrado: 0 };
+  const ahora = new Date().toISOString();
   let socios = [];
-  try { socios = await selectSupabase(env, 'miembros?plan=eq.fundador&estado=in.(activo,baja)&select=codigo,email,seller,fin,estado,aviso1,aviso2,aviso3,borrado'); } catch (_) { return res; }
+  // Procesamos: fundadores en curso (activo), suscriptores que cancelaron (cancelado)
+  // y cuentas ya dadas de baja pendientes de borrar. Los 'renovado' (al día) se excluyen.
+  try { socios = await selectSupabase(env, 'miembros?estado=in.(activo,cancelado,baja)&select=codigo,email,seller,plan,fin,estado,aviso1,aviso2,aviso3,baja,borrado'); } catch (_) { return res; }
   for (const m of (socios || [])) {
     const d = diasHasta(m.fin);
-    if (d == null) continue;
     try {
-      if (!m.aviso1 && d <= 15 && d >= 1) {                 // E-15: seguimiento (antes del fin)
-        await enviarSeguimiento(env, m);
-        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso1: new Date().toISOString() }]);
-        await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'seguimiento', fin: m.fin }]);
-        res.seguimiento++;
+      // --- Ciclo de correos del FUNDADOR en curso (solo plan fundador + activo) ---
+      if (m.plan === 'fundador' && m.estado === 'activo' && d != null) {
+        if (!m.aviso1 && d <= 15 && d >= 1) {               // E-15: seguimiento (antes del fin)
+          await enviarSeguimiento(env, m);
+          await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso1: ahora }]);
+          await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'seguimiento', fin: m.fin }]);
+          res.seguimiento++;
+        }
+        if (!m.aviso2 && d <= 0) {                          // E: renovación con enlaces
+          await enviarRenovacion(env, m);
+          await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso2: ahora }]);
+          await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'renovacion', fin: m.fin }]);
+          res.renovacion++;
+        }
+        if (!m.aviso3 && d <= -7) {                         // E+7: último aviso + BAJA
+          await enviarUltimoAviso(env, m);
+          await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso3: ahora, estado: 'baja', activo: false, baja: ahora }]);
+          await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'ultimo_aviso', fin: m.fin }]);
+          m.estado = 'baja'; m.baja = ahora;
+          res.bajas++;
+        }
       }
-      if (!m.aviso2 && d <= 0) {                            // E: renovación con enlaces
-        await enviarRenovacion(env, m);
-        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso2: new Date().toISOString() }]);
-        await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'renovacion', fin: m.fin }]);
-        res.renovacion++;
-      }
-      if (!m.aviso3 && d <= -7) {                           // E+7: último aviso + BAJA
-        await enviarUltimoAviso(env, m);
-        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, aviso3: new Date().toISOString(), estado: 'baja', activo: false }]);
-        await upsertSupabase(env, 'fundador_avisos', [{ email: m.email, tipo: 'ultimo_aviso', fin: m.fin }]);
-        m.estado = 'baja';
+      // --- Suscriptor que CANCELÓ: al terminar lo pagado, se corta el acceso (baja) ---
+      if (m.estado === 'cancelado' && d != null && d <= 0) {
+        await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, estado: 'baja', activo: false, baja: ahora }]);
+        m.estado = 'baja'; m.baja = ahora;
         res.bajas++;
       }
-      if (m.estado === 'baja' && !m.borrado && d <= -(7 + gracia)) {   // E+7+gracia: borrado
-        if (borradoAuto) {
-          const tablas = await borrarDatosSeller(env, m.seller || m.email);
-          await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, borrado: new Date().toISOString() }]);
-          await upsertSupabase(env, 'fundador_bajas', [{ seller: m.seller || m.email, email: m.email, motivo: 'no_renovado', tablas: tablas.join(',') }]);
-          res.borrados++;
-        } else {
-          res.pendientes_borrado++;                          // BORRADO_AUTO apagado → solo se marca
+      // --- BORRADO de datos: pasados `gracia` días desde la BAJA (si BORRADO_AUTO=1) ---
+      if (m.estado === 'baja' && !m.borrado && m.baja) {
+        const diasDesdeBaja = -(diasHasta(String(m.baja).slice(0, 10)) || 0);
+        if (diasDesdeBaja >= gracia) {
+          if (borradoAuto) {
+            const tablas = await borrarDatosSeller(env, m.seller || m.email);
+            await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, borrado: ahora }]);
+            await upsertSupabase(env, 'fundador_bajas', [{ seller: m.seller || m.email, email: m.email, motivo: 'no_renovado', tablas: tablas.join(',') }]);
+            res.borrados++;
+          } else {
+            res.pendientes_borrado++;                        // BORRADO_AUTO apagado → solo se marca
+          }
         }
       }
     } catch (_) { /* un fallo en un socio no corta el barrido */ }

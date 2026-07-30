@@ -21,8 +21,14 @@ alter table miembros add column if not exists estado  text default 'activo';  --
 alter table miembros add column if not exists aviso1  timestamptz;   -- seguimiento (E-15) enviado
 alter table miembros add column if not exists aviso2  timestamptz;   -- renovación (E) enviado
 alter table miembros add column if not exists aviso3  timestamptz;   -- último aviso (E+7) enviado
+alter table miembros add column if not exists baja    timestamptz;   -- momento en que se cortó el acceso
 alter table miembros add column if not exists borrado timestamptz;   -- fecha de borrado de datos
+alter table miembros add column if not exists stripe_customer text;  -- id de cliente de Stripe (cus_...)
 create index if not exists idx_miembros_estado_fin on miembros (estado, fin);
+create index if not exists idx_miembros_stripe_customer on miembros (stripe_customer);
+
+-- estado: 'activo' (fundador en curso) | 'renovado' (suscriptor al día) |
+--         'cancelado' (canceló, acceso hasta fin) | 'baja' (acceso cortado, pdte. borrado)
 
 -- plan pasa a describir el ciclo: 'fundador' | 'mensual' | 'anual' | 'beta'
 -- (no hace falta cambiar nada; es texto libre).
