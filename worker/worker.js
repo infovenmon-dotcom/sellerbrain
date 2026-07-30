@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v60-cambio-plan'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v61-nichos'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -78,7 +78,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -864,6 +864,21 @@ export default {
           return json({ listing, modelo: MODELO_IA }, cors);
         } catch (e) {
           return json({ error: e.message }, cors, 500);
+        }
+      }
+
+      // --- Investigación de mercado / nichos (IA) para crecimiento de marca ---
+      // Uso: POST /v1/nichos {objetivo, nicho, senales:{...}, resenas:"..."}
+      if (url.pathname === '/v1/nichos' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch (_) { body = {}; }
+        if (!env.ANTHROPIC_API_KEY) return json({ error: 'IA no disponible (falta ANTHROPIC_API_KEY).' }, cors, 400);
+        if (!(body.nicho || body.resenas)) return json({ error: 'Escribe el nicho/producto o pega reseñas.' }, cors, 400);
+        try {
+          const analisis = await generarAnalisisNicho(env, body);
+          if (!analisis) return json({ error: 'sin_analisis' }, cors, 200);
+          return json({ analisis, modelo: MODELO_IA, generado: new Date().toISOString() }, cors);
+        } catch (e) {
+          return json({ error: e.message }, cors, 200);
         }
       }
 
@@ -2320,6 +2335,45 @@ async function analizarKeywordsClaude(env, datos) {
     method: 'POST',
     headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: MODELO_IA, max_tokens: 1800, system: sys, messages: [{ role: 'user', content: user }] })
+  });
+  if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
+  const j = await r.json();
+  const texto = (j.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+  return texto || null;
+}
+
+// INVESTIGACIÓN DE MERCADO / NICHOS (crecimiento de marca). Trabaja SOLO con lo que
+// aporta el usuario (señales de validación + reseñas de la competencia). No inventa
+// datos de mercado; el valor está en analizar las reseñas → problema + diferenciación.
+async function generarAnalisisNicho(env, d) {
+  if (!env.ANTHROPIC_API_KEY) return null;
+  const sys =
+    'Eres analista de investigación de mercado para vendedores de Amazon FBA, con enfoque en el ' +
+    'CRECIMIENTO DE MARCA. Trabajas SOLO con los datos que te da el usuario: unas señales de ' +
+    'validación (que él estima) y, sobre todo, RESEÑAS de productos de la competencia. Reglas ' +
+    'estrictas: NO inventes cifras de mercado ni ventas de la competencia; si faltan datos, dilo con ' +
+    'claridad; no prometas resultados ni rentabilidad. Tu mayor valor es LEER LAS RESEÑAS y extraer ' +
+    'los DOLORES reales del cliente (lo que falla, lo que piden) para convertirlos en diferenciación. ' +
+    'Responde en español, en Markdown, conciso y accionable, con ESTA estructura exacta:\n' +
+    '## Validación\nUn semáforo (🟢 validado / 🟡 dudoso / 🔴 saturado o sin demanda) y 1-2 frases ' +
+    'justificándolo SOLO con las señales dadas (demanda vs saturación/competencia/precio). Si las ' +
+    'señales son pobres, dilo y pide cuáles faltan.\n' +
+    '## El problema que resuelve\nLos 3-5 dolores recurrentes que detectas en las reseñas, cada uno ' +
+    'con un indicio/cita textual breve. Si no hay reseñas, dilo y explica qué reseñas pedir.\n' +
+    '## Diferenciación\n3-5 ángulos concretos para destacar, atando CADA uno a un dolor de arriba ' +
+    '(mejora X, añade Y, reposiciona Z, packaging, bundle, instrucciones, material…).\n' +
+    '## Veredicto\nPuntuación de oportunidad (0-10) + GO / NO-GO + por qué en 1-2 frases, y 3 ' +
+    'próximos pasos concretos. Nada de relleno ni introducciones.';
+  const user =
+    'Objetivo: ' + (d.objetivo || 'crecimiento de marca en el nicho') + '\n' +
+    'Nicho / producto: ' + (d.nicho || '(sin especificar)') + '\n' +
+    'Señales de validación (estimadas por el vendedor): ' + JSON.stringify(d.senales || {}) + '\n' +
+    'Reseñas de la competencia (analiza para sacar el problema y la diferenciación):\n' +
+    ((d.resenas || '(no aportadas)').toString().slice(0, 9000));
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({ model: MODELO_IA, max_tokens: 1900, system: sys, messages: [{ role: 'user', content: user }] })
   });
   if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + (await r.text()).slice(0, 300));
   const j = await r.json();

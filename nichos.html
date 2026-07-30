@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SellerBrain — Investigación de marca / Nichos</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#070d0b; --card:#0e1613; --card2:#101d17; --line:#1e2c26; --gn:#2EE6A0; --gn2:#12a574; --tx:#eaf4ef; --mu:#8aa79a; --am:#f5b23e; --rd:#ff6b6b; }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 500px at 50% -8%,#0d2018,transparent),var(--bg);
+    color:var(--tx);font-family:'Satoshi',system-ui,Arial,sans-serif;line-height:1.5}
+  .wrap{max-width:920px;margin:0 auto;padding:26px 20px 60px}
+  .brand{display:flex;align-items:center;gap:11px;margin-bottom:6px}
+  .brand .w{font-weight:900;font-size:20px}.brand .w b{color:var(--gn)}
+  h1{font-size:25px;margin:10px 0 4px}
+  .sub{color:var(--mu);font-size:14.5px;margin:0 0 20px;max-width:680px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px 20px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .card .h-sub{color:var(--mu);font-size:12.5px;margin:0 0 12px}
+  label{display:block;font-weight:700;font-size:13px;margin:12px 0 6px}
+  textarea,input,select{width:100%;background:#0a120f;border:1px solid var(--line);border-radius:10px;color:var(--tx);font-family:inherit;font-size:14.5px;padding:11px 12px}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--gn)}
+  textarea{resize:vertical}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .obj{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .obj label{flex:1;min-width:220px;background:#0a120f;border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin:0;cursor:pointer;font-weight:600;font-size:13.5px;display:flex;gap:9px;align-items:flex-start}
+  .obj label.on{border-color:var(--gn);background:rgba(46,230,160,.08)}
+  .obj small{display:block;color:var(--mu);font-weight:400;margin-top:2px}
+  .file{font-size:12.5px;color:var(--mu)}
+  .go{width:100%;margin-top:6px;background:linear-gradient(135deg,var(--gn),var(--gn2));color:#04150e;border:none;border-radius:12px;padding:15px;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer}
+  .go:disabled{opacity:.55;cursor:default}
+  .note{color:var(--mu);font-size:12px;margin-top:10px;line-height:1.5}
+  .out{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:8px;display:none}
+  .out h3{color:var(--gn);font-size:16px;margin:18px 0 8px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .out h3:first-child{margin-top:0}
+  .out ul{margin:6px 0 6px 2px;padding-left:18px}.out li{margin:5px 0}
+  .out p{margin:8px 0}.out b,.out strong{color:#fff}
+  .out blockquote{border-left:3px solid var(--gn);margin:8px 0;padding:2px 12px;color:var(--mu);font-style:italic}
+  .msg{color:var(--mu);font-size:13.5px;margin-top:10px}
+  .err{color:var(--rd)}
+  .key{margin-bottom:14px}
+  .key input{max-width:340px}
+  .foot{color:var(--mu);font-size:11.5px;margin-top:24px;text-align:center}
+  a{color:var(--gn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2EE6A0"/><stop offset="1" stop-color="#0E9F6E"/></linearGradient></defs><ellipse cx="32" cy="32" rx="28" ry="12" fill="none" stroke="url(#g)" stroke-width="3" transform="rotate(-24 32 32)"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="url(#g)" stroke-width="5"/><circle cx="32" cy="32" r="4.4" fill="#EAF7F1"/><circle cx="52.5" cy="18.7" r="3.3" fill="#2EE6A0"/></svg>
+    <span class="w">Seller<b>Brain</b></span>
+  </div>
+  <h1>Investigación de marca / Nichos</h1>
+  <p class="sub">Para hacer crecer tu marca: valida la demanda, encuentra <b>el problema que resuelve</b> el producto (leyendo las reseñas de la competencia) y saca <b>ángulos de diferenciación</b>. No es un scraper de mercado: analiza lo que tú le das (señales + reseñas) con IA para darte un veredicto accionable.</p>
+
+  <div class="key">
+    <label>Clave de acceso</label>
+    <input id="key" type="password" placeholder="Tu clave (se guarda en este navegador)">
+  </div>
+
+  <!-- 1. Objetivo + nicho -->
+  <div class="card">
+    <h2>1 · Qué quieres investigar</h2>
+    <div class="obj" id="obj">
+      <label class="on" data-v="crecer"><input type="radio" name="obj" checked> Crecer mi marca en su nicho<small>Ampliar la gama, productos afines a los que ya vendes</small></label>
+      <label data-v="nuevo"><input type="radio" name="obj"> Producto nuevo ya validado<small>Entrar en un producto con demanda probada y diferenciarme</small></label>
+    </div>
+    <label>Nicho / producto (descríbelo: qué es, para quién, marca)</label>
+    <textarea id="nicho" rows="3" placeholder="Ej.: accesorios de cocina para Thermomix — tapas, espátulas, moldes; público que ya tiene el robot y busca sacarle más partido."></textarea>
+  </div>
+
+  <!-- 2. Validación -->
+  <div class="card">
+    <h2>2 · Señales de validación</h2>
+    <p class="h-sub">Lo que estimes (a mano o desde Helium 10). Sirve para el semáforo de demanda vs saturación. Rellena lo que tengas.</p>
+    <div class="grid">
+      <div><label>Volumen de búsqueda (kw principal)</label><input id="vol" type="number" placeholder="p.ej. 12000"></div>
+      <div><label>Nº de competidores/vendedores</label><input id="comp" type="number" placeholder="p.ej. 25"></div>
+      <div><label>Precio mín. (€)</label><input id="pmin" type="number" placeholder="15"></div>
+      <div><label>Precio máx. (€)</label><input id="pmax" type="number" placeholder="35"></div>
+      <div><label>Nº reseñas del top</label><input id="rev" type="number" placeholder="p.ej. 800"></div>
+      <div><label>Nota media del top (1-5)</label><input id="nota" type="number" step="0.1" placeholder="4.1"></div>
+    </div>
+    <label>Opcional · CSV de Cerebro (Helium 10) para autocompletar el volumen</label>
+    <input id="csv" type="file" accept=".csv" class="file">
+    <div class="msg" id="csvmsg"></div>
+  </div>
+
+  <!-- 3. Reseñas -->
+  <div class="card">
+    <h2>3 · Reseñas de la competencia <span style="color:var(--am);font-size:12px;font-weight:600">· lo más importante</span></h2>
+    <p class="h-sub">Pega reseñas de productos competidores (sobre todo las de <b>1-3★</b>). De ahí sale el problema real del cliente y tu diferenciación. Cuantas más, mejor.</p>
+    <textarea id="resenas" rows="8" placeholder="Pega aquí reseñas (una por línea o en bloque). Prioriza las negativas: 'se rompió a la semana', 'la tapa no encaja', 'las instrucciones son un desastre'…"></textarea>
+  </div>
+
+  <button class="go" id="go" onclick="analizar()">Analizar el nicho</button>
+  <div class="note">⚙️ Lo analiza la IA de SellerBrain. No inventa cifras de mercado: valida con tus señales y saca el problema/diferenciación de las reseñas que pegues. Si faltan datos, te lo dirá.</div>
+
+  <div class="msg" id="estado"></div>
+  <div class="out" id="out"></div>
+
+  <div class="foot">SellerBrain · VENMON NATURALMENTE SL</div>
+</div>
+
+<script>
+  var API='https://sellerbrain-api.info-venmon.workers.dev';
+  var KK='sb_api_key';
+  // clave: reutiliza la del dashboard si existe
+  document.getElementById('key').value = localStorage.getItem(KK) || localStorage.getItem('fba_token') || localStorage.getItem('sb_token') || '';
+  // objetivo
+  var objVal='crecer';
+  document.querySelectorAll('#obj label').forEach(function(l){
+    l.addEventListener('click',function(){ document.querySelectorAll('#obj label').forEach(function(x){x.classList.remove('on');}); l.classList.add('on'); objVal=l.getAttribute('data-v'); });
+  });
+
+  // CSV de Cerebro → coge el mayor "Search Volume"
+  document.getElementById('csv').addEventListener('change', function(e){
+    var f=e.target.files[0]; if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var txt=rd.result, lines=txt.split(/\r?\n/).filter(Boolean);
+        if(lines.length<2){ csvMsg('No pude leer el CSV.',true); return; }
+        var sep=lines[0].indexOf(';')>-1 && lines[0].indexOf(',')<0 ? ';' : ',';
+        var head=splitCSV(lines[0],sep).map(function(h){return h.toLowerCase().trim();});
+        var iv=head.findIndex(function(h){return h.indexOf('search volume')>-1 || h==='volumen' || h.indexOf('volume')>-1;});
+        if(iv<0){ csvMsg('No encontré la columna de volumen (Search Volume).',true); return; }
+        var max=0,n=0;
+        for(var i=1;i<lines.length;i++){ var c=splitCSV(lines[i],sep); var v=parseInt((c[iv]||'').replace(/[^\d]/g,''),10); if(!isNaN(v)){ n++; if(v>max)max=v; } }
+        if(max>0){ document.getElementById('vol').value=max; csvMsg('✔ '+n+' keywords leídas. Volumen máximo: '+max.toLocaleString('es-ES')+' (puesto arriba).',false); }
+        else csvMsg('No encontré volúmenes numéricos.',true);
+      }catch(err){ csvMsg('Error leyendo el CSV: '+err.message,true); }
+    };
+    rd.readAsText(f);
+  });
+  function csvMsg(t,err){ var e=document.getElementById('csvmsg'); e.textContent=t; e.className='msg'+(err?' err':''); }
+  function splitCSV(line,sep){ var out=[],cur='',q=false; for(var i=0;i<line.length;i++){ var ch=line[i]; if(ch==='"'){q=!q;} else if(ch===sep&&!q){out.push(cur);cur='';} else cur+=ch; } out.push(cur); return out.map(function(s){return s.replace(/^"|"$/g,'').trim();}); }
+
+  function analizar(){
+    var key=document.getElementById('key').value.trim();
+    if(!key){ estado('Introduce tu clave de acceso arriba.',true); return; }
+    localStorage.setItem(KK,key);
+    var nicho=document.getElementById('nicho').value.trim();
+    var resenas=document.getElementById('resenas').value.trim();
+    if(!nicho && !resenas){ estado('Escribe el nicho/producto o pega reseñas.',true); return; }
+    var senales={
+      volumen_busqueda:num('vol'), competidores:num('comp'),
+      precio_min:num('pmin'), precio_max:num('pmax'),
+      resenas_top:num('rev'), nota_media_top:num('nota')
+    };
+    var body={ objetivo: objVal==='nuevo'?'entrar en un producto nuevo validado y diferenciarme':'crecer mi marca en su nicho', nicho:nicho, senales:senales, resenas:resenas };
+    var btn=document.getElementById('go'); btn.disabled=true; btn.textContent='Analizando… (10-20 s)';
+    estado('La IA está leyendo las reseñas y cruzando las señales…',false);
+    document.getElementById('out').style.display='none';
+    fetch(API+'/v1/nichos',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        btn.disabled=false; btn.textContent='Analizar el nicho';
+        if(d.error){ estado('No se pudo analizar: '+d.error,true); return; }
+        estado('',false);
+        var out=document.getElementById('out'); out.style.display='block'; out.innerHTML=mdToHtml(d.analisis||'');
+        out.scrollIntoView({behavior:'smooth',block:'start'});
+      })
+      .catch(function(e){ btn.disabled=false; btn.textContent='Analizar el nicho'; estado('Error de conexión: '+e.message,true); });
+  }
+  function num(id){ var v=document.getElementById(id).value; return v===''?null:(+v); }
+  function estado(t,err){ var e=document.getElementById('estado'); e.textContent=t; e.className='msg'+(err?' err':''); }
+
+  // mini-render de Markdown (##, **, listas, >)
+  function esc(s){return s.replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+  function inline(s){ return esc(s).replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/\*([^*]+)\*/g,'<i>$1</i>'); }
+  function mdToHtml(md){
+    var lines=md.split(/\r?\n/), html='', list=false;
+    function closeList(){ if(list){ html+='</ul>'; list=false; } }
+    for(var i=0;i<lines.length;i++){
+      var ln=lines[i];
+      if(/^\s*#{2,3}\s+/.test(ln)){ closeList(); html+='<h3>'+inline(ln.replace(/^\s*#{2,3}\s+/,''))+'</h3>'; }
+      else if(/^\s*>\s?/.test(ln)){ closeList(); html+='<blockquote>'+inline(ln.replace(/^\s*>\s?/,''))+'</blockquote>'; }
+      else if(/^\s*([-*]|\d+\.)\s+/.test(ln)){ if(!list){html+='<ul>';list=true;} html+='<li>'+inline(ln.replace(/^\s*([-*]|\d+\.)\s+/,''))+'</li>'; }
+      else if(ln.trim()===''){ closeList(); }
+      else { closeList(); html+='<p>'+inline(ln)+'</p>'; }
+    }
+    closeList(); return html;
+  }
+</script>
+</body>
+</html>
