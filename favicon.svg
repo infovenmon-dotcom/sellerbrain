@@ -1,11 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2EE6A0"/>
-      <stop offset="1" stop-color="#14B87A"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="15" fill="#0D0D0D"/>
-  <circle cx="32" cy="32" r="16.5" fill="none" stroke="url(#g)" stroke-width="5.5"/>
-  <circle cx="32" cy="12.5" r="6.5" fill="#2EE6A0"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#0D1512"/><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3AF0AD"/><stop offset="1" stop-color="#12A574"/></linearGradient></defs><ellipse cx="32" cy="32" rx="28" ry="12" fill="none" stroke="url(#g)" stroke-width="3" transform="rotate(-24 32 32)"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="url(#g)" stroke-width="5"/><circle cx="32" cy="32" r="4.4" fill="#FFFFFF"/><circle cx="52.5" cy="18.7" r="3.3" fill="#3AF0AD"/></svg>
