@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v57-filtro-productos'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v58-payload-robusto'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -128,7 +128,15 @@ export default {
         // El fundador (25€ único) y el mensual (~20€) se PARECEN en importe: la única
         // señal fiable es el TIPO de pago → 'payment' = fundador, 'subscription' = renovación.
         if (evt.type === 'checkout.session.completed') {
-          const o = (evt.data && evt.data.object) || {};
+          let o = (evt.data && evt.data.object) || {};
+          // Si el payload es "reducido" (thin: no trae email/mode), pedimos la sesión completa.
+          if ((!o.mode || !(o.customer_details || o.customer_email || o.receipt_email)) && env.STRIPE_SECRET_KEY && o.id) {
+            try {
+              const rr = await fetch('https://api.stripe.com/v1/checkout/sessions/' + encodeURIComponent(o.id),
+                { headers: { 'Authorization': 'Bearer ' + env.STRIPE_SECRET_KEY } });
+              const full = await rr.json(); if (full && full.id) o = full;
+            } catch (_) {}
+          }
           const email = ((o.customer_details && o.customer_details.email) || o.customer_email || o.receipt_email || '').trim().toLowerCase();
           const nombre = (o.customer_details && o.customer_details.name) || '';
           const modo = o.mode || '';                       // 'payment' (fundador) | 'subscription' (renovación)
@@ -169,17 +177,24 @@ export default {
         // CANCELACIÓN de suscripción. Los eventos de suscripción NO traen email:
         // localizamos al miembro por su stripe_customer (guardado al renovar).
         if (evt.type === 'customer.subscription.updated' || evt.type === 'customer.subscription.deleted') {
-          const s = (evt.data && evt.data.object) || {};
-          const prev = (evt.data && evt.data.previous_attributes) || {};
+          let s = (evt.data && evt.data.object) || {};
+          // Payload reducido → pedimos la suscripción completa (necesitamos items, cliente, fin de periodo).
+          if ((!s.items || s.cancel_at_period_end === undefined || !s.customer) && env.STRIPE_SECRET_KEY && s.id) {
+            try {
+              const rr = await fetch('https://api.stripe.com/v1/subscriptions/' + encodeURIComponent(s.id),
+                { headers: { 'Authorization': 'Bearer ' + env.STRIPE_SECRET_KEY } });
+              const full = await rr.json(); if (full && full.id) s = full;
+            } catch (_) {}
+          }
           const custId = s.customer || '';
           const cancelYa = evt.type === 'customer.subscription.deleted';                        // ya terminó
-          const cancelProgramada = evt.type === 'customer.subscription.updated' &&
-            s.cancel_at_period_end === true && prev.cancel_at_period_end !== true;               // acaba de cancelar
+          const cancelProgramada = evt.type === 'customer.subscription.updated' && s.cancel_at_period_end === true;
           if (custId && (cancelYa || cancelProgramada) && suscripcionEsSellerBrain(env, s)) {
             let mm = [];
-            try { mm = await selectSupabase(env, 'miembros?stripe_customer=eq.' + encodeURIComponent(custId) + '&select=codigo,email,seller&limit=1'); } catch (_) {}
+            try { mm = await selectSupabase(env, 'miembros?stripe_customer=eq.' + encodeURIComponent(custId) + '&select=codigo,email,seller,estado&limit=1'); } catch (_) {}
             const mem = mm && mm[0];
-            if (mem) {
+            // Evita reenviar el correo si ya estaba cancelado (updates repetidos con cancel_at_period_end=true).
+            if (mem && !(cancelProgramada && mem.estado === 'cancelado')) {
               const periodoFin = s.current_period_end ? new Date(s.current_period_end * 1000).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
               const finAcceso = cancelYa ? new Date().toISOString().slice(0, 10) : periodoFin;   // sigue hasta fin del periodo pagado
               await upsertSupabase(env, 'miembros', [{ codigo: mem.codigo, estado: 'cancelado', fin: finAcceso }]);
