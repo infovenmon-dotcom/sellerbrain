@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v58-payload-robusto'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v59-email-demo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -709,6 +709,28 @@ export default {
         if (!to) return json({ error: 'falta ?to=email' }, cors, 400);
         const r = await enviarAccesoEmail(env, to, 'SB-TEST-0000');
         return json({ enviado: r, nota: r && r.saltado ? 'Falta RESEND_API_KEY en Cloudflare' : 'Revisa tu bandeja (y spam)' }, cors);
+      }
+
+      // --- DEMO de correos (admin): envía uno o TODOS los correos del ciclo para verlos.
+      //     /v1/email-demo?to=tucorreo&tipo=todos   (tipo: acceso|seguimiento|renovacion|ultimo|cancelacion|todos) ---
+      if (url.pathname === '/v1/email-demo') {
+        const to = (url.searchParams.get('to') || '').trim();
+        if (!to) return json({ error: 'falta ?to=email' }, cors, 400);
+        const tipo = (url.searchParams.get('tipo') || 'todos').toLowerCase();
+        const hoy = new Date();
+        const dISO = (n) => new Date(hoy.getTime() + n * 86400000).toISOString().slice(0, 10);
+        const m = { email: to, codigo: 'SB-DEMO-0000' };
+        const res = {};
+        const run = async (t) => {
+          if (t === 'acceso') res.acceso = await enviarAccesoEmail(env, to, 'SB-DEMO-0000');
+          else if (t === 'seguimiento') res.seguimiento = await enviarSeguimiento(env, { ...m, fin: dISO(15) });
+          else if (t === 'renovacion') res.renovacion = await enviarRenovacion(env, { ...m, fin: dISO(0) });
+          else if (t === 'ultimo') res.ultimo = await enviarUltimoAviso(env, { ...m, fin: dISO(-7) });
+          else if (t === 'cancelacion') res.cancelacion = await enviarCancelacion(env, m, dISO(18));
+        };
+        const lista = tipo === 'todos' ? ['acceso', 'seguimiento', 'renovacion', 'ultimo', 'cancelacion'] : [tipo];
+        for (const t of lista) { try { await run(t); } catch (e) { res[t] = { error: e.message }; } }
+        return json({ enviado_a: to, tipos: lista, resultado: res, nota: 'Revisa tu bandeja (y spam)' }, cors);
       }
 
       // --- Ingesta COMPLETA multicuenta (VENMON + cada vendedor conectado). Admin. ---
