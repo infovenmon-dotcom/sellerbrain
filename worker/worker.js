@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v52-fundadores-ciclo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v53-fundadores-form'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2747,7 +2747,8 @@ function cfgEmail(env) {
   let logo = env.EMAIL_LOGO;
   if (!logo) { try { logo = new URL(portalBase).origin + '/assets/logo.png'; } catch (_) { logo = 'https://sellersbrain.io/assets/logo.png'; } }
   return { from, soporte, replyTo, logo, portal: portalBase + '?login=1',
-    linkMensual: env.STRIPE_LINK_MENSUAL || '', linkAnual: env.STRIPE_LINK_ANUAL || '' };
+    linkMensual: env.STRIPE_LINK_MENSUAL || '', linkAnual: env.STRIPE_LINK_ANUAL || '',
+    formSeguimiento: env.FORM_SEGUIMIENTO || '' };   // enlace al formulario de feedback
 }
 
 // Envío genérico por Resend. Devuelve {ok,status,detalle}.
@@ -2793,9 +2794,9 @@ function botonHTML(url, texto, color) {
 function preguntasSeguimiento(env) {
   const ls = (env.PREGUNTAS_SEGUIMIENTO || '').split('|').map(s => s.trim()).filter(Boolean);
   return ls.length ? ls : [
-    '¿Qué es lo que más te ha ayudado hasta ahora?',
-    '¿Qué te falta o qué mejorarías?',
-    '¿Has recuperado dinero con los avisos (reembolsos, sobrecostes, PPC)?'
+    '¿Qué es lo que más te ayuda?',
+    '¿Qué te falta o cambiarías?',
+    'Del 0 al 10, ¿lo recomendarías?'
   ];
 }
 
@@ -2811,13 +2812,23 @@ async function enviarSeguimiento(env, m) {
   const c = cfgEmail(env);
   const dias = diasHasta(m.fin);
   const preguntas = preguntasSeguimiento(env).map(p => '<li style="margin:6px 0;color:#173a2b">' + p + '</li>').join('');
+  // Si hay formulario configurado, el cliente contesta ahí (para analizarlo junto);
+  // si no, cae a "responde a este correo".
+  const cta = c.formSeguimiento
+    ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 4px"><tr><td>' +
+        botonHTML(c.formSeguimiento, 'Responder la encuesta (2 min) →') +
+      '</td></tr></table>'
+    : '<p style="color:#5b6b63;font-size:14px">Cuéntanoslo <b>respondiendo a este correo</b>.</p>';
   const cuerpo =
     '<p style="color:#5b6b63;font-size:15px;line-height:22px">Llevas unas semanas con SellerBrain y nos encantaría saber cómo te va. Tu acceso fundador termina en <b>' + dias + ' días</b>.</p>' +
-    '<p style="color:#5b6b63;font-size:15px;margin-bottom:4px">Cuéntanos, respondiendo a este correo:</p>' +
+    '<p style="color:#5b6b63;font-size:15px;margin-bottom:4px">Son 3 preguntas rápidas:</p>' +
     '<ul style="font-size:15px;line-height:22px;padding-left:20px">' + preguntas + '</ul>' +
-    '<p style="color:#5b6b63;font-size:14px">Gracias por ser de los primeros. Leemos todas las respuestas.</p>';
+    cta +
+    '<p style="color:#5b6b63;font-size:14px;margin-top:12px">Gracias por ser de los primeros. Leemos todas las respuestas y nos ayudan a mejorar.</p>';
   const html = shellEmail({ logo: c.logo, soporte: c.soporte, titulo: '¿Qué tal tus primeras semanas? 👀', cuerpo });
-  const text = 'Tu acceso fundador termina en ' + dias + ' días. Cuéntanos respondiendo a este correo:\n- ' + preguntasSeguimiento(env).join('\n- ');
+  const text = 'Tu acceso fundador termina en ' + dias + ' días. 3 preguntas:\n- ' +
+    preguntasSeguimiento(env).join('\n- ') +
+    (c.formSeguimiento ? ('\n\nResponde aquí: ' + c.formSeguimiento) : '\n\nResponde a este correo.');
   return enviarResend(env, m.email, '¿Cómo te va con SellerBrain? (2 min)', html, text);
 }
 
