@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v56-feedback'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v57-filtro-productos'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -134,7 +134,10 @@ export default {
           const modo = o.mode || '';                       // 'payment' (fundador) | 'subscription' (renovación)
           const importe = +o.amount_total || +o.amount || 0; // en céntimos
           const esRenovacion = modo === 'subscription';    // suscripción = renovación
-          if (email) {
+          // FILTRO: esta cuenta de Stripe se usa para más cosas además de SellerBrain.
+          // Solo damos de alta/renovamos si el pago es de un PRODUCTO de SellerBrain.
+          const esSB = await esCheckoutSellerBrain(env, o.id);
+          if (email && esSB) {
             // ¿ya tiene código este email? (evita duplicar si paga dos veces)
             let ya = [];
             try { ya = await selectSupabase(env, 'miembros?email=eq.' + encodeURIComponent(email) + '&select=codigo&fin&limit=1'); } catch (_) {}
@@ -172,7 +175,7 @@ export default {
           const cancelYa = evt.type === 'customer.subscription.deleted';                        // ya terminó
           const cancelProgramada = evt.type === 'customer.subscription.updated' &&
             s.cancel_at_period_end === true && prev.cancel_at_period_end !== true;               // acaba de cancelar
-          if (custId && (cancelYa || cancelProgramada)) {
+          if (custId && (cancelYa || cancelProgramada) && suscripcionEsSellerBrain(env, s)) {
             let mm = [];
             try { mm = await selectSupabase(env, 'miembros?stripe_customer=eq.' + encodeURIComponent(custId) + '&select=codigo,email,seller&limit=1'); } catch (_) {}
             const mem = mm && mm[0];
@@ -2667,6 +2670,43 @@ function nuevoCodigo() {
   const b = crypto.getRandomValues(new Uint8Array(8));
   const s = [...b].map(x => (x % 36).toString(36)).join('').toUpperCase();
   return 'SB-' + s.slice(0, 4) + '-' + s.slice(4, 8);
+}
+
+// La cuenta de Stripe se usa para varios negocios. Este filtro comprueba que un
+// checkout es de un PRODUCTO de SellerBrain antes de crear/renovar un miembro.
+//   · SB_STRIPE_PRODUCTS = lista de IDs de producto permitidos (prod_...,prod_...)
+//   · STRIPE_SECRET_KEY  = clave (o clave restringida de solo lectura) para leer las líneas
+// Si no hay lista configurada, NO filtra (comportamiento anterior). Ante error de
+// red, no bloquea (mejor crear un alta de más que perder un cliente que pagó).
+async function esCheckoutSellerBrain(env, sessionId) {
+  const permitidos = (env.SB_STRIPE_PRODUCTS || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!permitidos.length) return true;            // sin lista → no filtra
+  if (!env.STRIPE_SECRET_KEY || !sessionId) return true;
+  try {
+    const r = await fetch('https://api.stripe.com/v1/checkout/sessions/' + encodeURIComponent(sessionId) +
+      '/line_items?limit=20&expand[]=data.price.product',
+      { headers: { 'Authorization': 'Bearer ' + env.STRIPE_SECRET_KEY } });
+    const d = await r.json();
+    const items = (d && d.data) || [];
+    return items.some(it => {
+      const p = it.price && it.price.product;
+      const prodId = typeof p === 'string' ? p : (p && p.id);
+      return prodId && permitidos.indexOf(prodId) > -1;
+    });
+  } catch (_) { return true; }                    // ante fallo: no bloquear el alta
+}
+
+// ¿Los productos de una suscripción son de SellerBrain? (usa el propio objeto del
+// evento, sin llamada extra). Doble seguridad para cancelaciones en cuenta compartida.
+function suscripcionEsSellerBrain(env, sub) {
+  const permitidos = (env.SB_STRIPE_PRODUCTS || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!permitidos.length) return true;
+  const items = (sub && sub.items && sub.items.data) || [];
+  return items.some(it => {
+    const p = it.price && it.price.product;
+    const prodId = typeof p === 'string' ? p : (p && p.id);
+    return prodId && permitidos.indexOf(prodId) > -1;
+  });
 }
 
 // Envía el email de acceso vía Resend (si hay RESEND_API_KEY). Si no, no rompe:
