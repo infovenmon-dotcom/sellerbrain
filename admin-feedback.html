@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SellerBrain — Análisis de feedback</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#070d0b; --card:#0e1613; --line:#1e2c26; --gn:#2EE6A0; --tx:#eaf4ef; --mu:#8aa79a; --rd:#ff6b6b; --am:#f5b23e; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:'Satoshi',system-ui,Arial,sans-serif;padding:24px;max-width:1000px;margin:auto}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:20px;margin-bottom:4px}
+  .brand b{color:var(--gn)}
+  h1{font-size:22px;margin:8px 0 2px}
+  .mu{color:var(--mu);font-size:14px}
+  .row{display:flex;gap:8px;margin:16px 0;flex-wrap:wrap}
+  input{background:#0a120f;border:1px solid var(--line);border-radius:10px;color:var(--tx);font-family:inherit;font-size:14px;padding:10px 12px;flex:1;min-width:220px}
+  button{background:var(--gn);border:none;border-radius:10px;color:#04150e;font-family:inherit;font-weight:800;font-size:14px;padding:10px 16px;cursor:pointer}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .kpi .l{color:var(--mu);font-size:12px}
+  .kpi .v{font-size:26px;font-weight:800;margin-top:4px}
+  .list{display:flex;flex-direction:column;gap:10px}
+  .item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .item .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+  .badge{font-weight:800;border-radius:8px;padding:3px 9px;font-size:13px}
+  .pill{color:var(--mu);font-size:12px}
+  .q{color:var(--mu);font-size:12px;margin:8px 0 1px}
+  .a{font-size:14.5px;line-height:1.45}
+</style>
+</head>
+<body>
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2EE6A0"/><stop offset="1" stop-color="#0E9F6E"/></linearGradient></defs><ellipse cx="32" cy="32" rx="28" ry="12" fill="none" stroke="url(#g)" stroke-width="3" transform="rotate(-24 32 32)"/><circle cx="32" cy="32" r="14.5" fill="none" stroke="url(#g)" stroke-width="5"/><circle cx="32" cy="32" r="4.4" fill="#EAF7F1"/><circle cx="52.5" cy="18.7" r="3.3" fill="#2EE6A0"/></svg>
+    Seller<b>Brain</b>
+  </div>
+  <h1>Análisis de feedback</h1>
+  <div class="mu">Respuestas del formulario de seguimiento (encuesta E-15). Solo admin.</div>
+
+  <div class="row">
+    <input id="key" type="password" placeholder="Clave admin (SB_API_KEY)">
+    <button onclick="cargar()">Cargar</button>
+  </div>
+
+  <div id="kpis" class="kpis" style="display:none"></div>
+  <div id="list" class="list"></div>
+  <div id="msg" class="mu"></div>
+
+<script>
+  var API='https://sellerbrain-api.info-venmon.workers.dev';
+  var K='sb_api_key';
+  document.getElementById('key').value = localStorage.getItem(K) || '';
+  function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+  function cargar(){
+    var key=document.getElementById('key').value.trim();
+    if(!key){document.getElementById('msg').textContent='Introduce la clave admin.';return;}
+    localStorage.setItem(K,key);
+    document.getElementById('msg').textContent='Cargando…';
+    fetch(API+'/v1/feedback?key='+encodeURIComponent(key))
+      .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(d){ pintar(d); })
+      .catch(function(e){ document.getElementById('msg').textContent = e.message==='401'?'Clave incorrecta.':'Error: '+e.message; });
+  }
+  function pintar(d){
+    document.getElementById('msg').textContent='';
+    var k=document.getElementById('kpis'); k.style.display='grid';
+    k.innerHTML =
+      kpi('Respuestas', d.total) +
+      kpi('NPS medio (0-10)', d.nps_medio==null?'—':d.nps_medio) +
+      kpi('NPS score', d.nps_score==null?'—':d.nps_score) +
+      kpi('Promot. / Detract.', (d.promotores||0)+' / '+(d.detractores||0));
+    var L=document.getElementById('list');
+    if(!d.respuestas || !d.respuestas.length){ L.innerHTML='<div class="mu">Aún no hay respuestas.</div>'; return; }
+    L.innerHTML = d.respuestas.map(function(f){
+      var n=f.nps; var col = n==null?'#334':(n>=9?'#123f2c':(n<=6?'#3f1717':'#3a3113'));
+      var txt = n==null?'#8aa79a':(n>=9?'#2EE6A0':(n<=6?'#ff6b6b':'#f5b23e'));
+      var fecha=(f.creado||'').slice(0,10);
+      return '<div class="item"><div class="top">'+
+        '<span class="badge" style="background:'+col+';color:'+txt+'">'+(n==null?'sin nota':('NPS '+n))+'</span>'+
+        '<span class="pill">'+esc(f.email||'anónimo')+' · '+fecha+'</span></div>'+
+        (f.ayuda?('<div class="q">Lo que más ayuda</div><div class="a">'+esc(f.ayuda)+'</div>'):'')+
+        (f.mejora?('<div class="q">Qué falta / cambiaría</div><div class="a">'+esc(f.mejora)+'</div>'):'')+
+        '</div>';
+    }).join('');
+  }
+  function kpi(l,v){ return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div></div>'; }
+  if(document.getElementById('key').value) cargar();
+</script>
+</body>
+</html>

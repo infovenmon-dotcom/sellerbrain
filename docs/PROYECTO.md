@@ -2,7 +2,7 @@
 
 > Fuente única de la verdad: arquitectura, servicios, costes, cuentas, dominios,
 > estado de Amazon, seguridad y tareas pendientes. Se actualiza según avanzamos.
-> **Última actualización:** 2026-07-29 · **Worker:** v52-fundadores-ciclo
+> **Última actualización:** 2026-07-30 · **Worker:** v56-feedback
 
 ---
 
@@ -162,7 +162,13 @@ Ficheros en `sql/`. Los nuevos del multiusuario/onboarding:
 2. `multicuenta-pks.sql` — mete `seller` en la clave primaria (antes del 2º vendedor).
 3. `miembros-seller.sql` — columna `seller` en miembros (mapa login→seller).
 4. `stripe.sql` — tabla `stripe_eventos` (idempotencia del webhook).
-5. Otros ya en uso: `reembolsos.sql`, `inventario-pais.sql`, `ppc-*.sql`, `fugas-tarifa.sql`, etc.
+5. `fundadores.sql` — ciclo de vida en miembros (inicio/fin/estado/avisos/baja/stripe_customer) + auditoría.
+6. `feedback.sql` — respuestas del formulario de seguimiento (encuesta E-15).
+7. Otros ya en uso: `reembolsos.sql`, `inventario-pais.sql`, `ppc-*.sql`, `fugas-tarifa.sql`, etc.
+
+**Marca/fuente:** tipografía oficial **Satoshi** (Fontshare) integrada en landing/portal/dashboard/form.
+**Feedback:** `form.html` (público, guarda en Supabase vía `POST /v1/feedback`) + `admin-feedback.html`
+(análisis con la clave admin). El correo E-15 enlaza a `form.html` vía `FORM_SEGUIMIENTO` y le pasa `?e=email`.
 
 ---
 

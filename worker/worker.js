@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v55-cancelacion'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v56-feedback'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -69,7 +69,9 @@ export default {
       // Se acepta como cabecera "Authorization: Bearer LACLAVE" o como ?key=LACLAVE.
       // Excepciones públicas: /auth/ads/* (OAuth de clientes) y /v1/login (el
       // login del portal lo llama el navegador, que NO puede tener SB_API_KEY).
-      if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/login') {
+      // POST /v1/feedback es público (lo envía el navegador del cliente desde el formulario).
+      const feedbackPublico = url.pathname === '/v1/feedback' && request.method === 'POST';
+      if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/login' && !feedbackPublico) {
         const auth = (request.headers.get('Authorization') || '').replace('Bearer ', '');
         const key = auth || url.searchParams.get('key') || '';
         let ok = env.SB_API_KEY && key === env.SB_API_KEY;
@@ -225,6 +227,32 @@ export default {
       if (url.pathname === '/v1/fundadores/run') {
         const r = await procesarFundadores(env);
         return json({ ok: true, resultado: r }, cors);
+      }
+
+      // --- FEEDBACK (encuesta de seguimiento). POST público (lo envía el cliente
+      //     desde form.html). GET admin: respuestas + agregados para analizar. ---
+      if (url.pathname === '/v1/feedback') {
+        if (request.method === 'POST') {
+          let b; try { b = await request.json(); } catch (_) { b = {}; }
+          const email = (b.email || '').trim().toLowerCase();
+          const ayuda = (b.ayuda || '').toString().slice(0, 2000);
+          const mejora = (b.mejora || '').toString().slice(0, 2000);
+          let nps = parseInt(b.nps, 10); if (isNaN(nps) || nps < 0 || nps > 10) nps = null;
+          if (!ayuda && !mejora && nps == null) return json({ ok: false, error: 'vacio' }, cors, 400);
+          // Ligar la respuesta a su seller si el email es de un miembro.
+          let seller = email || null;
+          try { const m = await selectSupabase(env, 'miembros?email=eq.' + encodeURIComponent(email) + '&select=seller&limit=1'); if (m && m[0] && m[0].seller) seller = m[0].seller; } catch (_) {}
+          await upsertSupabase(env, 'feedback', [{ email: email || null, seller, ayuda, mejora, nps, creado: new Date().toISOString() }]);
+          return json({ ok: true }, cors);
+        }
+        // GET (admin): lista + agregados
+        const filas = await selSafe(env, 'feedback?order=creado.desc&limit=500', []);
+        const conNps = filas.filter(f => f.nps != null);
+        const media = conNps.length ? +(conNps.reduce((a, f) => a + (+f.nps), 0) / conNps.length).toFixed(1) : null;
+        const prom = conNps.filter(f => f.nps >= 9).length;
+        const det = conNps.filter(f => f.nps <= 6).length;
+        const npsScore = conNps.length ? Math.round(100 * (prom - det) / conNps.length) : null;
+        return json({ total: filas.length, nps_medio: media, nps_score: npsScore, promotores: prom, detractores: det, respuestas: filas }, cors);
       }
 
       // --- Costes de producto (COGS) — el margen real depende de esto ---
@@ -2841,10 +2869,12 @@ async function enviarSeguimiento(env, m) {
   const dias = diasHasta(m.fin);
   const preguntas = preguntasSeguimiento(env).map(p => '<li style="margin:6px 0;color:#173a2b">' + p + '</li>').join('');
   // Si hay formulario configurado, el cliente contesta ahí (para analizarlo junto);
-  // si no, cae a "responde a este correo".
-  const cta = c.formSeguimiento
+  // le pasamos su email para atribuir la respuesta. Si no, cae a "responde a este correo".
+  let urlForm = c.formSeguimiento;
+  if (urlForm) { urlForm += (urlForm.indexOf('?') > -1 ? '&' : '?') + 'e=' + encodeURIComponent(m.email); }
+  const cta = urlForm
     ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 4px"><tr><td>' +
-        botonHTML(c.formSeguimiento, 'Responder la encuesta (2 min) →') +
+        botonHTML(urlForm, 'Responder la encuesta (2 min) →') +
       '</td></tr></table>'
     : '<p style="color:#5b6b63;font-size:14px">Cuéntanoslo <b>respondiendo a este correo</b>.</p>';
   const cuerpo =
