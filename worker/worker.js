@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v59-email-demo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v60-cambio-plan'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -200,6 +200,20 @@ export default {
               await upsertSupabase(env, 'miembros', [{ codigo: mem.codigo, estado: 'cancelado', fin: finAcceso }]);
               try { await enviarCancelacion(env, mem, finAcceso); } catch (_) {}
               creado = { email: mem.email, cancelado: true, fin: finAcceso };
+            }
+          } else if (evt.type === 'customer.subscription.updated' && custId && s.cancel_at_period_end !== true && suscripcionEsSellerBrain(env, s)) {
+            // CAMBIO DE PLAN (mensual↔anual) o REACTIVACIÓN: actualizamos plan, periodo y estado.
+            let mm = [];
+            try { mm = await selectSupabase(env, 'miembros?stripe_customer=eq.' + encodeURIComponent(custId) + '&select=codigo,email&limit=1'); } catch (_) {}
+            const mem = mm && mm[0];
+            if (mem) {
+              const anual = suscripcionEsAnual(s);
+              const finN = s.current_period_end ? new Date(s.current_period_end * 1000).toISOString().slice(0, 10) : null;
+              const upd = { codigo: mem.codigo, plan: anual ? 'anual' : 'mensual', estado: 'renovado', activo: true,
+                aviso1: null, aviso2: null, aviso3: null, baja: null, borrado: null };
+              if (finN) upd.fin = finN;
+              await upsertSupabase(env, 'miembros', [upd]);
+              creado = { email: mem.email, cambio_plan: anual ? 'anual' : 'mensual' };
             }
           }
         }
@@ -2743,6 +2757,15 @@ function suscripcionEsSellerBrain(env, sub) {
     const p = it.price && it.price.product;
     const prodId = typeof p === 'string' ? p : (p && p.id);
     return prodId && permitidos.indexOf(prodId) > -1;
+  });
+}
+
+// ¿La suscripción es ANUAL? (por el intervalo del precio: 'year' vs 'month').
+function suscripcionEsAnual(sub) {
+  const items = (sub && sub.items && sub.items.data) || [];
+  return items.some(it => {
+    const rec = (it.price && it.price.recurring) || it.plan || {};
+    return rec.interval === 'year';
   });
 }
 
