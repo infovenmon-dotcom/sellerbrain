@@ -320,6 +320,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
           <h2><span class="ci">📣</span> Gasto vs ventas atribuidas · por día</h2>
           <span class="more" id="ppc-fuente"></span>
         </div>
+        <div id="ppc-pais-filtro" style="display:none;gap:6px;flex-wrap:wrap;margin:2px 0 10px"></div>
         <div id="ppc-chart"></div>
         <div class="chart-legend">
           <span><i style="background:#B983D6"></i> Gasto PPC</span>
@@ -2368,6 +2369,61 @@ var PPC_DEMO = {
 (function(){for(var i=29;i>=0;i--){var g=8+Math.sin(i/3.2)*3+((i*7)%5);PPC_DEMO.dias.push({fecha:'',gasto:g,ventas_ppc:g*(2.2+((i*11)%14)/10)});}})();
 
 var PPC_DATA=null;
+var PPC_PAIS='all';   // filtro del gráfico PPC: 'all' o código de país (ES/FR/IT…)
+// Serie diaria agregada según el país elegido (o todos): 1 punto por fecha.
+function serieDiasPPC(paisSel){
+  var rows=(PPC_DATA&&PPC_DATA.dias||[]).filter(function(x){return paisSel==='all'||x.pais===paisSel;});
+  // Demo (sin fecha) → devolver tal cual, sin agrupar. Datos reales → agrupar por fecha.
+  if(!rows.some(function(x){return x.fecha;})) return rows.map(function(x){return {fecha:x.fecha,gasto:+x.gasto||0,ventas_ppc:+x.ventas_ppc||0,pais:x.pais||''};});
+  var byF={};
+  rows.forEach(function(x){
+    if(!byF[x.fecha]) byF[x.fecha]={fecha:x.fecha,gasto:0,ventas_ppc:0,pais:paisSel==='all'?'':x.pais};
+    byF[x.fecha].gasto+=+x.gasto||0; byF[x.fecha].ventas_ppc+=+x.ventas_ppc||0;
+  });
+  return Object.keys(byF).sort().map(function(k){return byF[k];});
+}
+function filtrarPPCPais(code){
+  PPC_PAIS=code;
+  var fEl=document.getElementById('ppc-pais-filtro');
+  if(fEl) Array.prototype.forEach.call(fEl.children,function(b){ b.classList.toggle('on', b.getAttribute('onclick').indexOf("'"+code+"'")>-1); });
+  dibujarPPCChart();
+}
+// Dibuja el gráfico Gasto vs Ventas (con tooltip por día) para el país elegido.
+function dibujarPPCChart(){
+  var chartEl=document.getElementById('ppc-chart'); if(!chartEl) return;
+  var W=640,H=150,pad=6,serie=serieDiasPPC(PPC_PAIS).slice(-30),n=serie.length;
+  var maxV=Math.max.apply(null,serie.map(function(x){return Math.max(x.gasto,x.ventas_ppc);}).concat([1]));
+  function px(i){return pad+i*(W-2*pad)/Math.max(n-1,1);}
+  function py(val){return H-pad-(val/maxV)*(H-2*pad);}
+  function pts(key){return serie.map(function(x,i){return px(i).toFixed(1)+','+py(x[key]).toFixed(1);}).join(' ');}
+  function fCorta(iso){var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];var pz=(iso||'').split('-');return pz.length===3?(pz[2]+' '+(M[+pz[1]-1]||'')):(iso||'');}
+  if(!n){ chartEl.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px">Aún sin serie diaria para este país.</div>'; return; }
+  var dotCss='position:absolute;width:9px;height:9px;border-radius:50%;background:#0e1613;transform:translate(-50%,-50%);display:none;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.35)';
+  chartEl.innerHTML=
+    '<div id="ppc-cin" style="position:relative">'+
+      '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
+      '<polyline points="'+pts('ventas_ppc')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
+      '<polyline points="'+pts('gasto')+'" fill="none" stroke="#B983D6" stroke-width="2"/></svg>'+
+      '<div id="ppc-guide" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28);display:none;pointer-events:none"></div>'+
+      '<div id="ppc-dv" style="'+dotCss+';border:2px solid var(--gn)"></div>'+
+      '<div id="ppc-dg" style="'+dotCss+';border:2px solid #B983D6"></div>'+
+      '<div id="ppc-tip" style="position:absolute;background:#0b1512;border:1px solid #27392f;border-radius:8px;padding:6px 9px;font-size:11px;line-height:1.55;white-space:nowrap;display:none;pointer-events:none;z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.5)"></div>'+
+    '</div>';
+  var box=document.getElementById('ppc-cin'),guide=document.getElementById('ppc-guide'),
+      dv=document.getElementById('ppc-dv'),dg=document.getElementById('ppc-dg'),tip=document.getElementById('ppc-tip');
+  box.onmousemove=function(e){
+    var r=box.getBoundingClientRect(); var frac=(e.clientX-r.left)/r.width; if(frac<0)frac=0; if(frac>1)frac=1;
+    var i=Math.round(frac*(n-1)), s=serie[i];
+    var xp=px(i)/W*100, yv=py(s.ventas_ppc)/H*100, yg=py(s.gasto)/H*100;
+    guide.style.left=xp+'%'; guide.style.display='block';
+    dv.style.left=xp+'%'; dv.style.top=yv+'%'; dv.style.display='block';
+    dg.style.left=xp+'%'; dg.style.top=yg+'%'; dg.style.display='block';
+    tip.innerHTML='<b>'+fCorta(s.fecha)+'</b>'+(s.pais?(' · '+s.pais):(PPC_PAIS!=='all'?' · '+PPC_PAIS:''))+'<br><span style="color:#B983D6">■</span> Gasto <b>'+f(s.gasto,2)+'€</b><br><span style="color:var(--gn)">■</span> Ventas <b>'+f(s.ventas_ppc,2)+'€</b>';
+    tip.style.display='block'; tip.style.top='2px';
+    if(xp>60){ tip.style.right=(100-xp)+'%'; tip.style.left='auto'; } else { tip.style.left=xp+'%'; tip.style.right='auto'; }
+  };
+  box.onmouseleave=function(){ guide.style.display='none'; dv.style.display='none'; dg.style.display='none'; tip.style.display='none'; };
+}
 
 var SB_VENTAS_REALES=false; // true cuando vengan de SP-API/CSV (no estimadas)
 
@@ -2528,42 +2584,19 @@ function renderPPC(fuente){
       '<div class="ben" style="color:'+k.c+'">'+k.v+'</div>'+
       '<div style="font-size:10px;color:var(--mu);margin-top:2px">'+k.sub+'</div></div>';
   }).join('');
-  // Gráfico (con tooltip por día al pasar el ratón)
-  var W=640,H=150,pad=6,serie=d.dias.slice(-30),n=serie.length;
-  var maxV=Math.max.apply(null,serie.map(function(x){return Math.max(x.gasto,x.ventas_ppc);}).concat([1]));
-  function px(i){return pad+i*(W-2*pad)/Math.max(n-1,1);}
-  function py(val){return H-pad-(val/maxV)*(H-2*pad);}
-  function pts(key){return serie.map(function(x,i){return px(i).toFixed(1)+','+py(x[key]).toFixed(1);}).join(' ');}
-  function fCorta(iso){var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];var pz=(iso||'').split('-');return pz.length===3?(pz[2]+' '+(M[+pz[1]-1]||'')):(iso||'');}
-  var chartEl=document.getElementById('ppc-chart');
-  if(!n){ chartEl.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px">Aún sin serie diaria — el cron nocturno la va construyendo día a día.</div>'; }
-  else{
-    var dotCss='position:absolute;width:9px;height:9px;border-radius:50%;background:#0e1613;transform:translate(-50%,-50%);display:none;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.35)';
-    chartEl.innerHTML=
-      '<div id="ppc-cin" style="position:relative">'+
-        '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
-        '<polyline points="'+pts('ventas_ppc')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
-        '<polyline points="'+pts('gasto')+'" fill="none" stroke="#B983D6" stroke-width="2"/></svg>'+
-        '<div id="ppc-guide" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28);display:none;pointer-events:none"></div>'+
-        '<div id="ppc-dv" style="'+dotCss+';border:2px solid var(--gn)"></div>'+
-        '<div id="ppc-dg" style="'+dotCss+';border:2px solid #B983D6"></div>'+
-        '<div id="ppc-tip" style="position:absolute;background:#0b1512;border:1px solid #27392f;border-radius:8px;padding:6px 9px;font-size:11px;line-height:1.55;white-space:nowrap;display:none;pointer-events:none;z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.5)"></div>'+
-      '</div>';
-    var box=document.getElementById('ppc-cin'),guide=document.getElementById('ppc-guide'),
-        dv=document.getElementById('ppc-dv'),dg=document.getElementById('ppc-dg'),tip=document.getElementById('ppc-tip');
-    box.onmousemove=function(e){
-      var r=box.getBoundingClientRect(); var frac=(e.clientX-r.left)/r.width; if(frac<0)frac=0; if(frac>1)frac=1;
-      var i=Math.round(frac*(n-1)), s=serie[i];
-      var xp=px(i)/W*100, yv=py(s.ventas_ppc)/H*100, yg=py(s.gasto)/H*100;
-      guide.style.left=xp+'%'; guide.style.display='block';
-      dv.style.left=xp+'%'; dv.style.top=yv+'%'; dv.style.display='block';
-      dg.style.left=xp+'%'; dg.style.top=yg+'%'; dg.style.display='block';
-      tip.innerHTML='<b>'+fCorta(s.fecha)+'</b>'+(s.pais?(' · '+s.pais):'')+'<br><span style="color:#B983D6">■</span> Gasto <b>'+f(s.gasto,2)+'€</b><br><span style="color:var(--gn)">■</span> Ventas <b>'+f(s.ventas_ppc,2)+'€</b>';
-      tip.style.display='block'; tip.style.top='2px';
-      if(xp>60){ tip.style.right=(100-xp)+'%'; tip.style.left='auto'; } else { tip.style.left=xp+'%'; tip.style.right='auto'; }
-    };
-    box.onmouseleave=function(){ guide.style.display='none'; dv.style.display='none'; dg.style.display='none'; tip.style.display='none'; };
+  // Filtro de país sobre el gráfico (Todos + cada país presente)
+  var paisesPPC=[]; (d.dias||[]).forEach(function(x){ if(x.pais && paisesPPC.indexOf(x.pais)<0) paisesPPC.push(x.pais); });
+  paisesPPC.sort();
+  var fEl=document.getElementById('ppc-pais-filtro');
+  if(fEl){
+    if(paisesPPC.length>1){
+      if(paisesPPC.indexOf(PPC_PAIS)<0 && PPC_PAIS!=='all') PPC_PAIS='all';
+      var chips=[{k:'all',t:'🌍 Todos'}].concat(paisesPPC.map(function(p){return {k:p,t:(BANDERA[p]||'')+' '+p};}));
+      fEl.innerHTML=chips.map(function(c){ return '<button class="chip'+(PPC_PAIS===c.k?' on':'')+'" style="cursor:pointer" onclick="filtrarPPCPais(\''+c.k+'\')">'+c.t+'</button>'; }).join('');
+      fEl.style.display='flex';
+    } else { fEl.innerHTML=''; fEl.style.display='none'; PPC_PAIS='all'; }
   }
+  dibujarPPCChart();
   // Campañas
   document.getElementById('ppc-campanas').innerHTML=d.campanas.map(function(x){
     var a=x.ventas_ppc>0?x.gasto/x.ventas_ppc*100:999;
