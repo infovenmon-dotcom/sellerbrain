@@ -2528,17 +2528,42 @@ function renderPPC(fuente){
       '<div class="ben" style="color:'+k.c+'">'+k.v+'</div>'+
       '<div style="font-size:10px;color:var(--mu);margin-top:2px">'+k.sub+'</div></div>';
   }).join('');
-  // Gráfico
-  var W=640,H=150,pad=6,serie=d.dias.slice(-30);
+  // Gráfico (con tooltip por día al pasar el ratón)
+  var W=640,H=150,pad=6,serie=d.dias.slice(-30),n=serie.length;
   var maxV=Math.max.apply(null,serie.map(function(x){return Math.max(x.gasto,x.ventas_ppc);}).concat([1]));
-  function pts(key){return serie.map(function(x,i){
-    return (pad+i*(W-2*pad)/Math.max(serie.length-1,1)).toFixed(1)+','+(H-pad-(x[key]/maxV)*(H-2*pad)).toFixed(1);
-  }).join(' ');}
-  document.getElementById('ppc-chart').innerHTML=serie.length?
-    '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto" preserveAspectRatio="none">'+
-    '<polyline points="'+pts('ventas_ppc')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
-    '<polyline points="'+pts('gasto')+'" fill="none" stroke="#B983D6" stroke-width="2"/></svg>'
-    :'<div style="color:var(--mu);font-size:12px;padding:20px">Aún sin serie diaria — el cron nocturno la va construyendo día a día.</div>';
+  function px(i){return pad+i*(W-2*pad)/Math.max(n-1,1);}
+  function py(val){return H-pad-(val/maxV)*(H-2*pad);}
+  function pts(key){return serie.map(function(x,i){return px(i).toFixed(1)+','+py(x[key]).toFixed(1);}).join(' ');}
+  function fCorta(iso){var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];var pz=(iso||'').split('-');return pz.length===3?(pz[2]+' '+(M[+pz[1]-1]||'')):(iso||'');}
+  var chartEl=document.getElementById('ppc-chart');
+  if(!n){ chartEl.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px">Aún sin serie diaria — el cron nocturno la va construyendo día a día.</div>'; }
+  else{
+    var dotCss='position:absolute;width:9px;height:9px;border-radius:50%;background:#0e1613;transform:translate(-50%,-50%);display:none;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.35)';
+    chartEl.innerHTML=
+      '<div id="ppc-cin" style="position:relative">'+
+        '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
+        '<polyline points="'+pts('ventas_ppc')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
+        '<polyline points="'+pts('gasto')+'" fill="none" stroke="#B983D6" stroke-width="2"/></svg>'+
+        '<div id="ppc-guide" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28);display:none;pointer-events:none"></div>'+
+        '<div id="ppc-dv" style="'+dotCss+';border:2px solid var(--gn)"></div>'+
+        '<div id="ppc-dg" style="'+dotCss+';border:2px solid #B983D6"></div>'+
+        '<div id="ppc-tip" style="position:absolute;background:#0b1512;border:1px solid #27392f;border-radius:8px;padding:6px 9px;font-size:11px;line-height:1.55;white-space:nowrap;display:none;pointer-events:none;z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.5)"></div>'+
+      '</div>';
+    var box=document.getElementById('ppc-cin'),guide=document.getElementById('ppc-guide'),
+        dv=document.getElementById('ppc-dv'),dg=document.getElementById('ppc-dg'),tip=document.getElementById('ppc-tip');
+    box.onmousemove=function(e){
+      var r=box.getBoundingClientRect(); var frac=(e.clientX-r.left)/r.width; if(frac<0)frac=0; if(frac>1)frac=1;
+      var i=Math.round(frac*(n-1)), s=serie[i];
+      var xp=px(i)/W*100, yv=py(s.ventas_ppc)/H*100, yg=py(s.gasto)/H*100;
+      guide.style.left=xp+'%'; guide.style.display='block';
+      dv.style.left=xp+'%'; dv.style.top=yv+'%'; dv.style.display='block';
+      dg.style.left=xp+'%'; dg.style.top=yg+'%'; dg.style.display='block';
+      tip.innerHTML='<b>'+fCorta(s.fecha)+'</b>'+(s.pais?(' · '+s.pais):'')+'<br><span style="color:#B983D6">■</span> Gasto <b>'+f(s.gasto,2)+'€</b><br><span style="color:var(--gn)">■</span> Ventas <b>'+f(s.ventas_ppc,2)+'€</b>';
+      tip.style.display='block'; tip.style.top='2px';
+      if(xp>60){ tip.style.right=(100-xp)+'%'; tip.style.left='auto'; } else { tip.style.left=xp+'%'; tip.style.right='auto'; }
+    };
+    box.onmouseleave=function(){ guide.style.display='none'; dv.style.display='none'; dg.style.display='none'; tip.style.display='none'; };
+  }
   // Campañas
   document.getElementById('ppc-campanas').innerHTML=d.campanas.map(function(x){
     var a=x.ventas_ppc>0?x.gasto/x.ventas_ppc*100:999;
