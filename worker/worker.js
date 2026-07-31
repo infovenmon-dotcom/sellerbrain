@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v61-nichos'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v62-stock-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -78,7 +78,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -785,6 +785,21 @@ export default {
         // Aprovechamos para traer también los reembolsos ya recibidos (mismo botón).
         try { const rr = await ingestaReembolsos(env); diag.reembolsos = rr.reembolsos; } catch (e) { diag.reembolsos_error = e.message; }
         return json({ ok: true, ...diag }, cors);
+      }
+
+      // --- Stock por país (LECTURA ligera del Libro Mayor ya guardado) + fecha de
+      //     actualización. Para el aviso de "stock en país sin IVA". ---
+      if (url.pathname === '/v1/stock-pais') {
+        const rows = await selSafe(env, 'inventario_pais?select=pais,unidades,actualizado', []);
+        const byP = {}; let act = null;
+        for (const r of (rows || [])) {
+          const p = (r.pais || '').toUpperCase(); if (!p) continue;
+          byP[p] = (byP[p] || 0) + (+r.unidades || 0);
+          if (r.actualizado && (!act || r.actualizado > act)) act = r.actualizado;
+        }
+        const paises = Object.keys(byP).map(p => ({ pais: p, unidades: byP[p] }))
+          .filter(x => x.unidades > 0).sort((a, b) => b.unidades - a.unidades);
+        return json({ paises, total: paises.reduce((a, x) => a + x.unidades, 0), actualizado: act }, cors);
       }
 
       // --- BACKFILL histórico: procesa UN tipo + UN rango de fechas por llamada.

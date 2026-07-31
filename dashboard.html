@@ -623,8 +623,22 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 <!-- ===== DETECTOR DE SOBRECOSTES (pestaña) ===== -->
 <div id="vista-sobre" style="display:none">
   <h2 style="font-family:'Satoshi',sans-serif;font-size:17px;font-weight:800;margin-bottom:10px">🔍 Detector de sobrecobros FBA</h2>
+
+  <!-- Stock por país (Libro Mayor) + aviso de IVA -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch" style="justify-content:space-between;align-items:center">
+      <h2 style="font-size:14px"><span class="ci">🌍</span> Stock por país (Libro Mayor)</h2>
+      <span id="stockpais-act" style="font-size:11px;color:var(--mu)"></span>
+    </div>
+    <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Dónde tiene Amazon tu inventario. Si aparece stock en un país donde <b>no estás registrado de IVA</b>, te avisamos: almacenar mercancía en un país suele crear obligación de IVA allí (PAN-EU / colocación de inventario).</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Tus países con IVA (edítalos):
+      <input id="stockpais-iva" placeholder="ES,FR,IT,BE" style="background:#0a120f;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:4px 8px;width:150px" onchange="guardarPaisesIva(this.value)">
+    </div>
+    <div id="stockpais-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+  </div>
+
   <div class="card">
-    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Cuando una parte de tus ventas se sirve desde otro país, Amazon cobra la gestión más cara que la local. Aquí ves cuánto pierdes por SKU y generas el <b>mensaje para abrir caso</b>. Ventana: últimos 90 días.</div>
+    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Cuando una parte de tus ventas se sirve desde otro país, Amazon cobra la gestión más cara que la local. Aquí ves cuánto pierdes por SKU y generas el <b>mensaje para abrir caso</b>. Ventana: últimos 90 días. <b>Nota:</b> la "tarifa local" es una estimación (aún no distingue la tarifa local exacta de cada país).</div>
     <div id="fugas-body-full"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
   </div>
 </div>
@@ -1484,6 +1498,48 @@ function cargarFugas(){
     .catch(function(){ if(card)card.style.display='none'; if(full)full.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
 
+/* ===== Stock por país (Libro Mayor) + aviso de IVA ===== */
+function paisesIva(){ return (localStorage.getItem('sb_paises_iva')||'ES,FR,IT,BE').toUpperCase().split(',').map(function(s){return s.trim();}).filter(Boolean); }
+function guardarPaisesIva(v){ localStorage.setItem('sb_paises_iva',(v||'').toUpperCase()); cargarStockPais(); }
+function cargarStockPais(){
+  var body=document.getElementById('stockpais-body'); if(!body)return;
+  var inp=document.getElementById('stockpais-iva'); if(inp && !inp.value) inp.value=paisesIva().join(',');
+  if(SB_CONFIG.mode!=='api'){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Disponible con tus datos reales (conecta la API).</div>'; return; }
+  fetch(SB_CONFIG.apiBase+'/v1/stock-pais',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ pintarStockPais(d); })
+    .catch(function(){ body.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
+}
+function pintarStockPais(d){
+  var body=document.getElementById('stockpais-body');
+  var act=document.getElementById('stockpais-act');
+  var paises=(d&&d.paises)||[];
+  if(act) act.textContent = d&&d.actualizado ? ('actualizado '+fechaHora(d.actualizado)) : '';
+  if(!paises.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún sin stock por país — el Libro Mayor entra con la ingesta nocturna (03:00 UTC).</div>'; return; }
+  var iva=paisesIva();
+  var fuera=paises.filter(function(p){ return iva.indexOf(p.pais)<0; });
+  var h='';
+  if(fuera.length){
+    h+='<div style="background:rgba(232,91,91,.10);border:1px solid rgba(232,91,91,.4);border-radius:10px;padding:11px 13px;margin-bottom:12px;font-size:13px;line-height:1.5">'+
+       '⚠️ <b style="color:#ff8a8a">Tienes stock en país(es) donde no consta IVA:</b> '+
+       fuera.map(function(p){return (BANDERA[p.pais]||'🏳️')+' <b>'+p.pais+'</b> ('+p.unidades+' uds)';}).join(' · ')+
+       '.<br><span style="color:var(--mu)">Almacenar mercancía en un país suele obligar a registrarse de IVA allí. Revisa <b>PAN-EU / colocación de inventario</b> en Seller Central, o valora darte de alta. Si ya tienes IVA allí, añádelo arriba.</span></div>';
+  } else {
+    h+='<div style="color:var(--gn);font-size:13px;margin-bottom:10px">👍 Todo tu stock está en países donde tienes IVA ('+iva.join(', ')+').</div>';
+  }
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
+     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">País</th><th style="padding:6px 8px">Unidades</th><th style="padding:6px 8px">IVA</th></tr></thead><tbody>';
+  paises.forEach(function(p){
+    var ok=iva.indexOf(p.pais)>-1;
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+       '<td style="padding:7px 8px;font-weight:600">'+(BANDERA[p.pais]||'🏳️')+' '+p.pais+'</td>'+
+       '<td style="padding:7px 8px">'+p.unidades+'</td>'+
+       '<td style="padding:7px 8px">'+(ok?'<span style="color:var(--gn)">✓ sí</span>':'<span style="color:#ff8a8a">⚠️ sin IVA</span>')+'</td></tr>';
+  });
+  body.innerHTML=h+'</tbody></table></div>';
+}
+function fechaHora(iso){ try{ var dt=new Date(iso); return dt.toLocaleDateString('es-ES')+' '+dt.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return (iso||'').slice(0,16).replace('T',' '); } }
+
 /* ===== Reembolsos FBA (Amazon te debe): perdido/dañado − ya reembolsado ===== */
 var REEMB=[];
 function toggleReembolsos(){
@@ -1566,7 +1622,7 @@ function aplicarDatos(d){
   // Satisfacción del cliente (motivos de devolución). En demo, ejemplo ilustrativo.
   try{ if(SB_CONFIG.mode==='api'){ cargarYoY(); cargarMensual(); } else { var yb=document.getElementById('yoy-chart'); if(yb)yb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; var mb=document.getElementById('mensual-chart'); if(mb)mb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; } }catch(e){}
   try{
-    if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); cargarFugas(); cargarReembolsos(); }
+    if(SB_CONFIG.mode==='api'){ cargarSatisfaccion(); cargarFugas(); cargarStockPais(); cargarReembolsos(); }
     else{ renderSatisfaccion([
       {sku:'DEMO-1',nombre:'Set de botellas (ejemplo)',estrellas_est:2.6,devoluciones:5,criticas:3,pct_devolucion:8.5,uds_vendidas:59,motivo_top:'DEFECTIVE',senal:'rojo'},
       {sku:'DEMO-2',nombre:'Jabón natural (ejemplo)',estrellas_est:4.3,devoluciones:2,criticas:0,pct_devolucion:1.2,uds_vendidas:168,motivo_top:'FOUND_BETTER_PRICE',senal:'verde'}
@@ -2483,7 +2539,7 @@ function cambiarVista(v){
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
-  if(v==='sobre') cargarFugas();
+  if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(TOOL_SRC[v]){
     var meta=TOOL_SRC[v], f=document.getElementById('if-tool');
     if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
