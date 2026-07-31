@@ -5,7 +5,8 @@
   publish = "."
   # AHORRO DE CRÉDITO: solo desplegar cuando cambie algo del FRONTEND.
   # El comando 'ignore' que sale con código 0 => se SALTA el deploy.
-  # git diff --quiet sale 0 (sin cambios) cuando NINGÚN fichero de web cambió
-  # en este commit (worker.js, sql/, docs/ no cuentan) => no despliega.
-  # Si cambia un .html o assets => git diff sale 1 => Netlify SÍ despliega.
-  ignore = "git diff --quiet HEAD^ HEAD -- '*.html' 'assets/**' '_headers' '_redirects' 'favicon.svg' 'favicon.ico' 'netlify.toml'"
+  # Comparamos contra el ÚLTIMO commit YA DESPLEGADO ($CACHED_COMMIT_REF), no solo
+  # contra HEAD^ — así, si se empujan varios commits juntos y alguno tocó el frontend,
+  # NO se pierde el despliegue. Si CACHED_COMMIT_REF está vacío (primer build) el diff
+  # falla => sale != 0 => despliega (lo seguro). worker.js, sql/, docs/ no cuentan.
+  ignore = "git diff --quiet ${CACHED_COMMIT_REF:-HEAD^} $COMMIT_REF -- '*.html' 'assets/**' '_headers' '_redirects' 'favicon.svg' 'favicon.ico' 'netlify.toml'"
