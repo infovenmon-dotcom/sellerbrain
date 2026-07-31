@@ -147,8 +147,12 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
         </select>
       </div>
       <div>
-        <label class="f">Plazo de reposición (lead time, días)</label>
-        <input id="cfg-lead" class="n" type="number" value="45" min="1" style="width:120px" onchange="calcular()">
+        <label class="f">Plazo de envío (días)</label>
+        <input id="cfg-lead" class="n" type="number" value="45" min="0" style="width:110px" onchange="calcular()">
+      </div>
+      <div>
+        <label class="f">Tiempo de fabricación (días)</label>
+        <input id="cfg-fab" class="n" type="number" value="0" min="0" style="width:110px" onchange="calcular()">
       </div>
       <div>
         <label class="f">Cobertura objetivo (días de stock a tener)</label>
@@ -161,10 +165,10 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
 
   <div class="card">
     <div class="ct"><span class="ci">🚦</span> Reposición por producto</div>
-    <div class="inf">Ordenado por urgencia. <b>Cobertura</b> = stock ÷ velocidad. <b>Pide antes de</b> = fecha de rotura − plazo de reposición. Escribe el stock si no subiste el inventario.</div>
+    <div class="inf">Ordenado por urgencia. <b>Cobertura</b> = stock en Amazon ÷ velocidad. <b>Pide antes de</b> = rotura − (envío + fabricación). En <b>Tuyo</b> apunta el stock que tienes en tu almacén/casa: si un producto va a romper y tienes stock tuyo, te avisamos de <b>enviar eso a Amazon primero</b> (y solo fabricas lo que falte).</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>SKU</th><th>Stock</th><th>Uds/día</th><th>Cobertura</th><th>Rotura ≈</th><th>Pide antes de</th><th>Pedir uds</th><th>Estado</th></tr></thead>
+      <thead><tr><th>SKU</th><th title="Stock en Amazon (FBA)">Stock FBA</th><th title="Stock que tienes tú (almacén/casa), aún sin enviar a Amazon">Tuyo</th><th>Uds/día</th><th>Cobertura</th><th>Rotura ≈</th><th>Pide antes de</th><th>Pedir uds</th><th>Estado</th></tr></thead>
       <tbody id="tabla-skus"></tbody>
     </table>
     </div>
@@ -202,7 +206,8 @@ function mostrarError(m){var e=document.getElementById('err');e.style.display='b
 function col(x,names){for(var i=0;i<names.length;i++){if(x[names[i]]!==undefined&&x[names[i]]!=='')return x[names[i]];}return '';}
 
 var VENTAS=[];   // [{sku, uds, fecha:Date}]
-var STOCK=JSON.parse(localStorage.getItem('sb_stock')||'{}');  // {sku: uds} — editable y persistente
+var STOCK=JSON.parse(localStorage.getItem('sb_stock')||'{}');  // {sku: uds en Amazon} — editable y persistente
+var PROPIO=JSON.parse(localStorage.getItem('sb_propio')||'{}'); // {sku: uds tuyas (almacén/casa)} — editable
 var MINF=null, MAXF=null;
 
 /* ===== Parser (mismo patrón que el resto de módulos) ===== */
@@ -268,6 +273,12 @@ function guardarStock(inp){
   localStorage.setItem('sb_stock',JSON.stringify(STOCK));
   calcular();
 }
+function guardarPropio(inp){
+  var sku=inp.dataset.sku;
+  PROPIO[sku]=parseInt(inp.value)||0;
+  localStorage.setItem('sb_propio',JSON.stringify(PROPIO));
+  calcular();
+}
 
 /* ===== Cálculo de reposición ===== */
 function udsEnVentana(sku, dias){
@@ -287,29 +298,36 @@ function diasReales(dias){
 function calcular(){
   if(!VENTAS.length)return;
   var ventana=+document.getElementById('cfg-ventana').value;
-  var lead=+document.getElementById('cfg-lead').value||0;
+  var envio=+document.getElementById('cfg-lead').value||0;
+  var fab=+document.getElementById('cfg-fab').value||0;
+  var lead=envio+fab;                        // plazo total de reposición = envío + fabricación
   var obj=+document.getElementById('cfg-obj').value||0;
   var dDiv=diasReales(ventana);
   var skus={};VENTAS.forEach(function(v){skus[v.sku]=1;});
   var hoy=new Date(); hoy.setHours(0,0,0,0);
 
-  var filas=[], enRiesgo=0, aPedir=0, totalPedir=0;
+  var filas=[], enRiesgo=0, aPedir=0, totalPedir=0, aEnviar=0;
   Object.keys(skus).forEach(function(sku){
     var uds=udsEnVentana(sku, ventana);
     var vel=uds/dDiv;                       // uds/día
     var stock=STOCK[sku]!==undefined?STOCK[sku]:null;
-    var cob=(vel>0&&stock!==null)?stock/vel:null;   // días de cobertura
+    var propio=PROPIO[sku]!==undefined?PROPIO[sku]:0;   // stock tuyo (almacén/casa)
+    var cob=(vel>0&&stock!==null)?stock/vel:null;   // días de cobertura (solo lo que hay EN Amazon)
     var rotura=(cob!==null)?new Date(hoy.getTime()+cob*86400000):null;
     var pedirAntes=(rotura)?new Date(rotura.getTime()-lead*86400000):null;
-    var pedir=(vel>0)?Math.max(0,Math.round(vel*(obj+lead)-(stock||0))):0;
-    var estado, cls;
+    // A fabricar/comprar = objetivo − lo de Amazon − lo tuyo (lo tuyo ya lo tienes, solo hay que enviarlo)
+    var pedir=(vel>0)?Math.max(0,Math.round(vel*(obj+lead)-(stock||0)-(propio||0))):0;
+    var estado, cls, enviaTuyo=false;
     if(stock===null){estado='pon stock';cls='am';}
     else if(vel<=0){estado='sin ventas';cls='am';}
-    else if(cob<=lead){estado='PIDE YA';cls='rd';enRiesgo++;}
+    else if(cob<=lead){
+      if(propio>0){ estado='📦 ENVÍA LO TUYO ('+propio+')'; cls='am'; enviaTuyo=true; aEnviar++; }
+      else { estado='PIDE YA'; cls='rd'; enRiesgo++; }
+    }
     else if(cob<=lead+ (obj*0.5)){estado='pide pronto';cls='am';}
     else {estado='ok';cls='gn';}
     if(pedir>0){aPedir++;totalPedir+=pedir;}
-    filas.push({sku:sku,stock:stock,vel:vel,cob:cob,rotura:rotura,pedirAntes:pedirAntes,pedir:pedir,estado:estado,cls:cls});
+    filas.push({sku:sku,stock:stock,propio:propio,vel:vel,cob:cob,rotura:rotura,pedirAntes:pedirAntes,pedir:pedir,estado:estado,cls:cls,enviaTuyo:enviaTuyo});
   });
   filas.sort(function(a,b){var ca=a.cob===null?1e9:a.cob, cb=b.cob===null?1e9:b.cob; return ca-cb;});
 
@@ -317,14 +335,15 @@ function calcular(){
   document.getElementById('kpis').innerHTML=
     kpi(filas.length,'productos activos')+
     kpi(enRiesgo, 'en riesgo de rotura', enRiesgo>0?'rd':'gn')+
-    kpi(aPedir, 'que deberías pedir ya')+
-    kpi(f(totalPedir,0), 'unidades a reponer (aprox.)','or');
+    kpi(aEnviar, 'con stock tuyo para enviar ya', aEnviar>0?'or':'gn')+
+    kpi(f(totalPedir,0), 'unidades a fabricar/comprar','or');
 
   // Tabla
   var h='';
   filas.forEach(function(r){
-    h+='<tr><td>'+esc(r.sku)+'</td>'+
+    h+='<tr'+(r.enviaTuyo?' style="background:rgba(245,166,35,.06)"':'')+'><td>'+esc(r.sku)+'</td>'+
       '<td><input class="st" data-sku="'+esc(r.sku)+'" value="'+(r.stock!==null?r.stock:'')+'" placeholder="0" onchange="guardarStock(this)"></td>'+
+      '<td><input class="st" data-sku="'+esc(r.sku)+'" value="'+(r.propio?r.propio:'')+'" placeholder="0" onchange="guardarPropio(this)"></td>'+
       '<td>'+(r.vel>0?f(r.vel,2):'—')+'</td>'+
       '<td>'+(r.cob!==null?'<span class="pill '+r.cls+'">'+f(r.cob,0)+' d</span>':'—')+'</td>'+
       '<td>'+fechaCorta(r.rotura)+'</td>'+
@@ -403,11 +422,11 @@ function descargarCSV(){
   var filas=window._filas;
   if(!filas||!filas.length){alert('Calcula primero.');return;}
   var SEP=';';
-  var L=['SKU'+SEP+'Stock'+SEP+'Uds/dia'+SEP+'Dias cobertura'+SEP+'Rotura aprox'+SEP+'Pedir antes de'+SEP+'Pedir uds'+SEP+'Estado'];
+  var L=['SKU'+SEP+'Stock FBA'+SEP+'Tuyo'+SEP+'Uds/dia'+SEP+'Dias cobertura'+SEP+'Rotura aprox'+SEP+'Pedir antes de'+SEP+'Fabricar/comprar uds'+SEP+'Estado'];
   filas.forEach(function(r){
-    L.push('"'+r.sku+'"'+SEP+(r.stock!==null?r.stock:'')+SEP+f(r.vel,2).replace('.',',')+SEP+
+    L.push('"'+r.sku+'"'+SEP+(r.stock!==null?r.stock:'')+SEP+(r.propio||'')+SEP+f(r.vel,2).replace('.',',')+SEP+
       (r.cob!==null?f(r.cob,0):'')+SEP+(r.rotura?r.rotura.toLocaleDateString('es-ES'):'')+SEP+
-      (r.pedirAntes?r.pedirAntes.toLocaleDateString('es-ES'):'')+SEP+(r.pedir||'')+SEP+r.estado);
+      (r.pedirAntes?r.pedirAntes.toLocaleDateString('es-ES'):'')+SEP+(r.pedir||'')+SEP+'"'+r.estado+'"');
   });
   var csv='﻿'+L.join('\r\n');
   var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
