@@ -3,41 +3,54 @@
 -- Ejecuta en Supabase -> SQL Editor. Idempotente.
 --
 -- Idea: si una parte de tus unidades se sirve desde otro pais (transfronterizo),
--- pagas una tarifa de gestion mas cara que la local. Comparamos la tarifa MEDIA
--- que pagas contra tu MEJOR tarifa (proxy de la local = percentil 15) y sacamos
--- cuanto dinero se va por servir fuera de pais. Base para una accion con € reales:
--- "mete stock en ES para KC-... -> +X€/mes".
+-- pagas una tarifa de gestion mas cara que la LOCAL DE ESE PAIS. Comparamos la
+-- tarifa MEDIA que pagas contra tu mejor tarifa observada EN ESE MISMO PAIS
+-- (proxy de la local del pais = percentil 15) y sacamos cuanto dinero se va.
+--
+-- B2 (fino por pais): las lineas de TARIFA del settlement a menudo NO traen el
+-- marketplace/pais. Antes eso las juntaba todas en '?' y la "local" acababa siendo
+-- la de Espana para todo. Ahora atribuimos cada linea al PAIS DE SU PEDIDO (via
+-- order-id, usando las lineas que si traen pais), asi el benchmark local es por pais.
 --
 -- Las tarifas del settlement vienen CON IVA -> se dividen por 1,21 (IVA recuperable).
 -- Cada linea de gestion ~ 1 unidad (asi lo confirma el settlement).
 -- =====================================================================
 
 create or replace view v_fuga_tarifa as
-with lineas as (
-  select
-    sku,
-    coalesce(nullif(pais,''),'?') as pais,
-    abs(importe) / 1.21 as fee            -- tarifa por unidad, SIN IVA
+with paisped as (                         -- pais por PEDIDO (de las lineas que si lo traen)
+  select pedido, max(pais) as pais
   from settlement_lineas
-  where importe < 0
-    and coalesce(sku,'') <> ''
-    and fecha >= (current_date - 90)      -- ventana de 90 dias
-    and ( concepto ilike '%fulfillment%' or concepto ilike '%fbaperunit%'
-       or concepto ilike '%weight%handl%' )
+  where coalesce(pais,'') <> '' and coalesce(pedido,'') <> ''
+  group by pedido
+),
+lineas as (
+  select
+    l.sku,
+    -- pais de la linea; si no lo trae, el de su pedido; si tampoco, '?'
+    coalesce(nullif(l.pais,''), p.pais, '?') as pais,
+    abs(l.importe) / 1.21 as fee            -- tarifa por unidad, SIN IVA
+  from settlement_lineas l
+  left join paisped p on p.pedido = l.pedido
+  where l.importe < 0
+    and coalesce(l.sku,'') <> ''
+    and l.fecha >= (current_date - 90)      -- ventana de 90 dias
+    and ( l.concepto ilike '%fulfillment%' or l.concepto ilike '%fbaperunit%'
+       or l.concepto ilike '%weight%handl%' )
 ),
 bench as (
   select
     sku, pais,
     count(*)                                                     as uds,
     round(avg(fee), 2)                                           as fee_medio,
-    round((percentile_cont(0.15) within group (order by fee))::numeric, 2) as fee_local,  -- tu mejor tarifa (≈ local)
+    round((percentile_cont(0.15) within group (order by fee))::numeric, 2) as fee_local,  -- mejor tarifa EN ESE PAIS (≈ local del pais)
     round(max(fee), 2)                                           as fee_max
   from lineas
+  where pais <> '?'                          -- sin pais conocido no comparamos (evita el falso "local de ES")
   group by sku, pais
 ),
 det as (
   select l.sku, l.pais,
-    count(*) filter (where l.fee > b.fee_local * 1.10) as uds_caras   -- servidas >10% por encima de la local
+    count(*) filter (where l.fee > b.fee_local * 1.10) as uds_caras   -- servidas >10% por encima de la local del pais
   from lineas l
   join bench b on b.sku = l.sku and b.pais = l.pais
   group by l.sku, l.pais
@@ -56,3 +69,6 @@ order by sobrecoste_mes desc;
 
 -- Comprobar:
 -- select * from v_fuga_tarifa order by sobrecoste_mes desc;
+-- Ver el reparto de pais atribuido (deberia haber muchos menos '?' que antes):
+-- select coalesce(nullif(pais,''), '(vacio)') pais, count(*)
+--   from settlement_lineas where importe<0 group by 1 order by 2 desc;
