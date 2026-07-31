@@ -320,7 +320,10 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
           <h2><span class="ci">📣</span> Gasto vs ventas atribuidas · por día</h2>
           <span class="more" id="ppc-fuente"></span>
         </div>
-        <div id="ppc-pais-filtro" style="display:none;gap:6px;flex-wrap:wrap;margin:2px 0 10px"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:2px 0 10px">
+          <div id="ppc-pais-filtro" style="display:none;gap:6px;flex-wrap:wrap"></div>
+          <select id="ppc-camp-filtro" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px;padding:6px 10px;max-width:300px" onchange="filtrarPPCCamp(this.value)"></select>
+        </div>
         <div id="ppc-chart"></div>
         <div class="chart-legend">
           <span><i style="background:#B983D6"></i> Gasto PPC</span>
@@ -2426,9 +2429,14 @@ var PPC_DEMO = {
 
 var PPC_DATA=null;
 var PPC_PAIS='all';   // filtro del gráfico PPC: 'all' o código de país (ES/FR/IT…)
-// Serie diaria agregada según el país elegido (o todos): 1 punto por fecha.
+var PPC_CAMP='all';   // filtro del gráfico PPC: 'all' o nombre de campaña
+// Serie diaria agregada según país y campaña elegidos: 1 punto por fecha.
 function serieDiasPPC(paisSel){
-  var rows=(PPC_DATA&&PPC_DATA.dias||[]).filter(function(x){return paisSel==='all'||x.pais===paisSel;});
+  // 'all' campañas → totales de ppc_dia; una campaña → su detalle diario (ppc_campanas).
+  var base = (PPC_CAMP==='all')
+    ? (PPC_DATA&&PPC_DATA.dias||[])
+    : (PPC_DATA&&PPC_DATA.campanas_dia||[]).filter(function(x){return (x.nombre||'')===PPC_CAMP;});
+  var rows=base.filter(function(x){return paisSel==='all'||x.pais===paisSel;});
   // Demo (sin fecha) → devolver tal cual, sin agrupar. Datos reales → agrupar por fecha.
   if(!rows.some(function(x){return x.fecha;})) return rows.map(function(x){return {fecha:x.fecha,gasto:+x.gasto||0,ventas_ppc:+x.ventas_ppc||0,pais:x.pais||''};});
   var byF={};
@@ -2444,6 +2452,7 @@ function filtrarPPCPais(code){
   if(fEl) Array.prototype.forEach.call(fEl.children,function(b){ b.classList.toggle('on', b.getAttribute('onclick').indexOf("'"+code+"'")>-1); });
   dibujarPPCChart();
 }
+function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; dibujarPPCChart(); }
 // Dibuja el gráfico Gasto vs Ventas (con tooltip por día) para el país elegido.
 function dibujarPPCChart(){
   var chartEl=document.getElementById('ppc-chart'); if(!chartEl) return;
@@ -2581,6 +2590,7 @@ function cargarPPC(){
       });
       PPC_DATA={dias:dias.map(function(d){return{fecha:d.fecha,gasto:+d.gasto,ventas_ppc:+d.ventas_ppc,pais:d.pais};}),
                 campanas:Object.values(porCamp).sort(function(a,b){return b.gasto-a.gasto;}),
+                campanas_dia:camp.map(function(c){return{fecha:c.fecha,pais:c.pais,nombre:c.nombre,gasto:+c.gasto,ventas_ppc:+c.ventas_ppc};}),
                 terminos:term};
       renderPPC('datos reales de tu Ads API');
     }).catch(function(){ PPC_DATA=PPC_DEMO; renderPPC('demo (API no disponible)'); });
@@ -2651,6 +2661,17 @@ function renderPPC(fuente){
       fEl.innerHTML=chips.map(function(c){ return '<button class="chip'+(PPC_PAIS===c.k?' on':'')+'" style="cursor:pointer" onclick="filtrarPPCPais(\''+c.k+'\')">'+c.t+'</button>'; }).join('');
       fEl.style.display='flex';
     } else { fEl.innerHTML=''; fEl.style.display='none'; PPC_PAIS='all'; }
+  }
+  // Selector de campaña sobre el gráfico (Todas + cada campaña con gasto)
+  var camps=[]; (d.campanas_dia||[]).forEach(function(x){ if(x.nombre && camps.indexOf(x.nombre)<0) camps.push(x.nombre); });
+  camps.sort();
+  var cEl=document.getElementById('ppc-camp-filtro');
+  if(cEl){
+    if(camps.length){
+      if(camps.indexOf(PPC_CAMP)<0 && PPC_CAMP!=='all') PPC_CAMP='all';
+      cEl.innerHTML='<option value="all">📣 Todas las campañas</option>'+camps.map(function(c){ return '<option value="'+c.replace(/"/g,'&quot;')+'"'+(PPC_CAMP===c?' selected':'')+'>'+c+'</option>'; }).join('');
+      cEl.style.display='inline-block';
+    } else { cEl.innerHTML=''; cEl.style.display='none'; PPC_CAMP='all'; }
   }
   dibujarPPCChart();
   // Campañas
