@@ -1460,6 +1460,12 @@ function toggleFugas(){
   if(caret) caret.innerHTML=(window._fugasResumen||'')+(abrir?'  ▾ ocultar':'  ▸ ver');
 }
 function keyFuga(x){ return (x.sku||'')+'|'+(x.pais||''); }
+// --- Tarifa local OFICIAL por SKU+país (la introduce el usuario; sobreescribe la estimación) ---
+function tlMap(){ try{ return JSON.parse(localStorage.getItem('sb_tarifa_local')||'{}'); }catch(e){ return {}; } }
+function tlOverride(x){ var v=tlMap()[keyFuga(x)]; return (v!=null&&v!=='')?+v:null; }
+function tlLocalUsada(x){ var o=tlOverride(x); return o!=null?o:(+x.fee_local||0); }   // oficial si la hay, si no la estimada
+function tlSobreMes(x){ var over=(+x.fee_medio||0)-tlLocalUsada(x); if(over<0)over=0; return over*(+x.uds||0)/3; }  // (media−local)×uds ÷3 (90d→mes)
+function guardarTL(inp){ var m=tlMap(); var k=inp.getAttribute('data-k'); var v=(inp.value||'').replace(',','.'); if(v==='') delete m[k]; else m[k]=+v||0; try{ localStorage.setItem('sb_tarifa_local', JSON.stringify(m)); }catch(e){} pintarFugas(); }
 function fugasHechasSet(){ try{ return new Set(JSON.parse(localStorage.getItem('sb_fugas_hechas')||'[]')); }catch(e){ return new Set(); } }
 function guardarHechas(s){ try{ localStorage.setItem('sb_fugas_hechas', JSON.stringify(Array.prototype.slice.call(s))); }catch(e){} }
 // Handlers por ÍNDICE en FUGAS (número): inmune a comillas/caracteres del SKU.
@@ -1478,16 +1484,16 @@ function filaFuga(x, hecho){
     '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
     '<td style="padding:7px 8px" title="'+paisTip+'">'+paisTxt+'</td>'+
     '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
-    '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
+    '<td style="padding:5px 8px">'+f(x.fee_medio,2)+'€ / <input type="number" step="0.01" min="0" value="'+f(tlLocalUsada(x),2)+'" data-k="'+keyFuga(x).replace(/"/g,'&quot;')+'" onchange="guardarTL(this)" style="width:60px;padding:3px 6px;background:#0d0d0d;border:1px solid var(--bd2);border-radius:7px;color:var(--gn);font-size:12px;text-align:right" title="Tarifa local OFICIAL de este producto en '+(x.pais||'')+' (sin IVA). Edítala para el cálculo exacto; por defecto es una estimación de tus datos.">€ '+(tlOverride(x)!=null?'<span style="color:var(--or2);font-size:9px">oficial</span>':'<span style="color:var(--mu);font-size:9px">estim.</span>')+'</td>'+
     '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
-    '<td style="padding:7px 8px;font-weight:700;color:#ff8a8a">'+f(x.sobrecoste_mes,2)+'€</td>'+
+    '<td style="padding:7px 8px;font-weight:700;color:#ff8a8a">'+f(tlSobreMes(x),2)+'€</td>'+
     '<td style="padding:7px 8px;white-space:nowrap">'+acc+'</td></tr>';
 }
 function tablaFugas(rows, hecho){
   var h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
     '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px" title="País desde el que se sirven/cobran estas tarifas (país de envío). Si no se conoce, sale «sin determinar».">País (envío)</th><th style="padding:6px 8px">Uds</th>'+
-    '<th style="padding:6px 8px" title="Tarifa media que pagas vs tu mejor tarifa local (sin IVA)">Media / Local</th>'+
+    '<th style="padding:6px 8px" title="Tarifa media que pagas vs tarifa local (sin IVA). La local es editable: mete la OFICIAL de ese producto en ese país para el cálculo exacto.">Media / Local ✏️</th>'+
     '<th style="padding:6px 8px" title="% de unidades servidas caras (cross-border)">% Caras</th>'+
     '<th style="padding:6px 8px">€/mes</th><th style="padding:6px 8px">'+(hecho?'':'Acción')+'</th></tr></thead><tbody>';
   rows.forEach(function(x){ h+=filaFuga(x,hecho); });
@@ -1498,7 +1504,7 @@ function pintarFugas(){
   var done=fugasHechasSet();
   var activos=FUGAS.filter(function(x){ return !done.has(keyFuga(x)); });
   var hechos =FUGAS.filter(function(x){ return  done.has(keyFuga(x)); });
-  var total=activos.reduce(function(a,x){ return a+(+x.sobrecoste_mes||0); },0);
+  var total=activos.reduce(function(a,x){ return a+tlSobreMes(x); },0);
   var h='';
   if(activos.length){
     h+='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+tablaFugas(activos,false);
@@ -1627,7 +1633,7 @@ function copiarReembolsoI(i){
 function msgCaso(x){
   return 'Asunto: Revisión de tarifas de gestión logística (FBA) — posible cobro cross-border\n\n'+
     'Producto: '+(x.nombre||x.sku)+'\nSKU: '+x.sku+(x.asin?('\nASIN: '+x.asin):'')+'\nMarketplace: '+((x.pais&&x.pais!=='?')?x.pais:(x.por_pais||'—'))+'\n\n'+
-    'He detectado que en los últimos 90 días una parte relevante de las unidades ('+f(x.pct_caras,0)+'%) se ha servido a una tarifa de gestión superior a la local: tarifa media '+f(x.fee_medio,2)+' € frente a '+f(x.fee_local,2)+' € local, sobre '+(x.uds||0)+' unidades. Esto supone un sobrecoste estimado de '+f(x.sobrecoste_mes,2)+' €/mes.\n\n'+
+    'He detectado que en los últimos 90 días una parte relevante de las unidades ('+f(x.pct_caras,0)+'%) se ha servido a una tarifa de gestión superior a la local: tarifa media '+f(x.fee_medio,2)+' € frente a '+f(tlLocalUsada(x),2)+' € local, sobre '+(x.uds||0)+' unidades. Esto supone un sobrecoste estimado de '+f(tlSobreMes(x),2)+' €/mes.\n\n'+
     'Solicito: (1) confirmación de por qué estas unidades no se sirvieron a tarifa local, (2) revisión de mi estado/elegibilidad en el Programa Paneuropeo de Logística para este ASIN, y (3) si procede, el reembolso de la diferencia de tarifa cobrada de más.\n\nGracias.';
 }
 function copiarCasoI(i){
