@@ -2782,11 +2782,29 @@ function renderPPC(fuente){
   renderPPCTerminos();
 }
 
+// Términos del rango activo. Si el backend ya guarda por día (filas con `fecha`),
+// filtra por el rango y agrega por término; si son un resumen del periodo (sin
+// `fecha`, formato actual), los devuelve tal cual y muestra la nota aclaratoria.
+function terminosRango(){
+  var raw=(PPC_DATA&&PPC_DATA.terminos)||[];
+  var esDiario = raw.some(function(t){return t.fecha;});
+  var nota=document.getElementById('ppc-terminos-nota');
+  if(nota) nota.style.display = (PPC_RANGO && !esDiario) ? 'inline' : 'none';
+  if(!esDiario) return raw;
+  var by={};
+  raw.forEach(function(t){
+    if(!ppcEnRango(t.fecha)) return;
+    var k=(t.termino||'')+'·'+(t.keyword||'');
+    if(!by[k]) by[k]={termino:t.termino,keyword:t.keyword,gasto:0,clics:0,ventas_ppc:0,pedidos_ppc:0};
+    var g=by[k]; g.gasto+=+t.gasto||0; g.clics+=+t.clics||0; g.ventas_ppc+=+t.ventas_ppc||0; g.pedidos_ppc+=+t.pedidos_ppc||0;
+  });
+  return Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){return b.gasto-a.gasto;});
+}
 function renderPPCTerminos(){
   if(!PPC_DATA)return;
   var be=(+document.getElementById('ppc-be').value||25)/100;
   var acciones=[],recuperable=0;
-  document.getElementById('ppc-terminos').innerHTML=PPC_DATA.terminos.slice(0,40).map(function(t){
+  document.getElementById('ppc-terminos').innerHTML=terminosRango().slice(0,40).map(function(t){
     var gasto=+t.gasto,clics=+t.clics,ped=+(t.pedidos_ppc||0),ven=+(t.ventas_ppc||0);
     var a=ven>0?gasto/ven:999;
     var ver,pill;
