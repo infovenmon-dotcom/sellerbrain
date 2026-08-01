@@ -2369,9 +2369,22 @@ async function ingestarEnvios(){
   var desc=Object.keys(descAcc);
   box.innerHTML='<div style="color:'+(totalFilas>0?'var(--gn)':'var(--am)')+'">'+(totalFilas>0?'✅':'⚠️')+' '+totalFilas+' líneas guardadas en envios_fc (90 días).</div>'+
     '<div style="color:var(--mu);margin-top:6px">Por país de salida: '+(sal||'—')+'</div>'+
-    (desc.length?'<div style="color:var(--am);margin-top:4px">Centros sin mapear (dímelos y los añado): '+desc.join(', ')+'</div>':'')+
+    (desc.length?('<div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:9px;padding:9px 11px;margin-top:8px">'+
+       '<div style="color:var(--am)">🏬 Centros logísticos <b>sin identificar</b> (país «?»): <b>'+desc.join(', ')+'</b></div>'+
+       '<div style="font-size:11px;color:var(--mu);margin-top:3px">Son almacenes de Amazon cuyo país no conocemos. Se quedan como «?» hasta identificarlos — no inventamos.</div>'+
+       '<div style="margin-top:7px"><button class="chip" style="cursor:pointer;border-color:rgba(245,166,35,.5);color:var(--am)" onclick="preguntarFCs(\''+desc.join(',')+'\')">📋 Preguntar a Amazon (copiar caso)</button></div></div>'):'')+
     (errs.length?'<div style="color:var(--rd);margin-top:4px">Ventanas con error: '+errs.join(' · ')+'</div>':'');
   btn.disabled=false;btn.style.opacity=1;
+}
+// Acción: copia un mensaje para abrir caso y preguntar a Amazon el país de esos centros.
+function preguntarFCs(fcs){
+  var lista=(fcs||'').split(',').filter(Boolean).join(', ');
+  var txt='Asunto: Ubicación (país) de centros logísticos FBA\n\n'+
+    'Hola,\n\nPara mi contabilidad y control de IVA necesito saber en qué PAÍS está ubicado cada uno de estos centros logísticos (fulfillment centers) donde tenéis o habéis tenido mi inventario:\n\n'+lista+'\n\n'+
+    '¿Me podéis confirmar el país (o marketplace) de cada uno? Muchas gracias.';
+  var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); alert('✓ Mensaje copiado. Ábrelo en Seller Central → Ayuda → Abrir un caso, y pégalo. Cuando te respondan, dime el país de cada centro y lo dejo fijo.'); }catch(e){ prompt('Copia el mensaje:', txt); }
+  document.body.removeChild(ta);
 }
 
 async function traerImagenes(){
