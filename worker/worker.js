@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v70-envios-fc'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v71-fugas-pais-salida'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -80,8 +80,9 @@ async function ingestaEnvios(env, ctx) {
   const seller = (ctx && ctx.seller) || 'venmon';
   const diag = { filas: 0, desconocidos: [], por_salida: {} };
   const hoy = new Date();
+  const dias = Math.min(+((env && env.ENVIOS_DIAS) || 90) || 90, 180);  // ventana; cubre los 90d del detector
   const hasta = hoy.toISOString();
-  const desde = new Date(hoy.getTime() - 30 * 86400000).toISOString();
+  const desde = new Date(hoy.getTime() - dias * 86400000).toISOString();
   let tsv = '';
   try {
     tsv = await pedirInforme(env, 'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL', desde, hasta,
