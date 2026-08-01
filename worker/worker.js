@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v71-fugas-pais-salida'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v72-envios-chunk30'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -76,34 +76,39 @@ function paisDeFC(fc) {
 // Ingesta del Informe de Envíos Gestionados por Amazon → país de SALIDA (del FC) y
 // país de DESTINO (ship-country) por pedido/SKU. NO necesita rol fiscal. Es la base
 // para atribuir el sobrecoste logístico al país correcto (cruzando con el settlement).
-async function ingestaEnvios(env, ctx) {
+async function ingestaEnvios(env, ctx, diasArg) {
   const seller = (ctx && ctx.seller) || 'venmon';
-  const diag = { filas: 0, desconocidos: [], por_salida: {} };
+  const diag = { filas: 0, desconocidos: [], por_salida: {}, ventanas: 0 };
   const hoy = new Date();
-  const dias = Math.min(+((env && env.ENVIOS_DIAS) || 90) || 90, 180);  // ventana; cubre los 90d del detector
-  const hasta = hoy.toISOString();
-  const desde = new Date(hoy.getTime() - dias * 86400000).toISOString();
-  let tsv = '';
-  try {
-    tsv = await pedirInforme(env, 'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL', desde, hasta,
-      [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE], undefined, ctx);
-  } catch (e) { diag.error = e.message; return diag; }
-  const filas = parseTSV(tsv);
+  // OJO: GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL limita el rango a ~30 días por
+  // petición (con 90 días devuelve FATAL). Troceamos en ventanas de 29 días.
+  const dias = Math.min(+diasArg || +((env && env.ENVIOS_DIAS) || 90) || 90, 180);
+  const PASO = 29;
   const byKey = {}, desc = {};
-  for (const r of filas) {
-    const oid = r['amazon-order-id'] || '';
-    const sku = r['sku'] || '';
-    if (!oid || !sku) continue;
-    const fc = (r['fulfillment-center-id'] || '').toUpperCase();
-    const psal = paisDeFC(fc);
-    if (psal === '?' && fc) desc[fc] = (desc[fc] || 0) + 1;
-    const k = oid + '|' + sku;
-    if (!byKey[k]) byKey[k] = {
-      order_id: oid, sku, fc, pais_salida: psal,
-      pais_destino: (r['ship-country'] || '').toUpperCase(), uds: 0,
-      fecha: (r['shipment-date'] || r['purchase-date'] || '').slice(0, 10) || null
-    };
-    byKey[k].uds += (+(r['quantity-shipped'] || 0) || 0);
+  const MK = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
+  for (let off = 0; off < dias; off += PASO) {
+    const hasta = new Date(hoy.getTime() - off * 86400000).toISOString();
+    const desde = new Date(hoy.getTime() - Math.min(off + PASO, dias) * 86400000).toISOString();
+    let tsv = '';
+    try {
+      tsv = await pedirInforme(env, 'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL', desde, hasta, MK, undefined, ctx);
+    } catch (e) { diag['error_v' + off] = e.message; continue; }
+    diag.ventanas++;
+    for (const r of parseTSV(tsv)) {
+      const oid = r['amazon-order-id'] || '';
+      const sku = r['sku'] || '';
+      if (!oid || !sku) continue;
+      const fc = (r['fulfillment-center-id'] || '').toUpperCase();
+      const psal = paisDeFC(fc);
+      if (psal === '?' && fc) desc[fc] = (desc[fc] || 0) + 1;
+      const k = oid + '|' + sku;
+      if (!byKey[k]) byKey[k] = {
+        order_id: oid, sku, fc, pais_salida: psal,
+        pais_destino: (r['ship-country'] || '').toUpperCase(), uds: 0,
+        fecha: (r['shipment-date'] || r['purchase-date'] || '').slice(0, 10) || null
+      };
+      byKey[k].uds += (+(r['quantity-shipped'] || 0) || 0);
+    }
   }
   const rows = Object.values(byKey);
   for (let i = 0; i < rows.length; i += 500) {
@@ -1955,8 +1960,9 @@ async function ingestaDiaria(env, origen, ctx) {
   } catch (e) { resultado.pasos.push({ reembolsos_error: e.message }); }
 
   // 3f. País de SALIDA por pedido (informe de envíos) → base del sobrecoste por país.
+  //     Ventana corta (7 días): envios_fc persiste, el histórico ya está guardado.
   if (planCompleto) try {
-    const r = await ingestaEnvios(env, ctx);
+    const r = await ingestaEnvios(env, ctx, 7);
     resultado.pasos.push({ envios_fc: r.filas || 0, fc_desconocidos: r.desconocidos });
   } catch (e) { resultado.pasos.push({ envios_error: e.message }); }
 
