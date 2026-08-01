@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v65-ppc-terminos-producto-diario'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v66-fugas-pais-envio'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -577,11 +577,11 @@ export default {
         // Dónde tiene stock cada SKU (Libro Mayor por país) → sustituye el "?" de país.
         const invp = {}; try { for (const r of (await selectSupabase(env, 'v_inventario_pais?select=sku,por_pais'))) invp[r.sku] = r.por_pais; } catch (_) {}
         const datos = (filas || []).map(f => {
-          const porPais = invp[f.sku] || null;          // p.ej. "ES:120, FR:18" (de dónde se sirve)
-          // El settlement a veces no trae marketplace mapeable y la vista deja pais='?'.
-          // Nunca devolvemos '?': si no se conoce, usamos el stock por país (Libro Mayor)
-          // o lo dejamos vacío para que el front pinte '—'.
-          const pais = (f.pais && f.pais !== '?') ? f.pais : (porPais || '');
+          const porPais = invp[f.sku] || null;          // p.ej. "ES:120, FR:18" (dónde está el stock)
+          // País de ENVÍO real (de la tarifa/pedido). Si el settlement no lo trae, lo
+          // dejamos vacío -> el front muestra "sin determinar" (NO lo mezclamos con el
+          // stock por país, que va aparte en por_pais).
+          const pais = (f.pais && f.pais !== '?') ? f.pais : '';
           return {
             ...f, pais,
             nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku,

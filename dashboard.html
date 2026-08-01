@@ -1457,9 +1457,12 @@ function filaFuga(x, hecho){
   var acc = hecho
     ? '<button class="chip" style="cursor:pointer" onclick="reactivarFugaI('+i+')">↩ Reactivar</button>'
     : '<button class="chip" style="cursor:pointer" onclick="copiarCasoI('+i+')">📋 Mensaje</button> <button class="chip" style="cursor:pointer;border-color:rgba(46,230,160,.45);color:var(--or2)" onclick="marcarFugaI('+i+')">✓ Hecho</button>';
+  var paisReal=(x.pais&&x.pais!=='?');
+  var paisTxt=paisReal?x.pais:'<span style="color:var(--mu);font-style:italic">sin determinar</span>';
+  var paisTip=(paisReal?('País de envío de estas tarifas: '+x.pais):'No hemos podido determinar el país de envío de estas tarifas.')+(x.por_pais?(' · Stock por país (Libro Mayor): '+x.por_pais):'');
   return '<tr style="border-top:1px solid rgba(255,255,255,.06)'+(hecho?';opacity:.5':'')+'">'+
     '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+(x.nombre||x.sku)+'</span></td>'+
-    '<td style="padding:7px 8px" title="'+(x.por_pais?('Stock por país (Libro Mayor): '+x.por_pais):'Sube el stock por país para verlo')+'">'+((x.pais&&x.pais!=='?')?x.pais:(x.por_pais||'—'))+'</td>'+
+    '<td style="padding:7px 8px" title="'+paisTip+'">'+paisTxt+'</td>'+
     '<td style="padding:7px 8px">'+(x.uds||0)+'</td>'+
     '<td style="padding:7px 8px">'+f(x.fee_medio,2)+'€ / <span style="color:var(--gn)">'+f(x.fee_local,2)+'€</span></td>'+
     '<td style="padding:7px 8px;color:'+((x.pct_caras>=40)?'#ff5c5c':'#f5b23e')+'">'+f(x.pct_caras,0)+'%</td>'+
@@ -1469,7 +1472,7 @@ function filaFuga(x, hecho){
 function tablaFugas(rows, hecho){
   var h='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'+
     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px">'+
-    '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">País</th><th style="padding:6px 8px">Uds</th>'+
+    '<th style="padding:6px 8px">Producto</th><th style="padding:6px 8px" title="País desde el que se sirven/cobran estas tarifas (país de envío). Si no se conoce, sale «sin determinar».">País (envío)</th><th style="padding:6px 8px">Uds</th>'+
     '<th style="padding:6px 8px" title="Tarifa media que pagas vs tu mejor tarifa local (sin IVA)">Media / Local</th>'+
     '<th style="padding:6px 8px" title="% de unidades servidas caras (cross-border)">% Caras</th>'+
     '<th style="padding:6px 8px">€/mes</th><th style="padding:6px 8px">'+(hecho?'':'Acción')+'</th></tr></thead><tbody>';
