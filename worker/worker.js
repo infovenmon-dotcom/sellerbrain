@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v64-ppc-ventas-uds'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v65-ppc-terminos-producto-diario'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -389,7 +389,7 @@ export default {
       if (url.pathname === '/v1/ppc/terminos') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase();
         const filtro = pais ? 'pais=eq.' + pais + '&' : '';
-        const filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=gasto.desc&limit=500');
+        const filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=hasta.desc,gasto.desc&limit=8000');
         return json({ datos: filas }, cors);
       }
 
@@ -941,7 +941,7 @@ export default {
         const desde = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
         const filas = await adsInformeTerminos(env, profileId, desde, hasta);
         await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({
-          pais, desde, hasta,
+          pais, fecha: t.date || hasta, desde: t.date || desde, hasta: t.date || hasta,
           termino: t.searchTerm || '', keyword: t.keyword || '', tipo: t.matchType || '',
           campania: t.campaignName || '',
           gasto: +(t.cost || 0).toFixed(2), clics: t.clicks || 0, impresiones: t.impressions || 0,
@@ -975,7 +975,7 @@ export default {
         const hasta = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
         const desde = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
         await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({
-          pais, desde, hasta,
+          pais, fecha: t.date || hasta, desde: t.date || desde, hasta: t.date || hasta,
           termino: t.searchTerm || '', keyword: t.keyword || '', tipo: t.matchType || '',
           campania: t.campaignName || '',
           gasto: +(t.cost || 0).toFixed(2), clics: t.clicks || 0, impresiones: t.impressions || 0,
@@ -1524,8 +1524,8 @@ function cuerpoAdsTerminos(desde, hasta) {
     startDate: desde, endDate: hasta,
     configuration: {
       adProduct: 'SPONSORED_PRODUCTS', groupBy: ['searchTerm'],
-      columns: ['searchTerm', 'keyword', 'matchType', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
-      reportTypeId: 'spSearchTerm', timeUnit: 'SUMMARY', format: 'GZIP_JSON'
+      columns: ['date', 'searchTerm', 'keyword', 'matchType', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spSearchTerm', timeUnit: 'DAILY', format: 'GZIP_JSON'
     }
   };
 }
@@ -1538,8 +1538,8 @@ function cuerpoAdsProducto(desde, hasta) {
     startDate: desde, endDate: hasta,
     configuration: {
       adProduct: 'SPONSORED_PRODUCTS', groupBy: ['advertiser'],
-      columns: ['advertisedSku', 'advertisedAsin', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
-      reportTypeId: 'spAdvertisedProduct', timeUnit: 'SUMMARY', format: 'GZIP_JSON'
+      columns: ['date', 'advertisedSku', 'advertisedAsin', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spAdvertisedProduct', timeUnit: 'DAILY', format: 'GZIP_JSON'
     }
   };
 }
@@ -1584,7 +1584,7 @@ async function guardarPPCdia(env, ads, pais, fecha) {
 
 async function guardarPPCterminos(env, filas, pais, desde, hasta) {
   await upsertSupabase(env, 'ppc_terminos', (filas || []).map(t => ({
-    pais, desde, hasta,
+    pais, fecha: t.date || hasta, desde: t.date || desde, hasta: t.date || hasta,
     termino: t.searchTerm || '', keyword: t.keyword || '', tipo: t.matchType || '',
     campania: t.campaignName || '',
     gasto: +(t.cost || 0).toFixed(2), clics: t.clicks || 0, impresiones: t.impressions || 0,
@@ -1595,18 +1595,20 @@ async function guardarPPCterminos(env, filas, pais, desde, hasta) {
 
 // Agrega el informe Advertised Product por SKU y lo guarda (una fila por SKU/país/ventana).
 async function guardarPPCproducto(env, filas, pais, desde, hasta) {
-  const bySku = {};
+  const byKey = {};   // clave sku|fecha → una fila por SKU y día (DAILY) o por SKU y ventana (SUMMARY)
   for (const t of (filas || [])) {
     const sku = t.advertisedSku || t.advertisedAsin || '';
     if (!sku) continue;
-    if (!bySku[sku]) bySku[sku] = { pais, sku, desde, hasta, gasto: 0, clics: 0, impresiones: 0, ventas_ppc: 0, pedidos_ppc: 0 };
-    bySku[sku].gasto += (t.cost || 0);
-    bySku[sku].clics += (t.clicks || 0);
-    bySku[sku].impresiones += (t.impressions || 0);
-    bySku[sku].ventas_ppc += (t.sales14d || 0);
-    bySku[sku].pedidos_ppc += (t.purchases14d || 0);
+    const fecha = t.date || hasta;
+    const k = sku + '|' + fecha;
+    if (!byKey[k]) byKey[k] = { pais, sku, fecha, desde: t.date || desde, hasta: t.date || hasta, gasto: 0, clics: 0, impresiones: 0, ventas_ppc: 0, pedidos_ppc: 0 };
+    byKey[k].gasto += (t.cost || 0);
+    byKey[k].clics += (t.clicks || 0);
+    byKey[k].impresiones += (t.impressions || 0);
+    byKey[k].ventas_ppc += (t.sales14d || 0);
+    byKey[k].pedidos_ppc += (t.purchases14d || 0);
   }
-  const rows = Object.values(bySku).map(x => ({
+  const rows = Object.values(byKey).map(x => ({
     ...x, gasto: +x.gasto.toFixed(2), ventas_ppc: +x.ventas_ppc.toFixed(2), actualizado: new Date().toISOString()
   }));
   await upsertSupabase(env, 'ppc_producto', rows);
@@ -2055,10 +2057,12 @@ async function productosPeriodo(env, desde, hasta, pais) {
   // PPC real por SKU (informe Advertised Product, ventana más reciente) → ACoS real.
   const ppcProd = {};
   try {
-    const rows = await selectSupabase(env, 'ppc_producto?select=sku,pais,gasto,ventas_ppc,clics,pedidos_ppc,hasta&order=hasta.desc&limit=3000');
+    const rows = await selectSupabase(env, 'ppc_producto?order=hasta.desc&limit=8000');
+    const tieneFecha = (rows || []).some(r => r.fecha);   // el backend ya guarda por día
     const maxHasta = (rows && rows[0]) ? rows[0].hasta : null;
     for (const r of (rows || [])) {
-      if (r.hasta !== maxHasta) continue;            // solo la ventana más reciente
+      if (tieneFecha) { if (!(r.fecha && r.fecha >= desde && r.fecha <= hasta)) continue; } // ventana = rango pedido
+      else if (r.hasta !== maxHasta) continue;       // legacy (resumen): solo la ventana más reciente
       if (pais && r.pais !== pais) continue;         // respeta el filtro de país
       if (!ppcProd[r.sku]) ppcProd[r.sku] = { gasto: 0, ventas: 0, clics: 0, pedidos: 0 };
       ppcProd[r.sku].gasto += +r.gasto || 0;
