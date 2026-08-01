@@ -87,20 +87,35 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
     <button class="btn-sec" onclick="stkCargar()">↻ Actualizar</button>
   </div>
   <div id="stk-status" style="font-size:12px;color:var(--mu);margin-bottom:8px"></div>
-  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <input type="text" id="stk-q" placeholder="🔎 Buscar producto o SKU…" oninput="stkRender()" style="flex:1;min-width:200px;padding:8px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12.5px">
+    <select id="stk-filtro" onchange="stkRender()" style="padding:8px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12.5px">
+      <option value="todos">Todos</option>
+      <option value="urg">🔴 Urgente (≤15 días)</option>
+      <option value="bajo">🟠 Cobertura baja (≤30 días)</option>
+      <option value="tarde">⚠️ Ya voy tarde (barco)</option>
+      <option value="cero">Sin stock (0)</option>
+    </select>
+    <select id="stk-orden" onchange="stkRender()" style="padding:8px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12.5px">
+      <option value="cob">Ordenar: por urgencia</option>
+      <option value="stock">Ordenar: por stock</option>
+      <option value="nombre">Ordenar: por nombre</option>
+    </select>
+  </div>
+  <div class="stk-scroll" style="max-height:60vh;overflow:auto;border:1px solid var(--bd);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
     <thead><tr style="text-align:left;color:var(--mu);font-size:11px">
-      <th style="padding:6px 8px">Producto</th>
-      <th style="padding:6px 8px">Stock</th>
-      <th style="padding:6px 8px" title="Unidades en camino a Amazon">En camino</th>
-      <th style="padding:6px 8px">Uds/día</th>
-      <th style="padding:6px 8px">Cobertura</th>
-      <th style="padding:6px 8px" title="Pide antes de esta fecha si vas por barco">🚢 Barco</th>
-      <th style="padding:6px 8px" title="Pide antes de esta fecha si vas por tren/camión">🚆 Tren</th>
-      <th style="padding:6px 8px" title="Pide antes de esta fecha si vas por aire">✈️ Aire</th>
+      <th style="padding:8px;position:sticky;top:0;left:0;z-index:3;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Producto</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Stock</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Unidades en camino a Amazon">En camino</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Uds/día</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Cobertura</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Pide antes de esta fecha si vas por barco">🚢 Barco</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Pide antes de esta fecha si vas por tren/camión">🚆 Tren</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Pide antes de esta fecha si vas por aire">✈️ Aire</th>
     </tr></thead>
     <tbody id="stk-tabla"></tbody>
   </table></div>
-  <div style="margin-top:9px;font-size:11px;color:var(--mu)">🚢 Barco ≈ 60d · 🚆 Tren/camión ≈ 30-35d · ✈️ Aire ≈ 15d, <b>+ ~7 días</b> que tarda Amazon en recepcionar. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b> para ese método.</div>
+  <div style="margin-top:9px;font-size:11px;color:var(--mu)">🚢 Barco ≈ 60d · 🚆 Tren/camión ≈ 30-35d · ✈️ Aire ≈ 15d, <b>+ ~7 días</b> que tarda Amazon en recepcionar. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b> para ese método. La cabecera queda fija al desplazarte.</div>
 </div>
 
 <!-- PASO 1 -->
@@ -452,14 +467,26 @@ function stkRender(){
   var lb=(+document.getElementById('lt-barco').value||0)+recep;
   var lt=(+document.getElementById('lt-tren').value||0)+recep;
   var la=(+document.getElementById('lt-aire').value||0)+recep;
-  var tb=document.getElementById('stk-tabla'), datos=STK.datos||[];
+  var tb=document.getElementById('stk-tabla'), datos=(STK.datos||[]).slice();
   if(!datos.length){ tb.innerHTML='<tr><td colspan="8" style="padding:10px;color:var(--mu)">Sin datos de stock todavía (necesita inventario y ventas ingestados).</td></tr>'; return; }
+  var q=(document.getElementById('stk-q').value||'').trim().toLowerCase();
+  var filtro=(document.getElementById('stk-filtro')||{}).value||'todos';
+  var orden=(document.getElementById('stk-orden')||{}).value||'cob';
+  if(q) datos=datos.filter(function(p){ return ((p.nombre||'')+' '+(p.sku||'')).toLowerCase().indexOf(q)>=0; });
+  if(filtro==='urg')  datos=datos.filter(function(p){ return p.dias!=null&&p.dias<=15; });
+  else if(filtro==='bajo') datos=datos.filter(function(p){ return p.dias!=null&&p.dias<=30; });
+  else if(filtro==='tarde')datos=datos.filter(function(p){ return p.dias!=null&&(p.dias-lb)<0; });
+  else if(filtro==='cero') datos=datos.filter(function(p){ return (+p.disponible||0)===0; });
+  if(orden==='stock')      datos.sort(function(a,b){ return (+b.disponible||0)-(+a.disponible||0); });
+  else if(orden==='nombre')datos.sort(function(a,b){ return (a.nombre||a.sku||'').localeCompare(b.nombre||b.sku||''); });
+  else                     datos.sort(function(a,b){ return (a.dias==null?1e9:a.dias)-(b.dias==null?1e9:b.dias); }); // urgencia
+  if(!datos.length){ tb.innerHTML='<tr><td colspan="8" style="padding:10px;color:var(--mu)">Ningún producto coincide con el filtro.</td></tr>'; return; }
   tb.innerHTML=datos.map(function(p){
     var cob = p.dias==null ? 'sin ventas' : p.dias+'d';
     var colCob = p.dias==null?'var(--mu)':(p.dias<=15?'#ff5c5c':p.dias<=30?'#f5b23e':'#2ee6a0');
     var b=stkFechaLimite(p.dias,lb), t=stkFechaLimite(p.dias,lt), a=stkFechaLimite(p.dias,la);
     return '<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
-      '<td style="padding:6px 8px;max-width:240px;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">'+stkEsc(p.nombre||p.sku)+'</span></td>'+
+      '<td style="padding:6px 8px;max-width:240px;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:var(--card);z-index:1"><span style="font-weight:600">'+stkEsc(p.nombre||p.sku)+'</span></td>'+
       '<td style="padding:6px 8px;font-weight:700">'+p.disponible+'</td>'+
       '<td style="padding:6px 8px;color:var(--mu2)">'+(p.entrante||0)+'</td>'+
       '<td style="padding:6px 8px">'+f(p.vel,2)+'</td>'+
