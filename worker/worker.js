@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v62-stock-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v63-ppc-unidades'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1420,7 +1420,7 @@ async function adsInformeDiario(env, fecha /* YYYY-MM-DD */, profileId) {
     configuration: {
       adProduct: 'SPONSORED_PRODUCTS',
       groupBy: ['campaign'],
-      columns: ['date', 'campaignId', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      columns: ['date', 'campaignId', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d', 'unitsSoldClicks14d'],
       reportTypeId: 'spCampaigns',
       timeUnit: 'DAILY',
       format: 'GZIP_JSON'
@@ -1512,7 +1512,7 @@ function cuerpoAdsDia(fecha) {
     startDate: fecha, endDate: fecha,
     configuration: {
       adProduct: 'SPONSORED_PRODUCTS', groupBy: ['campaign'],
-      columns: ['date', 'campaignId', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      columns: ['date', 'campaignId', 'campaignName', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d', 'unitsSoldClicks14d'],
       reportTypeId: 'spCampaigns', timeUnit: 'DAILY', format: 'GZIP_JSON'
     }
   };
@@ -1568,16 +1568,19 @@ async function guardarPPCdia(env, ads, pais, fecha) {
   const tot = (ads || []).reduce((a, c) => ({
     gasto: a.gasto + (c.cost || 0), clics: a.clics + (c.clicks || 0),
     impresiones: a.impresiones + (c.impressions || 0),
-    ventas: a.ventas + (c.sales14d || 0), pedidos: a.pedidos + (c.purchases14d || 0)
-  }), { gasto: 0, clics: 0, impresiones: 0, ventas: 0, pedidos: 0 });
+    ventas: a.ventas + (c.sales14d || 0), pedidos: a.pedidos + (c.purchases14d || 0),
+    unidades: a.unidades + (c.unitsSoldClicks14d || 0)
+  }), { gasto: 0, clics: 0, impresiones: 0, ventas: 0, pedidos: 0, unidades: 0 });
   await upsertSupabase(env, 'ppc_dia', [{
     fecha, pais, gasto: +tot.gasto.toFixed(2), clics: tot.clics,
-    impresiones: tot.impresiones, ventas_ppc: +tot.ventas.toFixed(2), pedidos_ppc: tot.pedidos
+    impresiones: tot.impresiones, ventas_ppc: +tot.ventas.toFixed(2), pedidos_ppc: tot.pedidos,
+    unidades_ppc: tot.unidades
   }]);
   await upsertSupabase(env, 'ppc_campanas', (ads || []).map(c => ({
     fecha, pais, campania_id: String(c.campaignId || ''), nombre: c.campaignName || '',
     gasto: +(c.cost || 0).toFixed(2), clics: c.clicks || 0, impresiones: c.impressions || 0,
-    ventas_ppc: +(c.sales14d || 0).toFixed(2), pedidos_ppc: c.purchases14d || 0
+    ventas_ppc: +(c.sales14d || 0).toFixed(2), pedidos_ppc: c.purchases14d || 0,
+    unidades_ppc: c.unitsSoldClicks14d || 0
   })));
   return (ads || []).length;
 }
