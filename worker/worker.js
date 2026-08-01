@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v67-stock-reservado'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v68-iva-check'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -784,6 +784,36 @@ export default {
         const diag = await ingestaInventarioPais(env);
         // Aprovechamos para traer también los reembolsos ya recibidos (mismo botón).
         try { const rr = await ingestaReembolsos(env); diag.reembolsos = rr.reembolsos; } catch (e) { diag.reembolsos_error = e.message; }
+        return json({ ok: true, ...diag }, cors);
+      }
+
+      // --- SONDA IVA (admin): ¿tu cuenta genera el "Informe de transacciones de IVA"
+      //     (GET_VAT_TRANSACTION_DATA)? Trae país de SALIDA y de LLEGADA por venta →
+      //     clave para el sobrecoste por país de envío y para el módulo OSS/Ventanilla
+      //     Única. Solo diagnostica: no guarda nada. ---
+      if (url.pathname === '/v1/iva-check') {
+        const diag = {};
+        const hasta = new Date().toISOString();
+        const desde = new Date(Date.now() - 30 * 86400000).toISOString();
+        try {
+          const tsv = await pedirInforme(env, 'GET_VAT_TRANSACTION_DATA', desde, hasta,
+            [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE]);
+          const filas = parseTSV(tsv);
+          const cols = filas[0] ? Object.keys(filas[0]) : [];
+          diag.disponible = true;
+          diag.filas = filas.length;
+          diag.lineas_crudas = (tsv || '').split('\n').length;
+          diag.columnas = cols;
+          diag.col_salida = cols.filter(c => c.indexOf('depart') > -1);      // país de salida
+          diag.col_llegada = cols.filter(c => c.indexOf('arriv') > -1);      // país de llegada
+          diag.col_pais = cols.filter(c => c.indexOf('country') > -1);
+          diag.col_scheme = cols.filter(c => c.indexOf('scheme') > -1 || c.indexOf('vat') > -1);
+          diag.crudo = (tsv || '').slice(0, 900);
+          diag.muestra = filas.slice(0, 5);
+        } catch (e) {
+          diag.disponible = false;
+          diag.error = e.message;   // p.ej. FATAL → la cuenta no tiene VCS/este informe activo
+        }
         return json({ ok: true, ...diag }, cors);
       }
 
