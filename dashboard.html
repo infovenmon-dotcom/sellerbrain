@@ -171,6 +171,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <a id="nav-nichos" onclick="cambiarVista('nichos')"><span class="ic">🔎</span> Investigación de marca</a>
     <a id="nav-calc" onclick="cambiarVista('calc')"><span class="ic">🧮</span> Calculadora EU / USA</a>
     <a id="nav-epr" onclick="cambiarVista('epr')"><span class="ic">♻️</span> Cumplimiento UE · EPR + GPSR</a>
+    <a id="nav-iva" onclick="cambiarVista('iva')"><span class="ic">🧾</span> Ventanilla Única · IVA</a>
     <div class="sep"></div>
     <a id="nav-ajustes" onclick="cambiarVista('ajustes')"><span class="ic">⚙️</span> Ajustes</a>
   </nav>
@@ -2672,6 +2673,7 @@ var TOOL_SRC = {
   nichos:  { src:'nichos.html',                    title:'Investigación de marca · Nichos, validación y diferenciación' },
   calc:    { src:'portal.html?embed=1&tab=margen', title:'Calculadora de margen', chips:true },
   epr:     { src:'epr.html',                       title:'Cumplimiento UE · EPR (PPWR) + GPSR' },
+  iva:     { src:'iva.html',                        title:'Ventanilla Única · IVA intracomunitario' },
   dev:     { src:'devoluciones.html',              title:'Devoluciones · Motivos y control' },
   stock:   { src:'stock.html',                     title:'Stock y reposición' }
 };

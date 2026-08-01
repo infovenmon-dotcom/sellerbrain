@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Ventanilla Única · IVA intracomunitario</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:30px 0 8px}.hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1.25}.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:760px;margin:9px 0 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}.inf b{color:rgba(255,255,255,.75)}
+.drop{border:2px dashed rgba(46,230,160,.4);border-radius:12px;padding:22px;text-align:center;cursor:pointer;background:rgba(46,230,160,.03)}
+.drop:hover{background:rgba(46,230,160,.08)}
+.btn{display:inline-block;padding:11px 18px;background:var(--or);color:#08120e;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;cursor:pointer}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:right;padding:7px 9px;color:var(--mu);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bd);white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:8px 9px;border-bottom:1px solid rgba(255,255,255,.05);text-align:right;white-space:nowrap}
+td:first-child{text-align:left;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:4px}
+.kpi{background:var(--card2);border:1px solid var(--bd);border-radius:12px;padding:14px 15px}
+.kpi .n{font-family:'Syne',sans-serif;font-size:23px;font-weight:800;line-height:1}
+.kpi .l{font-size:11px;color:var(--mu);margin-top:5px;line-height:1.35}
+.disclaimer{font-size:10.5px;color:var(--mu);margin-top:22px;line-height:1.6}
+.tot{border-top:2px solid rgba(255,255,255,.18);font-weight:800}
+.cb{color:var(--am)}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="logo">Seller<b>Brain</b></div><div class="badge">🧾 Ventanilla Única · IVA</div></div>
+<div class="wrap">
+<div class="hero">
+  <h1>Ventanilla Única · <span>IVA intracomunitario</span></h1>
+  <p>Sube el <b>Informe de Transacciones de IVA de Amazon</b> (Seller Central → Informes → Impuestos → Informe de transacciones de IVA, .csv). SellerBrain saca automáticamente tus <b>ventas intracomunitarias (OSS)</b> por país de destino, el <b>IVA a declarar</b> en la Ventanilla Única, las rutas <b>salida → destino</b> y los movimientos de stock entre países. <b>Todo se procesa en tu navegador</b> — el dato fiscal no sale de tu equipo.</p>
+</div>
+
+<div class="card">
+  <div class="ct"><span class="ci">📤</span> Sube tu Informe de Transacciones de IVA (.csv)</div>
+  <div class="inf">Es el mismo CSV que le pasas a tu gestoría. Debe tener las columnas <b>TRANSACTION_TYPE</b>, <b>DEPARTURE_COUNTRY</b>, <b>ARRIVAL_COUNTRY</b> y <b>TAX_REPORTING_SCHEME</b>. Puedes subir varios meses (uno detrás de otro se acumulan).</div>
+  <div class="drop" onclick="document.getElementById('f-iva').click()">
+    <div style="font-size:24px;margin-bottom:4px">🧾</div>
+    <div style="font-weight:700;font-size:13px">Arrastra o haz clic para subir el Informe de IVA (.csv)</div>
+    <div style="font-size:11px;color:var(--mu);margin-top:3px">Nada sale de tu navegador</div>
+    <input type="file" id="f-iva" accept=".csv,.txt" multiple style="display:none" onchange="ivaLeer(this.files)">
+  </div>
+  <div id="iva-status" style="font-size:12px;color:var(--mu);margin-top:10px"></div>
+</div>
+
+<div id="iva-res" style="display:none">
+  <div class="kpis" id="iva-kpis"></div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">🌍</span> Ventanilla Única (OSS) — IVA a declarar por país de destino</div>
+    <div class="inf">Ventas a consumidores de otro país de la UE (régimen <b>UNION-OSS</b>). El IVA se declara en la <b>Ventanilla Única</b> al tipo del país de destino. Esto es lo que va en tu declaración OSS trimestral (modelo 369 en España).</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>País de destino</th><th>Transacciones</th><th>Unidades</th><th>Base imponible</th><th>IVA repercutido</th></tr></thead>
+      <tbody id="iva-oss"></tbody>
+    </table></div>
+    <div style="margin-top:10px"><button class="btn-sec" onclick="ivaExportOSS()">⬇️ Exportar resumen OSS (CSV para el gestor)</button></div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">🔀</span> Rutas de envío (salida → destino)</div>
+    <div class="inf">De dónde sale tu stock y a qué país llega. En <span class="cb">naranja</span>, las <b>cross-border</b> (sale de un país distinto al del comprador): ahí Amazon te cobra la gestión más cara y además generan IVA intracomunitario.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Ruta</th><th>Envíos</th><th>Unidades</th><th>Valor (sin IVA)</th></tr></thead>
+      <tbody id="iva-rutas"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">🏠</span> IVA en régimen normal (declaración local por país de salida)</div>
+    <div class="inf">Ventas en régimen <b>REGULAR</b> (mismo país o con IVA local). Se declaran en el IVA del país correspondiente, no en la Ventanilla Única.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>País</th><th>Transacciones</th><th>Base imponible</th><th>IVA</th></tr></thead>
+      <tbody id="iva-regular"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">📦</span> Movimientos de stock entre países (FC_TRANSFER)</div>
+    <div class="inf">Amazon mueve tu inventario entre centros de distintos países (PAN-EU). Cada país donde acabe almacenado tu stock puede generarte <b>obligación de IVA local</b>.</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Ruta del stock</th><th>Movimientos</th><th>Unidades</th></tr></thead>
+      <tbody id="iva-transfers"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<div class="disclaimer">
+⚠️ Herramienta de apoyo, no asesoramiento fiscal. Los importes salen tal cual del informe de Amazon; confírmalos siempre con tu gestor antes de declarar. El coste de la tarifa FBA (sobrecoste logístico cross-border) sale del settlement y se cruza en el Detector de sobrecostes. Todo se procesa en tu navegador.
+</div>
+</div>
+
+<script>
+var IVA={rows:[],ficheros:0};
+function f(n,d){d=d==null?2:d;return (Math.round((+n||0)*Math.pow(10,d))/Math.pow(10,d)).toFixed(d);}
+var BAND={ES:'🇪🇸',FR:'🇫🇷',IT:'🇮🇹',DE:'🇩🇪',NL:'🇳🇱',BE:'🇧🇪',PL:'🇵🇱',PT:'🇵🇹',SK:'🇸🇰',CZ:'🇨🇿',SE:'🇸🇪',IE:'🇮🇪',AT:'🇦🇹'};
+function ban(c){return (BAND[c]||'🏳️')+' '+(c||'?');}
+function num(v){return parseFloat(String(v==null?'':v).replace(/\s/g,'').replace(',','.'))||0;}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Parser CSV robusto (comillas, coma o punto y coma, BOM)
+function parseCSV(texto){
+  texto=texto.replace(/^﻿/,'');
+  var lineas=texto.split(/\r?\n/).filter(function(l){return l.length;});
+  if(!lineas.length) return [];
+  var sep=(lineas[0].split(';').length>lineas[0].split(',').length)?';':',';
+  function partir(l){var o=[],c='',q=false;for(var i=0;i<l.length;i++){var ch=l[i];if(ch==='"'){if(q&&l[i+1]==='"'){c+='"';i++;}else q=!q;}else if(ch===sep&&!q){o.push(c);c='';}else c+=ch;}o.push(c);return o;}
+  var H=partir(lineas[0]).map(function(h){return h.trim().toUpperCase();});
+  var out=[];
+  for(var i=1;i<lineas.length;i++){var p=partir(lineas[i]);var r={};for(var j=0;j<H.length;j++)r[H[j]]=(p[j]||'').trim();out.push(r);}
+  return out;
+}
+function ivaLeer(files){
+  if(!files||!files.length)return;
+  var st=document.getElementById('iva-status');
+  var pend=files.length, leidos=0, nuevas=0;
+  Array.prototype.forEach.call(files,function(file){
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var rows=parseCSV(rd.result);
+        // Validación: ¿es el informe de IVA?
+        if(!rows.length || !('TRANSACTION_TYPE' in rows[0]) || !('DEPARTURE_COUNTRY' in rows[0])){
+          st.innerHTML='<span style="color:var(--rd)">❌ '+esc(file.name)+' no parece el Informe de Transacciones de IVA (faltan columnas TRANSACTION_TYPE / DEPARTURE_COUNTRY).</span>';
+        } else {
+          IVA.rows=IVA.rows.concat(rows); IVA.ficheros++; nuevas+=rows.length;
+        }
+      }catch(e){ st.innerHTML='<span style="color:var(--rd)">Error leyendo '+esc(file.name)+': '+esc(e.message)+'</span>'; }
+      leidos++;
+      if(leidos===pend){
+        if(IVA.rows.length){ st.innerHTML='✅ '+IVA.ficheros+' fichero(s) · '+IVA.rows.length+' transacciones cargadas.'; ivaRender(); }
+      }
+    };
+    rd.readAsText(file,'utf-8');
+  });
+}
+function ivaRender(){
+  var R=IVA.rows;
+  document.getElementById('iva-res').style.display='block';
+  // signo por tipo: SALE/INVOICE suman; REFUND/RETURN/CREDIT_NOTE restan
+  function signo(t){ return (t==='REFUND'||t==='RETURN'||t==='CREDIT_NOTE')?-1:1; }
+  var base=function(r){return num(r['TOTAL_ACTIVITY_VALUE_AMT_VAT_EXCL']);};
+  var ivaAmt=function(r){return num(r['TOTAL_ACTIVITY_VALUE_VAT_AMT']);};
+  var qty=function(r){return Math.abs(num(r['QTY']))||0;};
+
+  var ventasTot=0, nSale=0, ossBase=0, ossIva=0, nOss=0;
+  var oss={}, reg={}, rutas={}, transf={};
+  R.forEach(function(r){
+    var t=(r['TRANSACTION_TYPE']||'').toUpperCase();
+    var sc=(r['TAX_REPORTING_SCHEME']||'').toUpperCase();
+    var dep=(r['DEPARTURE_COUNTRY']||r['SALE_DEPART_COUNTRY']||'').toUpperCase()||'?';
+    var arr=(r['ARRIVAL_COUNTRY']||r['SALE_ARRIVAL_COUNTRY']||'').toUpperCase()||'?';
+    var s=signo(t);
+    if(t==='FC_TRANSFER'){
+      var kt=dep+'→'+arr; if(!transf[kt])transf[kt]={n:0,u:0}; transf[kt].n++; transf[kt].u+=qty(r); return;
+    }
+    if(t==='SALE'||t==='REFUND'||t==='RETURN'||t==='CREDIT_NOTE'){
+      if(t==='SALE'){ nSale++; ventasTot+=base(r); }
+      // rutas (solo ventas reales)
+      if(t==='SALE'){ var kr=dep+'→'+arr; if(!rutas[kr])rutas[kr]={n:0,u:0,v:0,cross:dep!==arr&&arr!=='?'&&dep!=='?'}; rutas[kr].n++; rutas[kr].u+=qty(r); rutas[kr].v+=base(r); }
+      if(sc==='UNION-OSS'){
+        if(!oss[arr])oss[arr]={n:0,u:0,base:0,iva:0}; oss[arr].n+=s; oss[arr].u+=s*qty(r); oss[arr].base+=s*base(r); oss[arr].iva+=s*ivaAmt(r);
+        if(t==='SALE'){ nOss++; ossBase+=base(r); ossIva+=ivaAmt(r); }
+      } else {
+        if(!reg[dep])reg[dep]={n:0,base:0,iva:0}; reg[dep].n+=s; reg[dep].base+=s*base(r); reg[dep].iva+=s*ivaAmt(r);
+      }
+    }
+  });
+
+  // KPIs
+  document.getElementById('iva-kpis').innerHTML=[
+    {n:nSale, l:'Ventas (transacciones)'},
+    {n:f(ventasTot,2)+'€', l:'Facturación sin IVA'},
+    {n:nOss, l:'Ventas intracomunitarias (OSS)', c:'var(--am)'},
+    {n:f(ossIva,2)+'€', l:'IVA OSS a declarar', c:'var(--or)'}
+  ].map(function(k){return '<div class="kpi"><div class="n" style="color:'+(k.c||'var(--tx)')+'">'+k.n+'</div><div class="l">'+k.l+'</div></div>';}).join('');
+
+  // OSS por país destino
+  var ok=Object.keys(oss).sort(function(a,b){return oss[b].iva-oss[a].iva;});
+  var tb=document.getElementById('iva-oss'), tB=0,tI=0,tU=0,tN=0;
+  tb.innerHTML=ok.map(function(c){var x=oss[c];tB+=x.base;tI+=x.iva;tU+=x.u;tN+=x.n;
+    return '<tr><td>'+ban(c)+'</td><td>'+Math.round(x.n)+'</td><td>'+Math.round(x.u)+'</td><td>'+f(x.base,2)+'€</td><td style="color:var(--or2)">'+f(x.iva,2)+'€</td></tr>';
+  }).join('')+ (ok.length?('<tr class="tot"><td>Σ Total OSS</td><td>'+Math.round(tN)+'</td><td>'+Math.round(tU)+'</td><td>'+f(tB,2)+'€</td><td style="color:var(--or)">'+f(tI,2)+'€</td></tr>'):'<tr><td colspan="5" style="color:var(--mu)">Sin ventas OSS en este periodo.</td></tr>');
+
+  // Rutas
+  var rk=Object.keys(rutas).sort(function(a,b){return rutas[b].v-rutas[a].v;});
+  document.getElementById('iva-rutas').innerHTML=rk.map(function(k){var x=rutas[k];var p=k.split('→');
+    return '<tr'+(x.cross?' style="background:rgba(245,166,35,.05)"':'')+'><td>'+ban(p[0])+' → '+ban(p[1])+(x.cross?' <span class="cb">cross-border</span>':'')+'</td><td>'+x.n+'</td><td>'+Math.round(x.u)+'</td><td>'+f(x.v,2)+'€</td></tr>';
+  }).join('')||'<tr><td colspan="4" style="color:var(--mu)">—</td></tr>';
+
+  // Regular por país salida
+  var gk=Object.keys(reg).sort(function(a,b){return reg[b].base-reg[a].base;});
+  document.getElementById('iva-regular').innerHTML=gk.map(function(c){var x=reg[c];
+    return '<tr><td>'+ban(c)+'</td><td>'+Math.round(x.n)+'</td><td>'+f(x.base,2)+'€</td><td>'+f(x.iva,2)+'€</td></tr>';
+  }).join('')||'<tr><td colspan="4" style="color:var(--mu)">—</td></tr>';
+
+  // Transfers
+  var tk=Object.keys(transf).sort(function(a,b){return transf[b].u-transf[a].u;});
+  document.getElementById('iva-transfers').innerHTML=tk.map(function(k){var x=transf[k];var p=k.split('→');
+    return '<tr><td>'+ban(p[0])+' → '+ban(p[1])+'</td><td>'+x.n+'</td><td>'+Math.round(x.u)+'</td></tr>';
+  }).join('')||'<tr><td colspan="3" style="color:var(--mu)">Sin movimientos entre países en este periodo.</td></tr>';
+
+  window._IVA_OSS=oss;
+}
+function ivaExportOSS(){
+  var oss=window._IVA_OSS||{};
+  var lin=['pais_destino;transacciones;unidades;base_imponible_eur;iva_repercutido_eur'];
+  Object.keys(oss).forEach(function(c){var x=oss[c];lin.push([c,Math.round(x.n),Math.round(x.u),f(x.base,2),f(x.iva,2)].join(';'));});
+  var blob=new Blob([lin.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='resumen_oss_ventanilla_unica.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+}
+</script>
+</body>
+</html>
