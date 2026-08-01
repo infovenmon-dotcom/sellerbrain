@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v74-429-backoff'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v75-backoff-largo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1278,7 +1278,7 @@ async function cuentasSpapiActivas(env) {
  * =================================================================== */
 async function spapiCall(env, path, opts = {}, ctx) {
   const token = await lwaToken(env, 'spapi', ctx);
-  const esperas = [15000, 30000, 45000];   // backoff ante 429 (createReport tiene cupo bajo)
+  const esperas = [30000, 60000, 90000];   // backoff ante 429 (createReport se rellena ~1/min)
   for (let intento = 0; ; intento++) {
     const r = await fetch(SPAPI_HOST + path, {
       ...opts,
