@@ -317,14 +317,28 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <div>
       <div class="card">
         <div class="ch">
-          <h2><span class="ci">📣</span> Gasto vs ventas atribuidas · por día</h2>
+          <h2><span class="ci">📣</span> Gasto vs ventas atribuidas <span id="ppc-titulo-suf" style="font-weight:400;color:var(--mu)">· por día</span></h2>
           <span class="more" id="ppc-fuente"></span>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:2px 0 10px">
           <div id="ppc-pais-filtro" style="display:none;gap:6px;flex-wrap:wrap"></div>
           <select id="ppc-camp-filtro" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px;padding:6px 10px;max-width:300px" onchange="filtrarPPCCamp(this.value)"></select>
         </div>
+        <div id="ppc-rango-bar" style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:12px">
+          <span style="color:var(--mu)">📅 Periodo:</span>
+          <button class="chip on" id="ppc-preset-30d" onclick="ppcPreset('30d')">Últimos 30 días</button>
+          <button class="chip" id="ppc-preset-mes" onclick="ppcPreset('mes')">Este mes</button>
+          <button class="chip" id="ppc-preset-mespas" onclick="ppcPreset('mespas')">Mes pasado</button>
+          <span style="width:1px;height:16px;background:var(--bd2);margin:0 2px"></span>
+          <input type="date" id="ppc-desde" onchange="ppcRangoManual()" title="Desde" style="background:#0a120f;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:11.5px;padding:5px 7px">
+          <span style="color:var(--mu)">→</span>
+          <input type="date" id="ppc-hasta" onchange="ppcRangoManual()" title="Hasta" style="background:#0a120f;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:11.5px;padding:5px 7px">
+          <span style="width:1px;height:16px;background:var(--bd2);margin:0 2px"></span>
+          <button class="chip" id="ppc-agrup" onclick="ppcToggleAgrupa()" title="Cambia el eje del gráfico entre días y meses">Gráfico: por día</button>
+          <span id="ppc-rango-info" style="margin-left:auto;color:var(--or);font-weight:700"></span>
+        </div>
         <div id="ppc-chart"></div>
+        <div style="font-size:10.5px;color:var(--mu);margin-top:4px">💡 Pincha un punto del gráfico para filtrar ese día (o ese mes) en toda la pantalla. Doble clic para volver a los 30 días.</div>
         <div class="chart-legend">
           <span><i style="background:#B983D6"></i> Gasto PPC</span>
           <span><i style="background:var(--gn)"></i> Ventas atribuidas</span>
@@ -332,7 +346,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       </div>
 
       <div class="card">
-        <div class="ch"><h2><span class="ci">🎯</span> Campañas · últimos 30 días</h2></div>
+        <div class="ch"><h2><span class="ci">🎯</span> Campañas <span id="ppc-titulo-camp" style="font-weight:400;color:var(--mu)">· últimos 30 días</span></h2></div>
         <div style="overflow-x:auto">
         <table class="tbl">
           <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Ventas (pedidos) atribuidas a los clics de la publicidad — es la base del CVR (ventas ÷ clics).">Ventas (uds)</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
@@ -343,7 +357,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 
       <div class="card">
         <div class="ch">
-          <h2><span class="ci">🔤</span> Términos de búsqueda · 30 días</h2>
+          <h2><span class="ci">🔤</span> Términos de búsqueda <span style="font-weight:400;color:var(--mu)">· 30 días</span> <span id="ppc-terminos-nota" style="font-size:10px;color:var(--am);font-weight:400;display:none">· resumen del periodo (aún no varía por día)</span></h2>
           <span style="font-size:11px;color:var(--mu)">ACoS objetivo: <input type="number" id="ppc-be" value="25" style="width:44px;padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px" onchange="renderPPCTerminos()">%</span>
         </div>
         <div style="overflow-x:auto">
@@ -365,14 +379,14 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div id="ppc-acciones"></div>
       </div>
       <div class="card">
-        <div class="ch"><h2><span class="ci">🌍</span> Por país · 30 días</h2></div>
+        <div class="ch"><h2><span class="ci">🌍</span> Por país <span id="ppc-titulo-pais" style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
         <div id="ppc-paises"></div>
       </div>
     </div>
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="ch"><h2><span class="ci">🚦</span> Rentabilidad por producto <span style="font-size:11px;color:var(--mu);font-weight:400">· ACoS real vs break-even (verde = rentable, rojo = pierde dinero)</span></h2></div>
+    <div class="ch"><h2><span class="ci">🚦</span> Rentabilidad por producto <span style="font-size:11px;color:var(--mu);font-weight:400">· ACoS real vs break-even (verde = rentable, rojo = pierde dinero)</span> <span id="ppc-rentab-nota" style="font-size:10px;color:var(--am);font-weight:400;display:none">· resumen del periodo (aún no varía por día)</span></h2></div>
     <div style="overflow-x:auto"><table class="tbl">
       <thead><tr><th>Producto</th><th>Gasto PPC</th><th title="Conversión de la publicidad: pedidos ÷ clics">CVR</th><th>ACoS real</th><th>Break-even</th><th>Veredicto</th></tr></thead>
       <tbody id="ppc-rentab"></tbody>
@@ -2430,19 +2444,48 @@ var PPC_DEMO = {
 var PPC_DATA=null;
 var PPC_PAIS='all';   // filtro del gráfico PPC: 'all' o código de país (ES/FR/IT…)
 var PPC_CAMP='all';   // filtro del gráfico PPC: 'all' o nombre de campaña
-// Serie diaria agregada según país y campaña elegidos: 1 punto por fecha.
+var PPC_RANGO=null;   // filtro maestro de fechas: null = todo (30 días); {desde,hasta} si hay selección
+var PPC_AGRUPA='dia'; // eje del gráfico: 'dia' | 'mes'
+function _iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// ¿la fecha ISO cae dentro del rango activo? (sin rango → siempre sí)
+function ppcEnRango(f){ if(!PPC_RANGO) return true; return f && f>=PPC_RANGO.desde && f<=PPC_RANGO.hasta; }
+// Campañas agregadas por (país·nombre) SOLO dentro del rango activo. Usa el detalle
+// diario (ppc_campanas) que trae gasto/clics/ventas/pedidos, así el KPI, la tabla y
+// "Por país" se recalculan para el periodo elegido. En demo (sin fecha) usa el agregado.
+function campanasRango(){
+  var raw=(PPC_DATA&&PPC_DATA.campanas_dia)||[];
+  if(!raw.length || !raw.some(function(x){return x.fecha;})) return (PPC_DATA&&PPC_DATA.campanas)||[];
+  var by={};
+  raw.forEach(function(c){
+    if(!ppcEnRango(c.fecha)) return;
+    var k=c.pais+'·'+c.nombre;
+    if(!by[k]) by[k]={pais:c.pais,nombre:c.nombre,gasto:0,clics:0,ventas_ppc:0,pedidos_ppc:0};
+    by[k].gasto+=+c.gasto||0; by[k].clics+=+c.clics||0; by[k].ventas_ppc+=+c.ventas_ppc||0; by[k].pedidos_ppc+=+c.pedidos_ppc||0;
+  });
+  return Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){return b.gasto-a.gasto;});
+}
+// Etiqueta legible del rango activo, p.ej. "14 jul", "1–31 jul" o "últimos 30 días".
+function ppcRangoTxt(){
+  if(!PPC_RANGO) return 'últimos 30 días';
+  var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  function c(iso){var p=(iso||'').split('-');return p.length===3?(+p[2]+' '+(M[+p[1]-1]||'')):iso;}
+  if(PPC_RANGO.desde===PPC_RANGO.hasta) return c(PPC_RANGO.desde);
+  return c(PPC_RANGO.desde)+' – '+c(PPC_RANGO.hasta);
+}
+// Serie del gráfico según país/campaña; agrupada por día o por mes (PPC_AGRUPA).
+// Cada punto lleva desde/hasta para que al pincharlo se fije ese rango.
 function serieDiasPPC(paisSel){
-  // 'all' campañas → totales de ppc_dia; una campaña → su detalle diario (ppc_campanas).
   var base = (PPC_CAMP==='all')
     ? (PPC_DATA&&PPC_DATA.dias||[])
     : (PPC_DATA&&PPC_DATA.campanas_dia||[]).filter(function(x){return (x.nombre||'')===PPC_CAMP;});
   var rows=base.filter(function(x){return paisSel==='all'||x.pais===paisSel;});
-  // Demo (sin fecha) → devolver tal cual, sin agrupar. Datos reales → agrupar por fecha.
-  if(!rows.some(function(x){return x.fecha;})) return rows.map(function(x){return {fecha:x.fecha,gasto:+x.gasto||0,ventas_ppc:+x.ventas_ppc||0,pais:x.pais||''};});
+  if(!rows.some(function(x){return x.fecha;})) return rows.map(function(x){return {fecha:x.fecha,clave:x.fecha,desde:x.fecha,hasta:x.fecha,gasto:+x.gasto||0,ventas_ppc:+x.ventas_ppc||0,pais:x.pais||''};});
   var byF={};
   rows.forEach(function(x){
-    if(!byF[x.fecha]) byF[x.fecha]={fecha:x.fecha,gasto:0,ventas_ppc:0,pais:paisSel==='all'?'':x.pais};
-    byF[x.fecha].gasto+=+x.gasto||0; byF[x.fecha].ventas_ppc+=+x.ventas_ppc||0;
+    var clave = PPC_AGRUPA==='mes' ? (x.fecha||'').slice(0,7) : x.fecha;
+    if(!byF[clave]) byF[clave]={fecha:x.fecha,clave:clave,desde:x.fecha,hasta:x.fecha,gasto:0,ventas_ppc:0,pais:paisSel==='all'?'':x.pais};
+    var g=byF[clave]; g.gasto+=+x.gasto||0; g.ventas_ppc+=+x.ventas_ppc||0;
+    if(x.fecha<g.desde) g.desde=x.fecha; if(x.fecha>g.hasta) g.hasta=x.fecha;
   });
   return Object.keys(byF).sort().map(function(k){return byF[k];});
 }
@@ -2453,20 +2496,64 @@ function filtrarPPCPais(code){
   dibujarPPCChart();
 }
 function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; dibujarPPCChart(); }
+// ---- Controles del filtro maestro de fechas ----
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); }
+function ppcPreset(p){
+  var hoy=new Date();
+  if(p==='30d'){ PPC_RANGO=null; }
+  else if(p==='mes'){ PPC_RANGO={desde:_iso(new Date(hoy.getFullYear(),hoy.getMonth(),1)), hasta:_iso(hoy)}; }
+  else if(p==='mespas'){ PPC_RANGO={desde:_iso(new Date(hoy.getFullYear(),hoy.getMonth()-1,1)), hasta:_iso(new Date(hoy.getFullYear(),hoy.getMonth(),0))}; }
+  _ppcRerender();
+}
+function ppcRangoManual(){
+  var de=document.getElementById('ppc-desde').value, ha=document.getElementById('ppc-hasta').value;
+  if(!de&&!ha){ PPC_RANGO=null; _ppcRerender(); return; }
+  if(de&&!ha) ha=de; if(ha&&!de) de=ha;
+  if(de>ha){ var t=de; de=ha; ha=t; }
+  PPC_RANGO={desde:de,hasta:ha}; _ppcRerender();
+}
+function ppcToggleAgrupa(){ PPC_AGRUPA=(PPC_AGRUPA==='dia')?'mes':'dia'; var b=document.getElementById('ppc-agrup'); if(b) b.textContent='Gráfico: por '+(PPC_AGRUPA==='mes'?'mes':'día'); dibujarPPCChart(); }
+// Al pinchar un punto del gráfico: fija el rango a ese día (o ese mes) y refresca todo.
+function ppcSelecPunto(desde,hasta){ if(!desde) return; PPC_RANGO={desde:desde,hasta:hasta||desde}; _ppcRerender(); }
+// Sincroniza los chips/inputs/etiquetas del filtro con el estado actual.
+function _ppcSyncBar(){
+  var on = PPC_RANGO ? '' : '30d'; // sólo el preset 30d se auto-marca; el resto los marca el usuario
+  ['30d','mes','mespas'].forEach(function(k){ var b=document.getElementById('ppc-preset-'+k); if(b) b.classList.toggle('on', k===on); });
+  var de=document.getElementById('ppc-desde'), ha=document.getElementById('ppc-hasta');
+  if(de) de.value = PPC_RANGO?PPC_RANGO.desde:''; if(ha) ha.value = PPC_RANGO?PPC_RANGO.hasta:'';
+  var info=document.getElementById('ppc-rango-info');
+  if(info) info.innerHTML = PPC_RANGO ? ('🔎 '+ppcRangoTxt()+' &nbsp;<a href="#" onclick="ppcPreset(\'30d\');return false" style="color:var(--mu);text-decoration:underline">✕ 30 días</a>') : '';
+  var suf=document.getElementById('ppc-titulo-suf'); if(suf) suf.textContent='· por '+(PPC_AGRUPA==='mes'?'mes':'día');
+  var tc=document.getElementById('ppc-titulo-camp'); if(tc) tc.textContent='· '+ppcRangoTxt();
+  var tp=document.getElementById('ppc-titulo-pais'); if(tp) tp.textContent='· '+ppcRangoTxt();
+  var nt=document.getElementById('ppc-terminos-nota'), nr=document.getElementById('ppc-rentab-nota');
+  if(nt) nt.style.display = PPC_RANGO?'inline':'none';
+  if(nr) nr.style.display = PPC_RANGO?'inline':'none';
+}
 // Dibuja el gráfico Gasto vs Ventas (con tooltip por día) para el país elegido.
 function dibujarPPCChart(){
   var chartEl=document.getElementById('ppc-chart'); if(!chartEl) return;
-  var W=640,H=150,pad=6,serie=serieDiasPPC(PPC_PAIS).slice(-30),n=serie.length;
+  _ppcSyncBar();
+  var W=640,H=150,pad=6,serie=serieDiasPPC(PPC_PAIS).slice(-(PPC_AGRUPA==='mes'?24:30)),n=serie.length;
   var maxV=Math.max.apply(null,serie.map(function(x){return Math.max(x.gasto,x.ventas_ppc);}).concat([1]));
   function px(i){return pad+i*(W-2*pad)/Math.max(n-1,1);}
   function py(val){return H-pad-(val/maxV)*(H-2*pad);}
   function pts(key){return serie.map(function(x,i){return px(i).toFixed(1)+','+py(x[key]).toFixed(1);}).join(' ');}
-  function fCorta(iso){var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];var pz=(iso||'').split('-');return pz.length===3?(pz[2]+' '+(M[+pz[1]-1]||'')):(iso||'');}
+  var MM=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  function fCorta(iso){var pz=(iso||'').split('-');return pz.length===3?(+pz[2]+' '+(MM[+pz[1]-1]||'')):(iso||'');}
+  function etiqueta(s){ if(PPC_AGRUPA==='mes'){ var p=(s.clave||'').split('-'); return (MM[+p[1]-1]||'')+' '+(p[0]||'').slice(2); } return fCorta(s.fecha); }
   if(!n){ chartEl.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px">Aún sin serie diaria para este país.</div>'; return; }
+  // Índices seleccionados (solapan con el rango activo) → banda de resaltado.
+  var step=(W-2*pad)/Math.max(n-1,1), sel=[];
+  serie.forEach(function(s,i){ if(PPC_RANGO && !(s.hasta<PPC_RANGO.desde||s.desde>PPC_RANGO.hasta)) sel.push(i); });
+  var banda='';
+  if(sel.length){ var x0=Math.max(0,px(sel[0])-step/2), x1=Math.min(W,px(sel[sel.length-1])+step/2);
+    banda='<rect x="'+x0.toFixed(1)+'" y="0" width="'+(x1-x0).toFixed(1)+'" height="'+H+'" fill="rgba(46,230,160,.13)" stroke="rgba(46,230,160,.45)" stroke-width="0.6"/>'; }
   var dotCss='position:absolute;width:9px;height:9px;border-radius:50%;background:#0e1613;transform:translate(-50%,-50%);display:none;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.35)';
   chartEl.innerHTML=
-    '<div id="ppc-cin" style="position:relative">'+
+    '<div id="ppc-cin" style="position:relative;cursor:pointer">'+
       '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" preserveAspectRatio="none">'+
+      banda+
       '<polyline points="'+pts('ventas_ppc')+'" fill="none" stroke="var(--gn)" stroke-width="2"/>'+
       '<polyline points="'+pts('gasto')+'" fill="none" stroke="#B983D6" stroke-width="2"/></svg>'+
       '<div id="ppc-guide" style="position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28);display:none;pointer-events:none"></div>'+
@@ -2476,18 +2563,20 @@ function dibujarPPCChart(){
     '</div>';
   var box=document.getElementById('ppc-cin'),guide=document.getElementById('ppc-guide'),
       dv=document.getElementById('ppc-dv'),dg=document.getElementById('ppc-dg'),tip=document.getElementById('ppc-tip');
+  function idxDe(e){ var r=box.getBoundingClientRect(); var frac=(e.clientX-r.left)/r.width; if(frac<0)frac=0; if(frac>1)frac=1; return Math.round(frac*(n-1)); }
   box.onmousemove=function(e){
-    var r=box.getBoundingClientRect(); var frac=(e.clientX-r.left)/r.width; if(frac<0)frac=0; if(frac>1)frac=1;
-    var i=Math.round(frac*(n-1)), s=serie[i];
+    var i=idxDe(e), s=serie[i];
     var xp=px(i)/W*100, yv=py(s.ventas_ppc)/H*100, yg=py(s.gasto)/H*100;
     guide.style.left=xp+'%'; guide.style.display='block';
     dv.style.left=xp+'%'; dv.style.top=yv+'%'; dv.style.display='block';
     dg.style.left=xp+'%'; dg.style.top=yg+'%'; dg.style.display='block';
-    tip.innerHTML='<b>'+fCorta(s.fecha)+'</b>'+(s.pais?(' · '+s.pais):(PPC_PAIS!=='all'?' · '+PPC_PAIS:''))+'<br><span style="color:#B983D6">■</span> Gasto <b>'+f(s.gasto,2)+'€</b><br><span style="color:var(--gn)">■</span> Ventas <b>'+f(s.ventas_ppc,2)+'€</b>';
+    tip.innerHTML='<b>'+etiqueta(s)+'</b>'+(s.pais?(' · '+s.pais):(PPC_PAIS!=='all'?' · '+PPC_PAIS:''))+'<br><span style="color:#B983D6">■</span> Gasto <b>'+f(s.gasto,2)+'€</b><br><span style="color:var(--gn)">■</span> Ventas <b>'+f(s.ventas_ppc,2)+'€</b><br><span style="color:var(--mu);font-size:10px">clic para filtrar</span>';
     tip.style.display='block'; tip.style.top='2px';
     if(xp>60){ tip.style.right=(100-xp)+'%'; tip.style.left='auto'; } else { tip.style.left=xp+'%'; tip.style.right='auto'; }
   };
   box.onmouseleave=function(){ guide.style.display='none'; dv.style.display='none'; dg.style.display='none'; tip.style.display='none'; };
+  box.onclick=function(e){ var s=serie[idxDe(e)]; if(s) ppcSelecPunto(s.desde,s.hasta); };
+  box.ondblclick=function(){ ppcPreset('30d'); };
 }
 
 var SB_VENTAS_REALES=false; // true cuando vengan de SP-API/CSV (no estimadas)
@@ -2590,7 +2679,7 @@ function cargarPPC(){
       });
       PPC_DATA={dias:dias.map(function(d){return{fecha:d.fecha,gasto:+d.gasto,ventas_ppc:+d.ventas_ppc,pais:d.pais};}),
                 campanas:Object.values(porCamp).sort(function(a,b){return b.gasto-a.gasto;}),
-                campanas_dia:camp.map(function(c){return{fecha:c.fecha,pais:c.pais,nombre:c.nombre,gasto:+c.gasto,ventas_ppc:+c.ventas_ppc};}),
+                campanas_dia:camp.map(function(c){return{fecha:c.fecha,pais:c.pais,nombre:c.nombre,gasto:+c.gasto,clics:+c.clics||0,ventas_ppc:+c.ventas_ppc,pedidos_ppc:+c.pedidos_ppc||0};}),
                 terminos:term};
       renderPPC('datos reales de tu Ads API');
     }).catch(function(){ PPC_DATA=PPC_DEMO; renderPPC('demo (API no disponible)'); });
@@ -2626,10 +2715,11 @@ function renderPPCRentab(){
 function renderPPC(fuente){
   document.getElementById('ppc-fuente').textContent=fuente;
   var d=PPC_DATA;
-  // KPIs
+  var campsR=campanasRango();   // campañas agregadas al RANGO de fechas activo
+  // KPIs (del rango activo)
   var g=0,v=0,c=0,p=0;
-  d.campanas.forEach(function(x){g+=x.gasto;v+=x.ventas_ppc;c+=x.clics;p+=x.pedidos_ppc;});
-  if(!d.campanas.length){d.dias.forEach(function(x){g+=x.gasto;v+=x.ventas_ppc;});}
+  campsR.forEach(function(x){g+=x.gasto;v+=x.ventas_ppc;c+=x.clics;p+=x.pedidos_ppc;});
+  if(!campsR.length){(d.dias||[]).forEach(function(x){ if(ppcEnRango(x.fecha)){g+=x.gasto;v+=x.ventas_ppc;} });}
   var acos=v>0?g/v*100:0;
   var roas=g>0?v/g:0;
   // TACoS: gasto ÷ ventas TOTALES. Si tenemos ventas totales reales (SP-API/CSV) las usa;
@@ -2637,7 +2727,7 @@ function renderPPC(fuente){
   var ventasTot=+localStorage.getItem('sb_ventas_totales_30d')||0;
   var tacos = ventasTot>0 ? g/ventasTot*100 : null;
   var kpis=[
-    {l:'Gasto 30 días',v:f(g,2)+'€',c:'#B983D6',sub:'inversión publicitaria'},
+    {l:PPC_RANGO?'Gasto periodo':'Gasto 30 días',v:f(g,2)+'€',c:'#B983D6',sub:'inversión publicitaria · '+ppcRangoTxt()},
     {l:'ACoS global',v:f(acos,1)+'%',c:acos<=25?'var(--gn)':acos<=35?'var(--am)':'var(--rd)',sub:'gasto ÷ ventas de anuncios'},
     {l:'ROAS',v:f(roas,2)+'x',c:roas>=4?'var(--gn)':roas>=2.8?'var(--am)':'var(--rd)',sub:'retorno por € invertido'},
     {l:'TACoS',v:tacos!==null?f(tacos,1)+'%':'—',c:tacos===null?'var(--mu)':tacos<=10?'var(--gn)':tacos<=15?'var(--am)':'var(--rd)',
@@ -2674,8 +2764,8 @@ function renderPPC(fuente){
     } else { cEl.innerHTML=''; cEl.style.display='none'; PPC_CAMP='all'; }
   }
   dibujarPPCChart();
-  // Campañas
-  document.getElementById('ppc-campanas').innerHTML=d.campanas.map(function(x){
+  // Campañas (del rango activo)
+  document.getElementById('ppc-campanas').innerHTML=campsR.map(function(x){
     var a=x.ventas_ppc>0?x.gasto/x.ventas_ppc*100:999;
     var roas=x.gasto>0?x.ventas_ppc/x.gasto:0;
     var est=a<=25?['gn','Rentable']:a<=40?['am','Vigilar']:x.ventas_ppc>0?['rd','ACoS alto']:['rd','Sin ventas'];
@@ -2722,9 +2812,9 @@ function renderPPCTerminos(){
       '<div style="flex:1"><div class="at">'+a.t+'</div><div class="av" style="color:var(--gn)">+'+f(a.v,2)+'€/mes</div><div class="ap">'+a.p+'</div></div>'+btnHecho(k)+'</div>';
   }).join('')+linkHechas(nHp);
   document.getElementById('ppc-acciones').innerHTML=htmlP.trim()?htmlP:'<div style="font-size:12px;color:var(--mu)">Sin fugas detectadas en los términos actuales. 👌</div>';
-  // Por país
+  // Por país (del rango activo)
   var porPais={};
-  (PPC_DATA.campanas.length?PPC_DATA.campanas:[]).forEach(function(x){
+  campanasRango().forEach(function(x){
     if(!porPais[x.pais])porPais[x.pais]={g:0,v:0};
     porPais[x.pais].g+=x.gasto;porPais[x.pais].v+=x.ventas_ppc;
   });
