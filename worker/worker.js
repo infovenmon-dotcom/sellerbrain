@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v69-envios-check'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v70-envios-fc'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -45,6 +45,74 @@ const MARKETPLACES = {
   ES: 'A1RKKUPIHCS9HS', FR: 'A13V1IB3VIYZZH', IT: 'APJ6JRA9NG5V4',
   DE: 'A1PA6795UKMFR9', NL: 'A1805IZSGTT6HS', BE: 'AMEN7PMS3EDWL', UK: 'A1F83G8C2ARO7P'
 };
+
+// Centro logístico (fulfillment-center-id) -> país de SALIDA. El prefijo (3 letras,
+// normalmente código IATA de la ciudad) identifica el país. Editable/ampliable: si
+// aparece un FC no mapeado, la ingesta lo marca '?' y lo lista en el diagnóstico.
+const FC_PAIS = {
+  // España
+  MAD:'ES', BCN:'ES', SVQ:'ES', VLC:'ES', RMU:'ES', OVD:'ES', ZAZ:'ES', GRX:'ES',
+  ALC:'ES', SCQ:'ES', SDR:'ES', SVU:'ES', XSB:'ES', LEI:'ES', AGP:'ES', SZW:'ES',
+  // Italia
+  MXP:'IT', BGY:'IT', BLQ:'IT', FCO:'IT', TRN:'IT', PSR:'IT', CIA:'IT', VCE:'IT',
+  NAP:'IT', TSF:'IT', SUF:'IT', PMF:'IT', FRL:'IT', CAG:'IT', REG:'IT', BRI:'IT',
+  PSA:'IT', VRN:'IT', TRS:'IT', MER:'IT',
+  // Francia
+  ORY:'FR', CDG:'FR', BVA:'FR', MRS:'FR', LYS:'FR', ETZ:'FR', LIL:'FR', LEH:'FR',
+  NTE:'FR', MLH:'FR', RNS:'FR', MPL:'FR', TLS:'FR', BOD:'FR', LIO:'FR',
+  // Alemania
+  LEJ:'DE', DTM:'DE', FRA:'DE', CGN:'DE', HAM:'DE', MUC:'DE', STR:'DE', DUS:'DE',
+  HAJ:'DE', NUE:'DE', KSF:'DE', GHF:'DE', SCN:'DE', ERF:'DE', PAD:'DE', BER:'DE',
+  // Polonia / NL / BE / CZ / SE / UK
+  WRO:'PL', POZ:'PL', KTW:'PL', SZZ:'PL', LCJ:'PL', GDN:'PL', WAW:'PL', KRK:'PL',
+  EIN:'NL', AMS:'NL', RTM:'NL', BRU:'BE', LGG:'BE', CRL:'BE', ANR:'BE',
+  PRG:'CZ', BRQ:'CZ', OSR:'CZ', ARN:'SE', GOT:'SE',
+  LTN:'GB', MAN:'GB', EMA:'GB', BHX:'GB', LBA:'GB', GLA:'GB', EDI:'GB', BRS:'GB'
+};
+function paisDeFC(fc) {
+  const p = String(fc || '').toUpperCase().slice(0, 3);
+  return FC_PAIS[p] || '?';
+}
+// Ingesta del Informe de Envíos Gestionados por Amazon → país de SALIDA (del FC) y
+// país de DESTINO (ship-country) por pedido/SKU. NO necesita rol fiscal. Es la base
+// para atribuir el sobrecoste logístico al país correcto (cruzando con el settlement).
+async function ingestaEnvios(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const diag = { filas: 0, desconocidos: [], por_salida: {} };
+  const hoy = new Date();
+  const hasta = hoy.toISOString();
+  const desde = new Date(hoy.getTime() - 30 * 86400000).toISOString();
+  let tsv = '';
+  try {
+    tsv = await pedirInforme(env, 'GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL', desde, hasta,
+      [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE], undefined, ctx);
+  } catch (e) { diag.error = e.message; return diag; }
+  const filas = parseTSV(tsv);
+  const byKey = {}, desc = {};
+  for (const r of filas) {
+    const oid = r['amazon-order-id'] || '';
+    const sku = r['sku'] || '';
+    if (!oid || !sku) continue;
+    const fc = (r['fulfillment-center-id'] || '').toUpperCase();
+    const psal = paisDeFC(fc);
+    if (psal === '?' && fc) desc[fc] = (desc[fc] || 0) + 1;
+    const k = oid + '|' + sku;
+    if (!byKey[k]) byKey[k] = {
+      order_id: oid, sku, fc, pais_salida: psal,
+      pais_destino: (r['ship-country'] || '').toUpperCase(), uds: 0,
+      fecha: (r['shipment-date'] || r['purchase-date'] || '').slice(0, 10) || null
+    };
+    byKey[k].uds += (+(r['quantity-shipped'] || 0) || 0);
+  }
+  const rows = Object.values(byKey);
+  for (let i = 0; i < rows.length; i += 500) {
+    await upsertSupabase(env, 'envios_fc', conSeller(rows.slice(i, i + 500), seller));
+  }
+  diag.filas = rows.length;
+  diag.desconocidos = Object.keys(desc).map(k => k + ' (' + desc[k] + ')');
+  rows.forEach(r => { diag.por_salida[r.pais_salida] = (diag.por_salida[r.pais_salida] || 0) + 1; });
+  return diag;
+}
 
 export default {
   // ============ HTTP ============
@@ -784,6 +852,12 @@ export default {
         const diag = await ingestaInventarioPais(env);
         // Aprovechamos para traer también los reembolsos ya recibidos (mismo botón).
         try { const rr = await ingestaReembolsos(env); diag.reembolsos = rr.reembolsos; } catch (e) { diag.reembolsos_error = e.message; }
+        return json({ ok: true, ...diag }, cors);
+      }
+
+      // --- Ingesta del país de SALIDA (informe de envíos) → tabla envios_fc ---
+      if (url.pathname === '/v1/envios-ingest') {
+        const diag = await ingestaEnvios(env);
         return json({ ok: true, ...diag }, cors);
       }
 
@@ -1878,6 +1952,12 @@ async function ingestaDiaria(env, origen, ctx) {
     const r = await ingestaReembolsos(env, ctx);
     resultado.pasos.push({ reembolsos: r.reembolsos || 0 });
   } catch (e) { resultado.pasos.push({ reembolsos_error: e.message }); }
+
+  // 3f. País de SALIDA por pedido (informe de envíos) → base del sobrecoste por país.
+  if (planCompleto) try {
+    const r = await ingestaEnvios(env, ctx);
+    resultado.pasos.push({ envios_fc: r.filas || 0, fc_desconocidos: r.desconocidos });
+  } catch (e) { resultado.pasos.push({ envios_error: e.message }); }
 
   // 3b. Keywords reales de Amazon (Brand Analytics — requiere Brand Registry y rol aprobado)
   //     Solo lunes: gasta subrequests y suele fallar sin Brand Registry; no hace falta a diario.
