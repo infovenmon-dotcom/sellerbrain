@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v73-envios-1ventana'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v74-429-backoff'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1278,16 +1278,20 @@ async function cuentasSpapiActivas(env) {
  * =================================================================== */
 async function spapiCall(env, path, opts = {}, ctx) {
   const token = await lwaToken(env, 'spapi', ctx);
-  const r = await fetch(SPAPI_HOST + path, {
-    ...opts,
-    headers: {
-      'x-amz-access-token': token,
-      'Content-Type': 'application/json',
-      ...(opts.headers || {})
-    }
-  });
-  if (!r.ok) throw new Error('SP-API ' + path + ': ' + r.status + ' ' + await r.text());
-  return r.json();
+  const esperas = [15000, 30000, 45000];   // backoff ante 429 (createReport tiene cupo bajo)
+  for (let intento = 0; ; intento++) {
+    const r = await fetch(SPAPI_HOST + path, {
+      ...opts,
+      headers: {
+        'x-amz-access-token': token,
+        'Content-Type': 'application/json',
+        ...(opts.headers || {})
+      }
+    });
+    if (r.ok) return r.json();
+    if (r.status === 429 && intento < esperas.length) { await sleep(esperas[intento]); continue; }
+    throw new Error('SP-API ' + path + ': ' + r.status + ' ' + await r.text());
+  }
 }
 
 // Inventario FBA en TIEMPO REAL (FBA Inventory API) — sin generar informe, así
