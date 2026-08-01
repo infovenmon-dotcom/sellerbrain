@@ -14,7 +14,10 @@
 -- Tarifas del settlement CON IVA -> /1,21 (IVA recuperable). ~1 línea = 1 unidad.
 -- =====================================================================
 
-create or replace view v_fuga_tarifa as
+-- La borramos y recreamos (evita el error de CREATE OR REPLACE al cambiar columnas;
+-- nada en la BD depende de esta vista, solo la lee el worker).
+drop view if exists v_fuga_tarifa;
+create view v_fuga_tarifa as
 with rutas as (                              -- por pedido: país de salida y de destino (envios_fc)
   select order_id as pedido, max(pais_salida) as salida, max(pais_destino) as destino
   from envios_fc
@@ -70,11 +73,14 @@ calc as (
   from bench b
   join det d on d.sku = b.sku and d.pais = b.pais
 )
+-- OJO: CREATE OR REPLACE VIEW exige mantener el ORDEN y nombre de las columnas
+-- existentes; las nuevas (local_real) van AL FINAL.
 select
-  sku, pais, uds, fee_medio, fee_local, fee_max, local_real, uds_caras,
+  sku, pais, uds, fee_medio, fee_local, fee_max, uds_caras,
   round(100.0 * uds_caras / nullif(uds, 0), 0)  as pct_caras,
   round(sobrecoste_90d, 2)                       as sobrecoste_90d,
-  round(sobrecoste_90d / 3.0, 2)                 as sobrecoste_mes
+  round(sobrecoste_90d / 3.0, 2)                 as sobrecoste_mes,
+  local_real
 from calc
 where uds >= 10
   and sobrecoste_90d >= 5
