@@ -2264,6 +2264,15 @@ function calcF(){
   var mh='<div class="fc">Clasificaci\u00f3n actual: '+dat.c+' '+dat.s+lpB+'</div><div class="ft">\u20ac'+f(tInfo.final,2)+'<span style="font-size:15px;color:var(--mu)"> ES</span>';
   if(efn)mh+='<span style="font-size:13px;color:#888;margin-left:10px">EFN: \u20ac'+f(efn,2)+'</span>';
   mh+='</div><div class="fss">'+la+'\u00d7'+an+'\u00d7'+al+'cm &middot; '+pe+'g'+(pvp?' &middot; \u20ac'+pvp:'')+'</div>';
+  // Peso FACTURABLE = el mayor entre peso real y volum\u00e9trico (L\u00d7An\u00d7Al\u00f75000). Amazon cobra por el m\u00e1s alto.
+  // Los sobres (SL/SE/SG/SX) van solo por peso real (sin volum\u00e9trico).
+  var esSobre=/^S[LEGX]/.test(k);
+  var puG=+pe, pdG=(la>0&&an>0&&al>0)?Math.round((la*an*al)/5000*1000):0;
+  var factG=esSobre?puG:Math.max(puG,pdG), volGana=!esSobre&&pdG>puG;
+  mh+='<div style="font-size:12px;margin-top:5px;color:'+(volGana?'#F5A623':'var(--mu)')+'">&#9878;&#65039; Peso facturable: <b>'+factG+' g</b> '+
+    (esSobre?'(sobre &rarr; solo peso real, sin volum\u00e9trico)'
+      :(volGana?'&mdash; <b>volum\u00e9trico</b> (L\u00d7An\u00d7Al\u00f75000 = '+pdG+'g) &gt; real ('+puG+'g). <b>Amazon te cobra por VOLUMEN.</b>'
+              :'&mdash; peso real ('+puG+'g) \u2265 volum\u00e9trico ('+pdG+'g)'))+'</div>';
   document.getElementById('rf-main').innerHTML=mh;
   // Situación actual
   var opciones=[{label:'Situaci\u00f3n actual',la:la,an:an,al:al,pe:pe,actual:true}];
