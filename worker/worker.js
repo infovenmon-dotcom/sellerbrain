@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v66-fugas-pais-envio'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v67-stock-reservado'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -552,8 +552,8 @@ export default {
       //     (uds/día 30d) y días de cobertura. El front calcula la fecha límite de
       //     pedido según el método de envío (barco/tren/aire) + recepción Amazon. ---
       if (url.pathname === '/v1/stock') {
-        const inv = {};
-        try { for (const r of (await selectSupabase(env, 'inventario?select=sku,disponible,entrante'))) inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0 }; } catch (_) {}
+        const inv = {}; let snapMax = null;
+        try { for (const r of (await selectSupabase(env, 'inventario?select=sku,disponible,entrante,reservado,snapshot'))) { inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0, res: +r.reservado || 0 }; if (r.snapshot && (!snapMax || r.snapshot > snapMax)) snapMax = r.snapshot; } } catch (_) {}
         const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
         const vel = {};
         try { for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds', []))) { const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0); } } catch (_) {}
@@ -561,12 +561,12 @@ export default {
         try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre'))) cat[c.sku] = c.nombre; } catch (_) {}
         const skus = new Set([...Object.keys(inv), ...Object.keys(vel)]);
         const datos = [...skus].filter(s => !/^amzn\.gr\./i.test(s)).map(s => {
-          const disp = (inv[s] && inv[s].disp) || 0, ent = (inv[s] && inv[s].ent) || 0;
+          const disp = (inv[s] && inv[s].disp) || 0, ent = (inv[s] && inv[s].ent) || 0, res = (inv[s] && inv[s].res) || 0;
           const v = (vel[s] || 0) / 30;                          // uds/día (media 30 días)
           const dias = v > 0 ? Math.floor(disp / v) : null;      // cobertura; null = sin ventas
-          return { sku: s, nombre: cat[s] || s, disponible: disp, entrante: ent, vel: +v.toFixed(2), dias };
+          return { sku: s, nombre: cat[s] || s, disponible: disp, entrante: ent, reservado: res, vel: +v.toFixed(2), dias };
         }).sort((a, b) => (a.dias == null ? 99999 : a.dias) - (b.dias == null ? 99999 : b.dias));
-        return json({ datos }, cors);
+        return json({ datos, actualizado: snapMax }, cors);
       }
 
       // --- SOBRECOSTES de logística (fugas de tarifa cross-border) → tabla + datos

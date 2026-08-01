@@ -118,7 +118,7 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
     </tr></thead>
     <tbody id="stk-tabla"></tbody>
   </table></div>
-  <div style="margin-top:9px;font-size:11px;color:var(--mu)">Plazo total = <b>fabricación</b> (columna 🏭 Fab. de cada producto, o el valor por defecto) + transporte (🚢/🚆/✈️) + <b>~7 días</b> de recepción en Amazon. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b>. En <b>🏠 En almacén/casa</b> apunta el stock que tienes sin enviar a Amazon y en <b>🏭 Fab.</b> los días de tu proveedor para ESE producto (ambos a mano, se guardan solos). La cabecera queda fija al desplazarte.</div>
+  <div style="margin-top:9px;font-size:11px;color:var(--mu)">Plazo total = <b>fabricación</b> (columna 🏭 Fab. de cada producto, o el valor por defecto) + transporte (🚢/🚆/✈️) + <b>~7 días</b> de recepción en Amazon. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b>. En <b>🏠 En almacén/casa</b> apunta el stock que tienes sin enviar a Amazon y en <b>🏭 Fab.</b> los días de tu proveedor para ESE producto (ambos a mano, se guardan solos). La cabecera queda fija al desplazarte.<br><b>Stock</b> = unidades <b>disponibles para vender ahora</b> (fulfillable). Las <b>reservadas</b> (+N res., pedidos en curso o traslados entre centros) no cuentan aquí; por eso el <b>Libro Mayor</b> del detector de sobrecostes (saldo del almacén a fecha de ayer) puede mostrar más unidades que este stock disponible.</div>
 </div>
 
 <!-- PASO 1 -->
@@ -502,7 +502,7 @@ function stkRender(){
     var fabV=(FABSKU[sku]!==undefined&&FABSKU[sku]!=='')?FABSKU[sku]:'';
     return '<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
       '<td style="padding:6px 8px;max-width:240px;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:var(--card);z-index:1"><span style="font-weight:600">'+stkEsc(p.nombre||p.sku)+'</span></td>'+
-      '<td style="padding:6px 8px;font-weight:700">'+p.disponible+'</td>'+
+      '<td style="padding:6px 8px;font-weight:700">'+p.disponible+((+p.reservado>0)?('<span style="color:#f5b23e;font-weight:400;font-size:10px" title="Unidades reservadas por Amazon (pedidos en curso, traslados entre centros). Están en el almacén pero NO disponibles para vender ahora — por eso el Libro Mayor puede mostrar más que el stock disponible."> +'+p.reservado+' res.</span>'):'')+'</td>'+
       '<td style="padding:6px 8px;color:var(--mu2)">'+(p.entrante||0)+'</td>'+
       '<td style="padding:4px 6px"><input type="number" min="0" value="'+(propio?propio:'')+'" placeholder="0" data-sku="'+skuA+'" onchange="stkGuardarPropio(this)" style="width:60px;padding:5px 7px;background:#0d0d0d;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:12px" title="Tu stock en almacén/casa (a mano, se guarda)"></td>'+
       '<td style="padding:4px 6px"><input type="number" min="0" value="'+fabV+'" placeholder="'+fabDef+'" data-sku="'+skuA+'" onchange="stkGuardarFabSku(this)" style="width:56px;padding:5px 7px;background:#0d0d0d;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:12px" title="Fabricación de este producto (días). Vacío = por defecto."></td>'+
@@ -522,7 +522,8 @@ function stkCargar(){
     .then(function(d){
       STK.datos=(d&&d.datos)||[];
       var urg=STK.datos.filter(function(p){return p.dias!=null&&p.dias<=15;}).length;
-      st.innerHTML=STK.datos.length+' productos · <b style="color:#ff5c5c">'+urg+'</b> con menos de 15 días de cobertura';
+      var fechaAct=(d&&d.actualizado)?(' · 🕒 stock a '+String(d.actualizado).replace('T',' ').slice(0,16)):'';
+      st.innerHTML=STK.datos.length+' productos · <b style="color:#ff5c5c">'+urg+'</b> con menos de 15 días de cobertura'+fechaAct;
       stkRender();
     })
     .catch(function(){ st.innerHTML='<span style="color:#f5b23e">No pude cargar el stock. ¿Has iniciado sesión?</span>'; });
