@@ -521,13 +521,29 @@ function render(){
     'Aplica los cambios, descarga el siguiente export horario y compara: si el ACoS de las franjas recortadas mejora y las ventas totales se mantienen, el dayparting funciona.</div></div>';
   document.getElementById('plan').innerHTML = ph;
 
-  // Tabla
+  // Tabla (con el "culpable" por franja; se repinta cuando lleguen los culpables)
+  pphRenderTabla();
+
+  document.getElementById('res').scrollIntoView({behavior:'smooth'});
+}
+
+function pphEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Pinta el cuerpo de la tabla hora a hora. En las franjas malas añade la CAMPAÑA
+// que más gasta en esa hora (PPH.culpables) — sin que el usuario tenga que filtrar.
+function pphRenderTabla(){
+  var D=horasData; if(!D) return;
+  var sym=document.getElementById('cfg-mon').value==='usd'?'$':'€';
   var tb='';
   D.porHora.forEach(function(h){
-    var acos = h.ventas>0 ? h.gasto/h.ventas*100 : null;
-    var cvr = h.clics>0 ? h.pedidos/h.clics*100 : 0;
-    var cpc = h.clics>0 ? h.gasto/h.clics : 0;
-    tb += '<tr>'+
+    var acos=h.ventas>0?h.gasto/h.ventas*100:null;
+    var cvr=h.clics>0?h.pedidos/h.clics*100:0;
+    var cpc=h.clics>0?h.gasto/h.clics:0;
+    var culp='';
+    if(h.v && h.v.tipo==='rd' && h.gasto>0){
+      var c=(PPH.culpables||{})[h.hora];
+      if(c && c.gasto>0) culp='<div style="font-size:10.5px;color:var(--mu);margin-top:2px" title="Campaña que más gasta en esta franja">👉 '+pphEsc(c.nombre)+' · '+sym+f(c.gasto,2)+'</div>';
+    }
+    tb+='<tr>'+
       '<td><b>'+String(h.hora).padStart(2,'0')+':00</b></td>'+
       '<td>'+f(h.clics,0)+'</td>'+
       '<td>'+sym+f(h.gasto,2)+'</td>'+
@@ -536,12 +552,37 @@ function render(){
       '<td>'+(acos!==null?f(acos,1)+'%':'—')+'</td>'+
       '<td>'+f(cvr,1)+'%</td>'+
       '<td>'+sym+f(cpc,2)+'</td>'+
-      '<td><span class="tag '+h.v.tipo+'">'+h.v.txt+'</span></td>'+
+      '<td><span class="tag '+h.v.tipo+'">'+h.v.txt+'</span>'+culp+'</td>'+
     '</tr>';
   });
-  document.getElementById('tbody').innerHTML = tb;
-
-  document.getElementById('res').scrollIntoView({behavior:'smooth'});
+  document.getElementById('tbody').innerHTML=tb;
+}
+// Carga (en 2º plano) el gasto por campaña y hora de TODAS las campañas y calcula,
+// por franja, la campaña que más gasta. Reutiliza el mismo endpoint. Luego repinta.
+function pphCargarCulpables(){
+  PPH.culpables={};
+  if(!PPH.base) return;
+  var ids=(PPH.campanas||[]).map(function(c){return c.campania_id;}).filter(Boolean);
+  if(!ids.length){ return; }
+  var pais=document.getElementById('real-pais').value;
+  var nom={}; (PPH.campanas||[]).forEach(function(c){ nom[c.campania_id]=c.campania||c.campania_id; });
+  var url=PPH.base+'/v1/ppc/horas?pais='+encodeURIComponent(pais)+pphRangoQS()+'&campania='+encodeURIComponent(ids.join(','));
+  fetch(url,{headers:pphHeaders()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var agg={};   // horaEspaña -> { campania_id -> gasto }
+      (d.reciente||[]).forEach(function(r){
+        var hora=+aHoraEspana(r.fecha, r.hora).slice(11,13);
+        if(!agg[hora]) agg[hora]={};
+        agg[hora][r.campania_id]=(agg[hora][r.campania_id]||0)+(+r.gasto||0);
+      });
+      Object.keys(agg).forEach(function(hora){
+        var best=null;
+        Object.keys(agg[hora]).forEach(function(id){ if(!best||agg[hora][id]>best.gasto) best={campania_id:id, gasto:agg[hora][id], nombre:nom[id]||id}; });
+        if(best) PPH.culpables[+hora]=best;
+      });
+      pphRenderTabla();
+    }).catch(function(){});
 }
 
 function kpi(v,l,s,col){
@@ -632,7 +673,7 @@ function demo(){
 })();
 
 // ===== DATOS REALES (conectado): PPC por horas desde el backend =====
-var PPH = { base:'', tok:'', total:[], campanas:[] };
+var PPH = { base:'', tok:'', total:[], campanas:[], culpables:{} };
 
 function pphBase(){
   try{
@@ -760,6 +801,7 @@ function pphAnalizar(){
       var dias={}; reciente.forEach(function(r){dias[r.fecha]=1;});
       var nd=Object.keys(dias).length;
       procesar(pphRows(reciente));
+      pphCargarCulpables();   // rellena la campaña culpable de cada franja mala (2º plano)
       st.innerHTML = '✅ Analizados '+reciente.length+' registros · '+nd+' día'+(nd===1?'':'s')
         + (nd<7 ? ' · <span style="color:var(--am)">con más días el patrón y el mapa de calor serán más fiables</span>' : '');
       var res=document.getElementById('res'); if(res) res.scrollIntoView({behavior:'smooth'});
