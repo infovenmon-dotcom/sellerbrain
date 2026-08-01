@@ -23,8 +23,9 @@ begin
     end if;
 
     -- 1) columna fecha + relleno desde `hasta` (sin borrar) + NOT NULL
+    --    OJO: `hasta` puede estar como date O como text según la tabla -> casteo robusto.
     execute format('alter table %I add column if not exists fecha date', t);
-    execute format('update %I set fecha = coalesce(fecha, hasta, current_date) where fecha is null', t);
+    execute format('update %I set fecha = coalesce(fecha, nullif(hasta::text,'''')::date, current_date) where fecha is null', t);
     execute format('alter table %I alter column fecha set not null', t);
 
     -- 2) clave primaria actual
