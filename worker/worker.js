@@ -37,7 +37,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v68-iva-check'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v69-envios-check'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -812,7 +812,41 @@ export default {
           diag.muestra = filas.slice(0, 5);
         } catch (e) {
           diag.disponible = false;
-          diag.error = e.message;   // p.ej. FATAL → la cuenta no tiene VCS/este informe activo
+          diag.error = e.message;   // 403 → la app no tiene el rol fiscal; FATAL → informe no generable
+        }
+        return json({ ok: true, ...diag }, cors);
+      }
+
+      // --- SONDA ENVÍOS (admin): Informe de Envíos Gestionados por Amazon
+      //     (GET_AMAZON_FULFILLED_SHIPMENTS_DATA). Trae fulfillment-center-id (→ país
+      //     de SALIDA) y ship-country (país de LLEGADA), SIN necesitar el rol fiscal.
+      //     Alternativa accesible al informe de IVA para el sobrecoste por país y OSS. ---
+      if (url.pathname === '/v1/envios-check') {
+        const diag = {};
+        const hasta = new Date().toISOString();
+        const desde = new Date(Date.now() - 30 * 86400000).toISOString();
+        const tipos = ['GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL', 'GET_AMAZON_FULFILLED_SHIPMENTS_DATA'];
+        for (const tipo of tipos) {
+          try {
+            const tsv = await pedirInforme(env, tipo, desde, hasta,
+              [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE]);
+            const filas = parseTSV(tsv);
+            const cols = filas[0] ? Object.keys(filas[0]) : [];
+            diag.disponible = true;
+            diag.tipo = tipo;
+            diag.filas = filas.length;
+            diag.columnas = cols;
+            diag.col_centro = cols.filter(c => c.indexOf('fulfillment-center') > -1 || c.indexOf('fulfillment_center') > -1 || c.indexOf('center') > -1);
+            diag.col_destino = cols.filter(c => c.indexOf('ship-country') > -1 || c.indexOf('ship_country') > -1 || (c.indexOf('country') > -1));
+            // Centros logísticos vistos (los primeros caracteres del FC indican el país)
+            const fcCol = diag.col_centro[0];
+            if (fcCol) diag.centros = Array.from(new Set(filas.map(f => f[fcCol]).filter(Boolean))).slice(0, 20);
+            diag.crudo = (tsv || '').slice(0, 900);
+            break;
+          } catch (e) {
+            diag.disponible = false;
+            diag['error_' + tipo] = e.message;
+          }
         }
         return json({ ok: true, ...diag }, cors);
       }

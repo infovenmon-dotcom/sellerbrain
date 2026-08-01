@@ -246,8 +246,14 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 
       <div style="margin-top:12px">
         <button class="chip" id="btn-ivacheck" onclick="probarIVA()">🧾 Comprobar informe de IVA</button>
-        <span style="font-size:11px;color:var(--mu);margin-left:8px">Comprueba si tu cuenta genera el «Informe de transacciones de IVA» (país de salida → llegada). Base del sobrecoste por país y de Ventanilla Única. 1-3 min.</span>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Comprueba si tu cuenta genera el «Informe de transacciones de IVA» (requiere rol fiscal). 1-3 min.</span>
         <div id="cx-iva-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <button class="chip" id="btn-envioscheck" onclick="probarEnvios()">📦 Comprobar informe de envíos (FC → país)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Alternativa sin rol fiscal: centro logístico (país de salida) → país de destino. Base del sobrecoste por país y de Ventanilla Única. 1-3 min.</span>
+        <div id="cx-envios-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
     </div>
   </div>
@@ -2307,6 +2313,30 @@ async function probarIVA(){
       box.innerHTML='<div style="color:var(--am)">⚠️ Ahora mismo tu cuenta no ha generado el informe.</div>'+
         '<div style="color:var(--rd);margin-top:4px">'+(d.error||'sin detalle')+'</div>'+
         '<div style="color:var(--mu);margin-top:6px">Suele ser porque no tienes activado el <b>Servicio de Cálculo de IVA (VCS)</b> en Seller Central (Configuración → Información fiscal / IVA). Actívalo y vuelve a probar.</div>';
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error o timeout: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
+
+// Sonda alternativa (sin rol fiscal): informe de envíos → centro logístico (salida) + país destino
+async function probarEnvios(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-envios-res'), btn=document.getElementById('btn-envioscheck');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Pidiendo el informe de envíos a Amazon… (1-3 min, no cierres)</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/envios-check?key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.disponible){
+      box.innerHTML='<div style="color:var(--gn)">✅ Tu cuenta SÍ genera el informe de envíos ('+(d.tipo||'')+') — '+(d.filas||0)+' envíos (30 días).</div>'+
+        '<div style="color:var(--mu);margin-top:6px">Centro logístico (salida): <b>'+((d.col_centro||[]).join(', ')||'—')+'</b> · País destino: <b>'+((d.col_destino||[]).join(', ')||'—')+'</b></div>'+
+        (d.centros&&d.centros.length?'<div style="color:var(--mu);margin-top:4px">Centros vistos: '+d.centros.join(', ')+'</div>':'')+
+        (d.crudo?'<div style="color:var(--mu2);margin-top:6px;white-space:pre-wrap;font-size:10.5px;max-height:200px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:8px">'+(d.crudo||'').replace(/</g,'&lt;')+'</div>':'');
+    } else {
+      var errs=Object.keys(d).filter(function(k){return k.indexOf('error_')===0;}).map(function(k){return k.replace('error_','')+': '+d[k];}).join('<br>');
+      box.innerHTML='<div style="color:var(--am)">⚠️ No se pudo generar el informe de envíos.</div>'+
+        '<div style="color:var(--rd);margin-top:4px">'+(errs||d.error||'sin detalle')+'</div>';
     }
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error o timeout: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
