@@ -335,7 +335,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div class="ch"><h2><span class="ci">🎯</span> Campañas · últimos 30 días</h2></div>
         <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Unidades vendidas atribuidas por la publicidad (14 días). El histórico previo muestra pedidos hasta que entren las nuevas ingestas.">Uds</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Ventas (pedidos) atribuidas a los clics de la publicidad — es la base del CVR (ventas ÷ clics).">Ventas (uds)</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
           <tbody id="ppc-campanas"></tbody>
         </table>
         </div>
@@ -2679,7 +2679,7 @@ function renderPPC(fuente){
     var a=x.ventas_ppc>0?x.gasto/x.ventas_ppc*100:999;
     var roas=x.gasto>0?x.ventas_ppc/x.gasto:0;
     var est=a<=25?['gn','Rentable']:a<=40?['am','Vigilar']:x.ventas_ppc>0?['rd','ACoS alto']:['rd','Sin ventas'];
-    var uds=(x.unidades_ppc!=null?x.unidades_ppc:x.pedidos_ppc)||0;
+    var uds=x.pedidos_ppc||0;   // ventas (pedidos) atribuidas a los clics — base del CVR
     return '<tr><td style="max-width:210px;overflow:hidden;text-overflow:ellipsis">'+x.nombre+'</td><td>'+x.pais+'</td>'+
       '<td style="color:#B983D6">'+f(x.gasto,2)+'€</td><td>'+x.clics+'</td>'+
       '<td style="font-weight:600">'+uds+'</td>'+
