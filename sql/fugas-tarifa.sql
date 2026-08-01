@@ -1,24 +1,22 @@
 -- =====================================================================
--- DETECTOR DE FUGAS DE TARIFA (cross-border) — por SKU y PAÍS DE SALIDA.
+-- DETECTOR DE FUGAS DE TARIFA (cross-border) — tarifa local REAL por SKU y país.
 -- Ejecuta en Supabase -> SQL Editor DESPUÉS de sql/envios-fc.sql. Idempotente.
 --
--- Idea: si una parte de tus unidades se sirve desde otro país (transfronterizo),
--- pagas una tarifa de gestión más cara que la LOCAL de ese país. Comparamos la
--- tarifa MEDIA que pagas contra tu mejor tarifa observada EN ESE MISMO PAÍS
--- (proxy de la local del país = percentil 15) y sacamos cuánto dinero se va.
+-- Idea: la "tarifa local" NO se estima; es lo que Amazon te cobra de VERDAD cuando
+-- sirve en LOCAL (envío salida=destino). Con envios_fc sabemos qué líneas del
+-- settlement fueron locales y cuáles cross-border (salida<>destino). La local real =
+-- media de las tarifas de los envíos locales de ese SKU en ese país. El sobrecoste =
+-- lo pagado de más en las unidades cross-border frente a esa local real.
 --
--- NUEVO (país fiable): antes intentábamos adivinar el país de cada tarifa desde el
--- propio settlement, que muchas veces NO lo trae -> salía '?'. Ahora tomamos el
--- PAÍS DE SALIDA real del Informe de Envíos (tabla envios_fc), cruzando por order-id.
--- Así el benchmark local es por país de salida y desaparece el 'sin determinar'.
+-- Si aún no hay envios_fc (o un SKU no tiene envíos locales conocidos), se cae a una
+-- ESTIMACIÓN (percentil 15) y la fila se marca local_real=false para no confundir.
 --
--- Las tarifas del settlement vienen CON IVA -> se dividen por 1,21 (IVA recuperable).
--- Cada línea de gestión ~ 1 unidad (así lo confirma el settlement).
+-- Tarifas del settlement CON IVA -> /1,21 (IVA recuperable). ~1 línea = 1 unidad.
 -- =====================================================================
 
 create or replace view v_fuga_tarifa as
-with paisped as (                          -- país de SALIDA por pedido (del informe de envíos)
-  select order_id as pedido, max(pais_salida) as pais
+with rutas as (                              -- por pedido: país de salida y de destino (envios_fc)
+  select order_id as pedido, max(pais_salida) as salida, max(pais_destino) as destino
   from envios_fc
   where coalesce(pais_salida,'') not in ('', '?')
   group by order_id
@@ -26,48 +24,64 @@ with paisped as (                          -- país de SALIDA por pedido (del in
 lineas as (
   select
     l.sku,
-    -- país de SALIDA real (envios_fc); si no hay match, el de la línea; si tampoco, '?'
-    coalesce(p.pais, nullif(l.pais,''), '?') as pais,
-    abs(l.importe) / 1.21 as fee            -- tarifa por unidad, SIN IVA
+    coalesce(r.salida, nullif(l.pais,''), '?') as pais,                 -- país de SALIDA real (o el de la línea)
+    (r.salida is not null) as ruta_ok,                                  -- sabemos la ruta de este pedido
+    (r.salida is not null and r.destino is not null and r.salida <> r.destino) as es_cross,  -- cross-border
+    abs(l.importe) / 1.21 as fee
   from settlement_lineas l
-  left join paisped p on p.pedido = l.pedido
+  left join rutas r on r.pedido = l.pedido
   where l.importe < 0
     and coalesce(l.sku,'') <> ''
-    and l.fecha >= (current_date - 90)      -- ventana de 90 días
+    and l.fecha >= (current_date - 90)
     and ( l.concepto ilike '%fulfillment%' or l.concepto ilike '%fbaperunit%'
        or l.concepto ilike '%weight%handl%' )
 ),
 bench as (
   select
     sku, pais,
-    count(*)                                                     as uds,
-    round(avg(fee), 2)                                           as fee_medio,
-    round((percentile_cont(0.15) within group (order by fee))::numeric, 2) as fee_local,  -- mejor tarifa EN ESE PAÍS (≈ local del país)
-    round(max(fee), 2)                                           as fee_max
+    count(*)                                                              as uds,
+    round(avg(fee), 2)                                                    as fee_medio,
+    round(max(fee), 2)                                                    as fee_max,
+    round(avg(fee) filter (where ruta_ok and not es_cross), 2)            as fee_local_real,  -- media REAL de envíos locales
+    count(*)      filter (where ruta_ok and not es_cross)                 as uds_local,
+    round((percentile_cont(0.15) within group (order by fee))::numeric,2) as fee_local_est    -- estimación (fallback)
   from lineas
-  where pais <> '?'                          -- sin país conocido no comparamos (evita el falso "local de ES")
+  where pais <> '?'
   group by sku, pais
 ),
 det as (
   select l.sku, l.pais,
-    count(*) filter (where l.fee > b.fee_local * 1.10) as uds_caras   -- servidas >10% por encima de la local del país
+    count(*) filter (where l.ruta_ok and l.es_cross)                                  as uds_cross,
+    sum(l.fee) filter (where l.ruta_ok and l.es_cross)                                as fee_cross_sum,
+    count(*) filter (where l.fee > coalesce(b.fee_local_real, b.fee_local_est)*1.10)  as uds_caras_est
   from lineas l
   join bench b on b.sku = l.sku and b.pais = l.pais
   group by l.sku, l.pais
+),
+calc as (
+  select
+    b.sku, b.pais, b.uds, b.fee_medio, b.fee_max,
+    coalesce(b.fee_local_real, b.fee_local_est)     as fee_local,
+    (b.fee_local_real is not null)                  as local_real,
+    case when b.fee_local_real is not null then d.uds_cross else d.uds_caras_est end  as uds_caras,
+    case when b.fee_local_real is not null
+         then (d.fee_cross_sum - b.fee_local_real * d.uds_cross)                      -- pagado de más en cross vs local real
+         else (b.fee_medio - b.fee_local_est) * b.uds end                            as sobrecoste_90d
+  from bench b
+  join det d on d.sku = b.sku and d.pais = b.pais
 )
 select
-  b.sku, b.pais, b.uds, b.fee_medio, b.fee_local, b.fee_max,
-  d.uds_caras,
-  round(100.0 * d.uds_caras / nullif(b.uds, 0), 0)              as pct_caras,
-  round((b.fee_medio - b.fee_local) * b.uds, 2)                 as sobrecoste_90d,
-  round((b.fee_medio - b.fee_local) * b.uds / 3.0, 2)          as sobrecoste_mes
-from bench b
-join det d on d.sku = b.sku and d.pais = b.pais
-where b.uds >= 10                                    -- suficientes unidades para fiarse
-  and (b.fee_medio - b.fee_local) * b.uds >= 5       -- solo fugas con algo de miga
+  sku, pais, uds, fee_medio, fee_local, fee_max, local_real, uds_caras,
+  round(100.0 * uds_caras / nullif(uds, 0), 0)  as pct_caras,
+  round(sobrecoste_90d, 2)                       as sobrecoste_90d,
+  round(sobrecoste_90d / 3.0, 2)                 as sobrecoste_mes
+from calc
+where uds >= 10
+  and sobrecoste_90d >= 5
 order by sobrecoste_mes desc;
 
 -- Comprobar:
--- select * from v_fuga_tarifa order by sobrecoste_mes desc;
--- Cobertura del país de salida (debería haber muy pocos '?' si envios_fc está cargado):
--- select coalesce(nullif(pais,''),'(vacio)') pais, count(*) from v_fuga_tarifa group by 1 order by 2 desc;
+-- select sku, pais, local_real, fee_medio, fee_local, uds_caras, sobrecoste_mes
+--   from v_fuga_tarifa order by sobrecoste_mes desc;
+-- ¿Cuántas filas ya con tarifa local REAL (necesita envios_fc cargado)?
+-- select local_real, count(*) from v_fuga_tarifa group by 1;
