@@ -83,7 +83,7 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
     <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">🚢 Barco (días)</label><input type="number" id="lt-barco" value="60" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
     <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">🚆 Tren/camión</label><input type="number" id="lt-tren" value="35" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
     <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">✈️ Aire</label><input type="number" id="lt-aire" value="15" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
-    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px" title="Días que tarda tu proveedor desde que pagas hasta que la mercancía está lista para enviar. Se suma al transporte.">🏭 Fabricación</label><input type="number" id="lt-fab" value="0" min="0" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkGuardarFab();stkRender()"></div>
+    <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px" title="Valor por defecto de fabricación. Cada producto puede tener el suyo propio en la columna 🏭 Fab. de la tabla.">🏭 Fabricación (por defecto)</label><input type="number" id="lt-fab" value="0" min="0" style="width:120px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkGuardarFab();stkRender()"></div>
     <div><label style="display:block;font-size:11px;color:var(--mu);margin-bottom:3px">📦 Recepción Amazon</label><input type="number" id="lt-recep" value="7" style="width:80px;padding:7px 9px;background:#111;border:1.5px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px" onchange="stkRender()"></div>
     <button class="btn-sec" onclick="stkCargar()">↻ Actualizar</button>
   </div>
@@ -108,7 +108,8 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
       <th style="padding:8px;position:sticky;top:0;left:0;z-index:3;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Producto</th>
       <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Stock</th>
       <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Unidades en camino a Amazon">En camino</th>
-      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Stock que tienes tú (almacén/casa), aún sin enviar a Amazon. A mano — se guarda en tu navegador.">🏠 Tuyo</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Stock que tienes en tu almacén/casa, aún sin enviar a Amazon. A mano — se guarda en tu navegador.">🏠 En almacén/casa</th>
+      <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Días de fabricación del proveedor para ESTE producto (desde que pagas hasta que está listo). Se suma al transporte. Vacío = usa el valor por defecto de arriba.">🏭 Fab.</th>
       <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Uds/día</th>
       <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)">Cobertura</th>
       <th style="padding:8px;position:sticky;top:0;z-index:2;background:var(--card2);box-shadow:0 1px 0 var(--bd)" title="Pide antes de esta fecha si vas por barco">🚢 Barco</th>
@@ -117,7 +118,7 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
     </tr></thead>
     <tbody id="stk-tabla"></tbody>
   </table></div>
-  <div style="margin-top:9px;font-size:11px;color:var(--mu)">Plazo total = <b>fabricación</b> (proveedor) + transporte (🚢/🚆/✈️) + <b>~7 días</b> de recepción en Amazon. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b> para ese método. En <b>🏠 Tuyo</b> apunta a mano el stock que tienes en tu almacén/casa (se guarda solo). La cabecera queda fija al desplazarte.</div>
+  <div style="margin-top:9px;font-size:11px;color:var(--mu)">Plazo total = <b>fabricación</b> (columna 🏭 Fab. de cada producto, o el valor por defecto) + transporte (🚢/🚆/✈️) + <b>~7 días</b> de recepción en Amazon. "Pide antes de" = hoy + (cobertura − plazo total). En rojo = <b>ya vas tarde</b>. En <b>🏠 En almacén/casa</b> apunta el stock que tienes sin enviar a Amazon y en <b>🏭 Fab.</b> los días de tu proveedor para ESE producto (ambos a mano, se guardan solos). La cabecera queda fija al desplazarte.</div>
 </div>
 
 <!-- PASO 1 -->
@@ -466,39 +467,45 @@ function stkFechaLimite(dias, lead){
 }
 // Guarda el stock "Tuyo" (almacén/casa) por SKU — misma clave que la tabla manual.
 function stkGuardarPropio(inp){ var sku=inp.dataset.sku; PROPIO[sku]=parseInt(inp.value)||0; try{ localStorage.setItem('sb_propio', JSON.stringify(PROPIO)); }catch(e){} }
-// Recuerda los días de fabricación entre sesiones.
+// Recuerda el valor de fabricación por defecto entre sesiones.
 function stkGuardarFab(){ try{ localStorage.setItem('sb_lt_fab', document.getElementById('lt-fab').value||'0'); }catch(e){} }
+// Fabricación POR PRODUCTO (días). Vacío = usa el valor por defecto.
+var FABSKU={}; try{ FABSKU=JSON.parse(localStorage.getItem('sb_fab_sku')||'{}'); }catch(e){ FABSKU={}; }
+function stkGuardarFabSku(inp){ var sku=inp.dataset.sku, v=inp.value; if(v===''||v==null){ delete FABSKU[sku]; } else { FABSKU[sku]=parseInt(v)||0; } try{ localStorage.setItem('sb_fab_sku', JSON.stringify(FABSKU)); }catch(e){} stkRender(); }
 function stkRender(){
   var recep=+document.getElementById('lt-recep').value||0;
-  var fab=+document.getElementById('lt-fab').value||0;   // días de fabricación del proveedor
-  var lb=(+document.getElementById('lt-barco').value||0)+fab+recep;
-  var lt=(+document.getElementById('lt-tren').value||0)+fab+recep;
-  var la=(+document.getElementById('lt-aire').value||0)+fab+recep;
+  var fabDef=+document.getElementById('lt-fab').value||0;   // fabricación por defecto
+  var barco=+document.getElementById('lt-barco').value||0, tren=+document.getElementById('lt-tren').value||0, aire=+document.getElementById('lt-aire').value||0;
+  function fabDe(p){ var s=p.sku||''; return (FABSKU[s]!==undefined&&FABSKU[s]!=='')?(+FABSKU[s]||0):fabDef; } // días de fabricación de este producto
+  function leads(p){ var fb=fabDe(p); return {lb:barco+fb+recep, lt:tren+fb+recep, la:aire+fb+recep}; }
   var tb=document.getElementById('stk-tabla'), datos=(STK.datos||[]).slice();
-  if(!datos.length){ tb.innerHTML='<tr><td colspan="9" style="padding:10px;color:var(--mu)">Sin datos de stock todavía (necesita inventario y ventas ingestados).</td></tr>'; return; }
+  if(!datos.length){ tb.innerHTML='<tr><td colspan="10" style="padding:10px;color:var(--mu)">Sin datos de stock todavía (necesita inventario y ventas ingestados).</td></tr>'; return; }
   var q=(document.getElementById('stk-q').value||'').trim().toLowerCase();
   var filtro=(document.getElementById('stk-filtro')||{}).value||'todos';
   var orden=(document.getElementById('stk-orden')||{}).value||'cob';
   if(q) datos=datos.filter(function(p){ return ((p.nombre||'')+' '+(p.sku||'')).toLowerCase().indexOf(q)>=0; });
   if(filtro==='urg')  datos=datos.filter(function(p){ return p.dias!=null&&p.dias<=15; });
   else if(filtro==='bajo') datos=datos.filter(function(p){ return p.dias!=null&&p.dias<=30; });
-  else if(filtro==='tarde')datos=datos.filter(function(p){ return p.dias!=null&&(p.dias-lb)<0; });
+  else if(filtro==='tarde')datos=datos.filter(function(p){ return p.dias!=null&&(p.dias-leads(p).lb)<0; });
   else if(filtro==='cero') datos=datos.filter(function(p){ return (+p.disponible||0)===0; });
   if(orden==='stock')      datos.sort(function(a,b){ return (+b.disponible||0)-(+a.disponible||0); });
   else if(orden==='nombre')datos.sort(function(a,b){ return (a.nombre||a.sku||'').localeCompare(b.nombre||b.sku||''); });
   else                     datos.sort(function(a,b){ return (a.dias==null?1e9:a.dias)-(b.dias==null?1e9:b.dias); }); // urgencia
-  if(!datos.length){ tb.innerHTML='<tr><td colspan="9" style="padding:10px;color:var(--mu)">Ningún producto coincide con el filtro.</td></tr>'; return; }
+  if(!datos.length){ tb.innerHTML='<tr><td colspan="10" style="padding:10px;color:var(--mu)">Ningún producto coincide con el filtro.</td></tr>'; return; }
   tb.innerHTML=datos.map(function(p){
     var cob = p.dias==null ? 'sin ventas' : p.dias+'d';
     var colCob = p.dias==null?'var(--mu)':(p.dias<=15?'#ff5c5c':p.dias<=30?'#f5b23e':'#2ee6a0');
-    var b=stkFechaLimite(p.dias,lb), t=stkFechaLimite(p.dias,lt), a=stkFechaLimite(p.dias,la);
-    var sku=p.sku||'';
+    var L=leads(p);
+    var b=stkFechaLimite(p.dias,L.lb), t=stkFechaLimite(p.dias,L.lt), a=stkFechaLimite(p.dias,L.la);
+    var sku=p.sku||'', skuA=stkEsc(sku).replace(/"/g,'&quot;');
     var propio=(PROPIO[sku]!==undefined?PROPIO[sku]:0);   // stock tuyo (almacén/casa), compartido con la tabla manual
+    var fabV=(FABSKU[sku]!==undefined&&FABSKU[sku]!=='')?FABSKU[sku]:'';
     return '<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
       '<td style="padding:6px 8px;max-width:240px;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:var(--card);z-index:1"><span style="font-weight:600">'+stkEsc(p.nombre||p.sku)+'</span></td>'+
       '<td style="padding:6px 8px;font-weight:700">'+p.disponible+'</td>'+
       '<td style="padding:6px 8px;color:var(--mu2)">'+(p.entrante||0)+'</td>'+
-      '<td style="padding:4px 6px"><input type="number" min="0" value="'+(propio?propio:'')+'" placeholder="0" data-sku="'+stkEsc(sku).replace(/"/g,'&quot;')+'" onchange="stkGuardarPropio(this)" style="width:60px;padding:5px 7px;background:#0d0d0d;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:12px" title="Tu stock en almacén/casa (a mano, se guarda)"></td>'+
+      '<td style="padding:4px 6px"><input type="number" min="0" value="'+(propio?propio:'')+'" placeholder="0" data-sku="'+skuA+'" onchange="stkGuardarPropio(this)" style="width:60px;padding:5px 7px;background:#0d0d0d;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:12px" title="Tu stock en almacén/casa (a mano, se guarda)"></td>'+
+      '<td style="padding:4px 6px"><input type="number" min="0" value="'+fabV+'" placeholder="'+fabDef+'" data-sku="'+skuA+'" onchange="stkGuardarFabSku(this)" style="width:56px;padding:5px 7px;background:#0d0d0d;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:12px" title="Fabricación de este producto (días). Vacío = por defecto."></td>'+
       '<td style="padding:6px 8px">'+f(p.vel,2)+'</td>'+
       '<td style="padding:6px 8px;color:'+colCob+';font-weight:600">'+cob+'</td>'+
       '<td style="padding:6px 8px;color:'+b.col+'">'+b.txt+'</td>'+

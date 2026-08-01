@@ -2460,6 +2460,7 @@ function campanasRango(){
   var by={};
   raw.forEach(function(c){
     if(!ppcEnRango(c.fecha)) return;
+    if(PPC_PAIS!=='all' && (c.pais||'')!==PPC_PAIS) return;   // filtro maestro de país
     var k=c.pais+'·'+c.nombre;
     if(!by[k]) by[k]={pais:c.pais,nombre:c.nombre,gasto:0,clics:0,ventas_ppc:0,pedidos_ppc:0};
     by[k].gasto+=+c.gasto||0; by[k].clics+=+c.clics||0; by[k].ventas_ppc+=+c.ventas_ppc||0; by[k].pedidos_ppc+=+c.pedidos_ppc||0;
@@ -2492,14 +2493,12 @@ function serieDiasPPC(paisSel){
   return Object.keys(byF).sort().map(function(k){return byF[k];});
 }
 function filtrarPPCPais(code){
-  PPC_PAIS=code;
-  var fEl=document.getElementById('ppc-pais-filtro');
-  if(fEl) Array.prototype.forEach.call(fEl.children,function(b){ b.classList.toggle('on', b.getAttribute('onclick').indexOf("'"+code+"'")>-1); });
-  dibujarPPCChart();
+  PPC_PAIS=code;   // filtro maestro: país aplica a toda la pantalla de PPC
+  _ppcRerender();
 }
 function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; dibujarPPCChart(); }
 // ---- Controles del filtro maestro de fechas ----
-function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'&&ppcEsDiario()){ try{renderPPCRentab();}catch(e){} } }
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } }
 function ppcPreset(p){
   var hoy=new Date();
   if(p==='30d'){ PPC_RANGO=null; }
@@ -2695,8 +2694,9 @@ function renderPPCRentab(){
   var hoy=new Date(), desde, hasta;
   if(typeof PPC_RANGO!=='undefined' && PPC_RANGO && ppcEsDiario()){ desde=PPC_RANGO.desde; hasta=PPC_RANGO.hasta; }
   else { desde=ymdUTC(new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1))); hasta=ymdUTC(hoy); }
+  var paisQ=(typeof PPC_PAIS!=='undefined'&&PPC_PAIS!=='all')?('&pais='+encodeURIComponent(PPC_PAIS)):'';
   el.innerHTML='<tr><td colspan="6" style="color:var(--mu);font-size:12px;padding:10px">Cargando…</td></tr>';
-  fetch(SB_CONFIG.apiBase+'/v1/productos?desde='+desde+'&hasta='+hasta,{headers:authHdr()})
+  fetch(SB_CONFIG.apiBase+'/v1/productos?desde='+desde+'&hasta='+hasta+paisQ,{headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(d){
       var ps=(d.productos||[]).filter(function(p){return p.acos_real!=null;});
@@ -2792,6 +2792,7 @@ function renderPPC(fuente){
 // `fecha`, formato actual), los devuelve tal cual y muestra la nota aclaratoria.
 function terminosRango(){
   var raw=(PPC_DATA&&PPC_DATA.terminos)||[];
+  if(PPC_PAIS!=='all') raw=raw.filter(function(t){return (t.pais||'')===PPC_PAIS;});   // filtro maestro de país
   var esDiario = raw.some(function(t){return t.fecha;});
   var nota=document.getElementById('ppc-terminos-nota');
   if(nota) nota.style.display = (PPC_RANGO && !esDiario) ? 'inline' : 'none';
