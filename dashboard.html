@@ -2343,24 +2343,34 @@ async function probarEnvios(){
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error o timeout: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
-// Ingesta real: guarda el país de salida por pedido (envios_fc)
+// Ingesta real: guarda el país de salida por pedido (envios_fc).
+// Encadena 3 ventanas de 29 días (0-29, 29-58, 58-87) — una petición corta cada
+// una — para no agotar el tiempo del worker con un solo informe de 90 días.
 async function ingestarEnvios(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
   var box=document.getElementById('cx-envios-res'), btn=document.getElementById('btn-enviosingest');
   if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
   btn.disabled=true;btn.style.opacity=.5;
-  box.innerHTML='<span style="color:var(--mu)">⏳ Cargando y guardando el país de salida de tus envíos… (1-3 min)</span>';
-  try{
-    var r=await fetch(SB_CONFIG.apiBase+'/v1/envios-ingest?key='+encodeURIComponent(key));
-    var d=await r.json();
-    if(d.error){ box.innerHTML='<span style="color:var(--rd)">❌ '+d.error+'</span>'; }
-    else {
-      var sal=Object.keys(d.por_salida||{}).map(function(k){return k+': '+d.por_salida[k];}).join(' · ');
-      box.innerHTML='<div style="color:'+((d.filas||0)>0?'var(--gn)':'var(--am)')+'">'+((d.filas||0)>0?'✅':'⚠️')+' '+(d.filas||0)+' líneas guardadas en envios_fc.</div>'+
-        '<div style="color:var(--mu);margin-top:6px">Por país de salida: '+(sal||'—')+'</div>'+
-        ((d.desconocidos&&d.desconocidos.length)?'<div style="color:var(--am);margin-top:4px">Centros sin mapear (dímelos y los añado): '+d.desconocidos.join(', ')+'</div>':'');
-    }
-  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error o timeout: '+e.message+'</span>'; }
+  var offs=[0,29,58], totalFilas=0, salAcc={}, descAcc={}, errs=[];
+  for(var i=0;i<offs.length;i++){
+    box.innerHTML='<span style="color:var(--mu)">⏳ Ventana '+(i+1)+'/'+offs.length+' (días '+offs[i]+'-'+(offs[i]+29)+')… cada una tarda 1-3 min, no cierres.</span>';
+    try{
+      var r=await fetch(SB_CONFIG.apiBase+'/v1/envios-ingest?dias=29&off='+offs[i]+'&key='+encodeURIComponent(key));
+      var d=await r.json();
+      if(d.error){ errs.push('días '+offs[i]+'-'+(offs[i]+29)+': '+d.error); }
+      else {
+        totalFilas+=(d.filas||0);
+        Object.keys(d.por_salida||{}).forEach(function(k){ salAcc[k]=(salAcc[k]||0)+d.por_salida[k]; });
+        (d.desconocidos||[]).forEach(function(s){ var c=s.replace(/\s*\(\d+\)$/,''); descAcc[c]=1; });
+      }
+    }catch(e){ errs.push('días '+offs[i]+'-'+(offs[i]+29)+': '+e.message); }
+  }
+  var sal=Object.keys(salAcc).map(function(k){return k+': '+salAcc[k];}).join(' · ');
+  var desc=Object.keys(descAcc);
+  box.innerHTML='<div style="color:'+(totalFilas>0?'var(--gn)':'var(--am)')+'">'+(totalFilas>0?'✅':'⚠️')+' '+totalFilas+' líneas guardadas en envios_fc (90 días).</div>'+
+    '<div style="color:var(--mu);margin-top:6px">Por país de salida: '+(sal||'—')+'</div>'+
+    (desc.length?'<div style="color:var(--am);margin-top:4px">Centros sin mapear (dímelos y los añado): '+desc.join(', ')+'</div>':'')+
+    (errs.length?'<div style="color:var(--rd);margin-top:4px">Ventanas con error: '+errs.join(' · ')+'</div>':'');
   btn.disabled=false;btn.style.opacity=1;
 }
 
