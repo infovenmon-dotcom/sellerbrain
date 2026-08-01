@@ -3,14 +3,18 @@
 Punto de restauración congelado ANTES de empezar el Motor Fiscal de Recargo de
 Equivalencia. Si algo se rompe o no convence, se vuelve aquí sin problema.
 
-- **Tag git:** `checkpoint-2026-08-pre-recargo` (en `main`).
+- **Rama de respaldo (en remoto):** `checkpoint-2026-08-pre-recargo` — commit `25bd86f`.
+  (El proxy de git de este entorno no admite tags; se usa una rama, que hace la misma función.)
 - **Worker desplegado:** `v75-backoff-largo` (SB_VERSION).
 - **Cómo volver a este punto:**
   ```
+  git fetch origin
   git checkout main
-  git reset --hard checkpoint-2026-08-pre-recargo   # (o: git checkout checkpoint-2026-08-pre-recargo)
+  git reset --hard origin/checkpoint-2026-08-pre-recargo   # deja main exactamente como este punto
+  git push origin main --force-with-lease                  # (solo si quieres revertir main en remoto)
   ```
-  Y volver a pegar el worker de la etiqueta si se hubiera cambiado.
+  Alternativa no destructiva: `git checkout checkpoint-2026-08-pre-recargo` para inspeccionar.
+  Y volver a pegar el worker `v75` en Cloudflare si se hubiera cambiado.
 
 ---
 
