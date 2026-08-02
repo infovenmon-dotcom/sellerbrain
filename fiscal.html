@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Perfil fiscal</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:30px 0 8px}.hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800}.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:760px;margin:9px 0 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+label.f{display:block;font-size:11.5px;color:var(--mu);margin:14px 0 5px;text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+select.n,input.n{width:100%;max-width:420px;padding:10px 11px;background:#111;border:1.5px solid var(--bd2);border-radius:10px;color:var(--tx);font-size:13px;font-family:'DM Sans',sans-serif}
+select.n:focus,input.n:focus{border-color:var(--or);outline:none}
+.opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.opt{padding:9px 14px;border-radius:11px;border:1.5px solid var(--bd2);background:none;color:var(--mu2);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.opt.on{border-color:var(--or);color:var(--tx);background:rgba(46,230,160,.10)}
+.opt.dis{opacity:.4;cursor:not-allowed}
+.chk{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1.5px solid var(--bd2);border-radius:99px;cursor:pointer;font-size:12.5px;margin:3px}
+.chk.on{border-color:var(--or);color:var(--or2);background:rgba(46,230,160,.08)}
+.btn{display:inline-block;padding:12px 22px;background:var(--or);color:#08120e;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13.5px;font-weight:800;cursor:pointer;margin-top:18px}
+.res{background:var(--card2);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-top:10px;font-size:13px;line-height:1.7}
+.res b{color:var(--tx)}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}
+.pill.gn{background:rgba(46,204,113,.14);color:var(--gn)}.pill.rd{background:rgba(232,64,64,.14);color:var(--rd)}.pill.am{background:rgba(245,166,35,.14);color:var(--am)}
+.note{font-size:11.5px;color:var(--mu);margin-top:6px;line-height:1.6}
+.warn{background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="logo">Seller<b>Brain</b></div><div class="badge">🧮 Perfil fiscal</div></div>
+<div class="wrap">
+<div class="hero">
+  <h1>Tu <span>perfil fiscal</span></h1>
+  <p>Configúralo <b>una vez</b> y SellerBrain calculará tu margen <b>real</b> según tu régimen de IVA. Cubre <b>régimen general</b> (empresas y autónomos que deducen IVA) y <b>recargo de equivalencia</b> (autónomos minoristas). <span style="color:var(--am)">De momento esto solo guarda tu perfil y te explica qué implica; el ajuste de los márgenes llega en el siguiente paso.</span></p>
+</div>
+
+<div class="card">
+  <div class="ct"><span class="ci">🧾</span> Configura tu situación</div>
+
+  <label class="f">Forma jurídica</label>
+  <div class="opts" id="op-forma">
+    <button class="opt" data-v="autonomo" onclick="setForma('autonomo')">👤 Autónomo / Persona física</button>
+    <button class="opt" data-v="sociedad" onclick="setForma('sociedad')">🏢 Sociedad (SL, SA…)</button>
+  </div>
+
+  <label class="f">Régimen de IVA</label>
+  <div class="opts" id="op-regimen">
+    <button class="opt" data-v="general" onclick="setRegimen('general')">General (deduces el IVA)</button>
+    <button class="opt" data-v="re" onclick="setRegimen('re')">Recargo de equivalencia</button>
+  </div>
+  <div id="re-aviso"></div>
+
+  <label class="f">País de establecimiento (donde tributas)</label>
+  <select class="n" id="pais-est" onchange="pintarResumen()">
+    <option value="ES">🇪🇸 España</option><option value="FR">🇫🇷 Francia</option><option value="IT">🇮🇹 Italia</option>
+    <option value="DE">🇩🇪 Alemania</option><option value="PT">🇵🇹 Portugal</option><option value="NL">🇳🇱 Países Bajos</option>
+    <option value="BE">🇧🇪 Bélgica</option><option value="PL">🇵🇱 Polonia</option>
+  </select>
+
+  <label class="f">Países donde tienes registro de IVA</label>
+  <div id="paises-iva" style="display:flex;flex-wrap:wrap;gap:2px"></div>
+
+  <label class="f">Ventanilla Única (OSS)</label>
+  <div class="opts" id="op-oss">
+    <button class="opt" data-v="1" onclick="setOss('1')">✅ OSS activado</button>
+    <button class="opt" data-v="0" onclick="setOss('0')">No</button>
+  </div>
+
+  <label class="f">Tipo de IVA de tus productos (por defecto)</label>
+  <div class="opts" id="op-iva">
+    <button class="opt" data-v="21" onclick="setIva('21')">21% (general)</button>
+    <button class="opt" data-v="10" onclick="setIva('10')">10% (reducido)</button>
+    <button class="opt" data-v="4" onclick="setIva('4')">4% (superreducido)</button>
+  </div>
+
+  <label class="f">¿Cómo te factura Amazon las comisiones/FBA/Ads?</label>
+  <div class="opts" id="op-amz">
+    <button class="opt" data-v="iva" onclick="setAmz('iva')">Con IVA local (lo normal)</button>
+    <button class="opt" data-v="inv" onclick="setAmz('inv')">Sin IVA (inversión sujeto pasivo)</button>
+  </div>
+  <div class="note">Según tus facturas, Amazon te repercute <b>21% IVA español</b> en comisión, logística y publicidad (incluso en FR/IT) → "Con IVA local". Cámbialo solo si tus facturas llegan sin IVA.</div>
+
+  <button class="btn" onclick="guardar()">💾 Guardar perfil</button>
+  <span id="guardado" style="margin-left:12px;color:var(--gn);font-weight:700;display:none">✓ Guardado</span>
+</div>
+
+<div class="card">
+  <div class="ct"><span class="ci">📖</span> Qué implica tu perfil (así calcularemos tu margen real)</div>
+  <div class="res" id="resumen"></div>
+  <div class="note">Esto es informativo por ahora. En el siguiente paso, estas reglas se aplicarán automáticamente en <b>Beneficio por producto</b> y <b>P&L</b> — tú no tendrás que tocar nada.</div>
+</div>
+</div>
+
+<script>
+var PAISES=['ES','FR','IT','DE','PT','NL','BE','PL'];
+var BAND={ES:'🇪🇸',FR:'🇫🇷',IT:'🇮🇹',DE:'🇩🇪',PT:'🇵🇹',NL:'🇳🇱',BE:'🇧🇪',PL:'🇵🇱'};
+var P={ forma:'autonomo', regimen:'general', pais_est:'ES', paises_iva:['ES'], oss:'1', iva:'21', amz:'iva' };
+try{ var g=JSON.parse(localStorage.getItem('sb_perfil_fiscal')||'null'); if(g) P=Object.assign(P,g); }catch(e){}
+
+function pintarPaisesIva(){
+  var c=document.getElementById('paises-iva');
+  c.innerHTML=PAISES.map(function(p){ var on=P.paises_iva.indexOf(p)>=0;
+    return '<span class="chk'+(on?' on':'')+'" onclick="togglePais(\''+p+'\')">'+BAND[p]+' '+p+'</span>';
+  }).join('');
+}
+function togglePais(p){ var i=P.paises_iva.indexOf(p); if(i>=0)P.paises_iva.splice(i,1); else P.paises_iva.push(p); pintarPaisesIva(); pintarResumen(); }
+function marcar(grupo,val){ document.querySelectorAll('#'+grupo+' .opt').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-v')===val); }); }
+
+function setForma(v){ P.forma=v;
+  // Sociedad -> siempre general (el RE no aplica a sociedades)
+  var reBtn=document.querySelector('#op-regimen .opt[data-v="re"]');
+  if(v==='sociedad'){ P.regimen='general'; reBtn.classList.add('dis'); }
+  else { reBtn.classList.remove('dis'); }
+  marcar('op-forma',v); marcar('op-regimen',P.regimen); avisoRegimen(); pintarResumen();
+}
+function setRegimen(v){
+  if(v==='re' && P.forma==='sociedad'){ return; } // bloqueado
+  P.regimen=v; marcar('op-regimen',v); avisoRegimen(); pintarResumen();
+}
+function avisoRegimen(){
+  var el=document.getElementById('re-aviso');
+  if(P.forma==='sociedad'){ el.innerHTML='<div class="warn">🏢 Las <b>sociedades no pueden estar en recargo de equivalencia</b> (es solo para autónomos/personas físicas) → tu régimen es <b>general</b> y <b>deduces el IVA</b>.</div>'; return; }
+  if(P.regimen==='re'){ el.innerHTML='<div class="warn">👤 El recargo de equivalencia es <b>obligatorio</b> para minoristas persona física, y requiere que <b>&gt;80%</b> de tus ventas sean a consumidor final y no transformes el producto. Si no cumples, te corresponde el régimen general.</div>'; }
+  else el.innerHTML='';
+}
+function setOss(v){ P.oss=v; marcar('op-oss',v); pintarResumen(); }
+function setIva(v){ P.iva=v; marcar('op-iva',v); pintarResumen(); }
+function setAmz(v){ P.amz=v; marcar('op-amz',v); pintarResumen(); }
+
+function pintarResumen(){
+  P.pais_est=document.getElementById('pais-est').value;
+  var re = P.regimen==='re';
+  var rec = P.iva==='21'?'5,2':P.iva==='10'?'1,4':'0,5';
+  var h='';
+  h+='<div>Perfil: <b>'+(P.forma==='sociedad'?'Sociedad':'Autónomo')+'</b> · Régimen <b>'+(re?'Recargo de equivalencia':'General')+'</b> · Establecido en <b>'+P.pais_est+'</b> · IVA producto <b>'+P.iva+'%</b> · OSS <b>'+(P.oss==='1'?'sí':'no')+'</b></div><hr style="border:none;border-top:1px solid var(--bd);margin:10px 0">';
+  // Servicios Amazon
+  if(re){
+    h+='<div>🛒 <b>Comisión / FBA / Ads de Amazon:</b> el IVA <span class="pill rd">NO deducible</span> → cuenta como coste (base + '+(P.amz==='iva'?'21%':'21% por inversión, modelo 309')+').</div>';
+  } else {
+    h+='<div>🛒 <b>Comisión / FBA / Ads de Amazon:</b> el IVA <span class="pill gn">deducible</span> → coste = la base (recuperas el IVA).</div>';
+  }
+  // Compras mercancía
+  if(re){
+    h+='<div>📦 <b>Compras de mercancía:</b> IVA <span class="pill rd">no deducible</span> + <b>recargo +'+rec+'%</b> → coste = base + IVA + recargo. Intracom/importación: además <b>autoliquidas en el 309</b> (y 349 si UE).</div>';
+  } else {
+    h+='<div>📦 <b>Compras de mercancía:</b> IVA <span class="pill gn">deducible</span> → coste = la base. Intracom/importación: autoliquidas pero es neutro (lo deduces).</div>';
+  }
+  // Ventas
+  if(re){
+    h+='<div>💶 <b>Ventas nacionales:</b> cobras el 21% pero <span class="pill gn">te lo quedas</span> (no lo declaras) → tu ingreso incluye ese IVA.</div>';
+    if(P.oss==='1') h+='<div>🌍 <b>Ventas a otros países UE (OSS):</b> el IVA del país destino lo <span class="pill am">remites vía OSS</span> → ese IVA no te lo quedas.</div>';
+  } else {
+    h+='<div>💶 <b>Ventas:</b> repercutes IVA y lo ingresas (303 nacional / OSS en UE) → a efectos de margen usamos el importe <b>sin IVA</b>.</div>';
+  }
+  // Obligaciones
+  var obl=[];
+  if(re){ obl.push('309 (si compras intracom/import o servicios en inversión)'); obl.push('349 (operaciones intracom)'); }
+  if(P.oss==='1') obl.push('Declaración OSS (ventas UE a distancia)');
+  if(!re && P.forma!=='sociedad') obl.push('303 (IVA trimestral)');
+  if(!re && P.forma==='sociedad') obl.push('303 (IVA trimestral)');
+  h+='<div style="margin-top:6px;color:var(--mu2)">📋 <b>Modelos a vigilar:</b> '+(obl.length?obl.join(' · '):'—')+'</div>';
+  document.getElementById('resumen').innerHTML=h;
+}
+
+function guardar(){
+  P.pais_est=document.getElementById('pais-est').value;
+  try{ localStorage.setItem('sb_perfil_fiscal', JSON.stringify(P)); }catch(e){}
+  var g=document.getElementById('guardado'); g.style.display='inline'; setTimeout(function(){g.style.display='none';},2500);
+}
+
+(function init(){
+  document.getElementById('pais-est').value=P.pais_est;
+  marcar('op-forma',P.forma); marcar('op-oss',P.oss); marcar('op-iva',P.iva); marcar('op-amz',P.amz);
+  if(P.forma==='sociedad'){ P.regimen='general'; document.querySelector('#op-regimen .opt[data-v="re"]').classList.add('dis'); }
+  marcar('op-regimen',P.regimen);
+  pintarPaisesIva(); avisoRegimen(); pintarResumen();
+})();
+</script>
+</body>
+</html>
