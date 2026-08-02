@@ -2218,10 +2218,14 @@ function calcM(){
   // ventas NO se ingresa (ingreso = PVP completo), el coste del producto lleva
   // IVA+RE no deducibles (21%+5,2%), y las tarifas de Amazon (facturadas con
   // inversión del sujeto pasivo) soportan un 21% autoliquidado no deducible.
-  var reChk=document.getElementById('m-re'),reOn=!!(reChk&&reChk.checked),reAplica=reOn&&ivaR===0.21,RE_RATE=0.052;
+  var reChk=document.getElementById('m-re'),reOn=!!(reChk&&reChk.checked),reAplica=reOn&&ivaR===0.21;
+  // IVA y recargo de la COMPRA según la banda del producto (del Perfil fiscal):
+  // 21%→+5,2% · 10%→+1,4% · 4%→+0,5%. Los servicios de Amazon siempre 21% IVA ES.
+  var prodIva=0.21, RE_RATE=0.052;
+  try{ var _pf=JSON.parse(localStorage.getItem('sb_perfil_fiscal')||'null'); if(_pf&&_pf.iva){ prodIva=_pf.iva==='10'?0.10:_pf.iva==='4'?0.04:0.21; RE_RATE=_pf.iva==='10'?0.014:_pf.iva==='4'?0.005:0.052; } }catch(e){}
   if(reAplica){
     neto=pvp; iva=0;
-    cost=+(cost*(1+ivaR+RE_RATE)).toFixed(2);
+    cost=+(cost*(1+prodIva+RE_RATE)).toFixed(2);
     fba=+(fba*1.21).toFixed(2); rec=+(fba*recP).toFixed(3);
     com=+(com*1.21).toFixed(2); ppc=+(ppc*1.21).toFixed(2); stor=+(stor*1.21).toFixed(2);
   }
@@ -2233,7 +2237,7 @@ function calcM(){
   var bh='';bi.forEach(function(i){bh+='<div class="bs" style="width:'+f(i.v/pvp*100,1)+'%;background:'+i.c+'"></div>';});
   if(ben>0)bh+='<div class="bs" style="flex:1;background:var(--gn)"></div>';
   document.getElementById('rm-bar').innerHTML=bh;
-  var rows=[{n:'PVP con IVA',p:'',v:'\u20ac'+f(pvp,2),c:'#1A1A1A',pos:true},{n:reAplica?'IVA 21% \u2014 no se ingresa (recargo equiv.)':'IVA '+f(ivaR*100,0)+'%',p:reAplica?'':f(iva/pvp*100,1)+'%',v:reAplica?'\u20ac0,00':'-\u20ac'+f(iva,2),c:'#3498DB',pos:reAplica},{n:'Ingreso neto',p:'',v:'\u20ac'+f(neto,2),c:'#1DB87A',pos:true},{n:reAplica?'Coste producto (IVA+RE 26,2% incl.)':'Coste producto',p:f(cost/pvp*100,1)+'%',v:'-\u20ac'+f(cost,2),c:'#2EE6A0',pos:false},{n:'FBA log\u00edstica'+(reAplica?' (+21% IVA)':''),p:f(fba/pvp*100,1)+'%',v:'-\u20ac'+f(fba,2),c:'#E84040',pos:false},{n:'Recargo comb. '+f(recP*100,1)+'%',p:f(rec/pvp*100,2)+'%',v:'-\u20ac'+f(rec,3),c:'#C0392B',pos:false},{n:'Comisi\u00f3n Amazon'+(reAplica?' (+21% IVA)':''),p:f(com/pvp*100,1)+'%',v:'-\u20ac'+f(com,2),c:'#F5A623',pos:false}].concat(dstTotal>0?[{n:'DST '+dst.com+'% com'+(dst.fba>0?' +'+dst.fba+'% FBA':''),p:f(dstTotal/pvp*100,2)+'%',v:'-\u20ac'+f(dstTotal,3),c:'#E67E22',pos:false}]:[]).concat([{n:'Almacenaje/ud',p:f(stor/pvp*100,1)+'%',v:'-\u20ac'+f(stor,2),c:'#888',pos:false}]);
+  var rows=[{n:'PVP con IVA',p:'',v:'\u20ac'+f(pvp,2),c:'#1A1A1A',pos:true},{n:reAplica?'IVA 21% \u2014 no se ingresa (recargo equiv.)':'IVA '+f(ivaR*100,0)+'%',p:reAplica?'':f(iva/pvp*100,1)+'%',v:reAplica?'\u20ac0,00':'-\u20ac'+f(iva,2),c:'#3498DB',pos:reAplica},{n:'Ingreso neto',p:'',v:'\u20ac'+f(neto,2),c:'#1DB87A',pos:true},{n:reAplica?('Coste producto (IVA+RE +'+f((prodIva+RE_RATE)*100,1)+'% incl.)'):'Coste producto',p:f(cost/pvp*100,1)+'%',v:'-\u20ac'+f(cost,2),c:'#2EE6A0',pos:false},{n:'FBA log\u00edstica'+(reAplica?' (+21% IVA)':''),p:f(fba/pvp*100,1)+'%',v:'-\u20ac'+f(fba,2),c:'#E84040',pos:false},{n:'Recargo comb. '+f(recP*100,1)+'%',p:f(rec/pvp*100,2)+'%',v:'-\u20ac'+f(rec,3),c:'#C0392B',pos:false},{n:'Comisi\u00f3n Amazon'+(reAplica?' (+21% IVA)':''),p:f(com/pvp*100,1)+'%',v:'-\u20ac'+f(com,2),c:'#F5A623',pos:false}].concat(dstTotal>0?[{n:'DST '+dst.com+'% com'+(dst.fba>0?' +'+dst.fba+'% FBA':''),p:f(dstTotal/pvp*100,2)+'%',v:'-\u20ac'+f(dstTotal,3),c:'#E67E22',pos:false}]:[]).concat([{n:'Almacenaje/ud',p:f(stor/pvp*100,1)+'%',v:'-\u20ac'+f(stor,2),c:'#888',pos:false}]);
   if(ppc>0)rows.push({n:'PPC '+f(ppcR*100,0)+'%',p:f(ppc/pvp*100,1)+'%',v:'-\u20ac'+f(ppc,2),c:'#9B59B6',pos:false});
   rows.push({n:'Beneficio neto',p:mg+'%',v:sgn(ben)+'\u20ac'+f(ben,2),c:ben>=0?'#1DB87A':'#E84040',pos:ben>=0});
   var dh='';rows.forEach(function(r){dh+='<div class="bi"><div class="bl2"><div class="dot" style="background:'+r.c+'"></div><div><div class="bn">'+r.n+'</div>'+(r.p?'<div class="bpct">'+r.p+' del PVP</div>':'')+'</div></div><div class="bv '+(r.pos?'pos':'neg')+'">'+r.v+'</div></div>';});
