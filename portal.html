@@ -2066,6 +2066,7 @@ function showTab(t){
   document.querySelectorAll('.tab').forEach(function(x,i){x.classList.remove('active');if(['margen','fba','usa','ppc','kw','pl'][i]===t)x.classList.add('active');});
   document.querySelectorAll('.sec').forEach(function(x){x.classList.remove('active');});
   document.getElementById('sec-'+t).classList.add('active');
+  if(t==='margen'){ try{ aplicarPerfilFiscal(); }catch(e){} }
 }
 function showRT(btn,id){
   document.querySelectorAll('.rt').forEach(function(x){x.classList.remove('active');});
@@ -2183,6 +2184,30 @@ function getTarifa(k,pvp,cat,pe,la,an,al){
   if(!STD[k])return null;
   var low=pvp>0?isLow(pvp,cat):false;
   return{std:STD[k].es,low:(low&&LOW[k])?LOW[k].es:null,final:(low&&LOW[k])?LOW[k].es:STD[k].es,isLow:(low&&LOW[k])?true:false};
+}
+// Lee el Perfil fiscal (sb_perfil_fiscal) y aplica el régimen automáticamente en la
+// calculadora: marca el RE si el perfil es autónomo en recargo de equivalencia, y lo
+// desmarca (con aviso) si es sociedad/general. El vendedor no toca nada.
+function aplicarPerfilFiscal(){
+  var reChk=document.getElementById('m-re'); if(!reChk) return;
+  var wrap=document.getElementById('re-wrap'); if(!wrap) return;
+  var P=null; try{ P=JSON.parse(localStorage.getItem('sb_perfil_fiscal')||'null'); }catch(e){}
+  var banner=document.getElementById('perfil-banner');
+  if(!banner){ banner=document.createElement('div'); banner.id='perfil-banner'; banner.style.cssText='font-size:11px;margin:2px 0 8px;padding:7px 10px;border-radius:9px;line-height:1.5'; wrap.parentNode.insertBefore(banner, wrap); }
+  if(!P){
+    banner.style.cssText+=';background:rgba(74,158,222,.08);border:1px solid rgba(74,158,222,.25);color:var(--mu2)';
+    banner.innerHTML='💡 Define tu <b>Perfil fiscal</b> (en el menú) y la calculadora aplicará tu régimen de IVA automáticamente.';
+    return;
+  }
+  var re = (P.regimen==='re' && P.forma!=='sociedad');
+  reChk.checked = re;
+  if(re){
+    banner.style.cssText+=';background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.3);color:var(--tx)';
+    banner.innerHTML='🧮 Aplicando tu <b>Perfil fiscal</b>: Autónomo · <b>Recargo de equivalencia</b> (el IVA no se deduce). <span style="color:var(--mu)">Cámbialo en «Perfil fiscal».</span>';
+  } else {
+    banner.style.cssText+=';background:rgba(46,204,113,.06);border:1px solid rgba(46,204,113,.22);color:var(--tx)';
+    banner.innerHTML='🧮 Aplicando tu <b>Perfil fiscal</b>: '+(P.forma==='sociedad'?'Sociedad':'Autónomo')+' · <b>Régimen general</b> (recuperas el IVA). <span style="color:var(--mu)">Cámbialo en «Perfil fiscal».</span>';
+  }
 }
 function calcM(){
   var pvp=+document.getElementById('m-pvp').value||0,cost=+document.getElementById('m-coste').value||0,fba=+document.getElementById('m-fba').value||0,stor=+document.getElementById('m-stor').value||0,ivaR=+document.getElementById('m-iva').value||0.21,cat=document.getElementById('m-cat').value,recP=(+document.getElementById('m-rec').value||0)/100,pe=+document.getElementById('m-peso').value||105,devP=+document.getElementById('m-dev').value||0,uds=+document.getElementById('m-uds').value||1000;
