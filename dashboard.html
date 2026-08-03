@@ -179,6 +179,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <a id="nav-epr" onclick="cambiarVista('epr')"><span class="ic">♻️</span> Cumplimiento UE · EPR + GPSR</a>
     <div class="sep">Fiscal y ajustes</div>
     <a id="nav-fiscal" onclick="cambiarVista('fiscal')"><span class="ic">🧮</span> Perfil fiscal</a>
+    <a id="nav-compras" onclick="cambiarVista('compras')"><span class="ic">📥</span> Compras de mercancía</a>
     <a id="nav-iva" onclick="cambiarVista('iva')"><span class="ic">🧾</span> Ventanilla Única · IVA</a>
     <a id="nav-ajustes" onclick="cambiarVista('ajustes')"><span class="ic">⚙️</span> Ajustes</a>
   </nav>
@@ -709,6 +710,13 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <div class="aju-t">Perfil fiscal</div>
       <div class="aju-d">Forma jurídica, régimen de IVA (general / recargo de equivalencia), tipo de IVA y escenario de facturación de Amazon. Marca el criterio de todo el P&amp;L.</div>
       <div class="aju-st" id="aju-fiscal-st">Sin definir</div>
+    </a>
+
+    <a class="aju-card" onclick="cambiarVista('compras')">
+      <div class="aju-ic">📥</div>
+      <div class="aju-t">Compras de mercancía</div>
+      <div class="aju-d">Registra tus facturas de proveedor: coste real por unidad (base sin IVA) y obligaciones según origen (309/349) en recargo de equivalencia.</div>
+      <div class="aju-st">Abrir</div>
     </a>
 
     <a class="aju-card" onclick="cambiarVista('iva')">
@@ -2863,6 +2871,7 @@ var TOOL_SRC = {
   epr:     { src:'epr.html',                       title:'Cumplimiento UE · EPR (PPWR) + GPSR' },
   iva:     { src:'iva.html',                        title:'Ventanilla Única · IVA intracomunitario' },
   fiscal:  { src:'fiscal.html',                     title:'Perfil fiscal · Régimen de IVA' },
+  compras: { src:'compras.html',                    title:'Compras de mercancía · Coste real y 309/349' },
   dev:     { src:'devoluciones.html',              title:'Devoluciones · Motivos y control' },
   stock:   { src:'stock.html',                     title:'Stock y reposición' }
 };

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Compras de mercancía</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:30px 0 8px}.hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1.25}.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:820px;margin:9px 0 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}.inf b{color:rgba(255,255,255,.75)}
+.form{display:grid;grid-template-columns:1.4fr 1.2fr 1.2fr .8fr 1fr .9fr auto;gap:8px;align-items:end}
+@media(max-width:820px){.form{grid-template-columns:1fr 1fr}}
+.fi label{display:block;font-size:10.5px;color:var(--mu);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.fi input,.fi select{width:100%;background:#111;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);padding:9px 10px;font-size:13px;font-family:inherit}
+.fi input:focus,.fi select:focus{outline:none;border-color:var(--or)}
+.btn{display:inline-block;padding:10px 16px;background:var(--or);color:#08120e;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+.x{background:none;border:none;color:var(--mu);cursor:pointer;font-size:15px;padding:2px 6px}.x:hover{color:var(--rd)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:right;padding:7px 9px;color:var(--mu);font-weight:500;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bd);white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:8px 9px;border-bottom:1px solid rgba(255,255,255,.05);text-align:right;white-space:nowrap}
+td:first-child{text-align:left;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:4px}
+.kpi{background:var(--card2);border:1px solid var(--bd);border-radius:12px;padding:14px 15px}
+.kpi .n{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1}
+.kpi .l{font-size:11px;color:var(--mu);margin-top:5px;line-height:1.35}
+.tot{border-top:2px solid rgba(255,255,255,.18);font-weight:800}
+.pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;white-space:nowrap}
+.p-nac{background:rgba(74,158,222,.15);color:#8fc4f0}
+.p-intra{background:rgba(245,166,35,.15);color:var(--am)}
+.p-imp{background:rgba(232,64,64,.15);color:#ff8a8a}
+.disclaimer{font-size:10.5px;color:var(--mu);margin-top:22px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="logo">Seller<b>Brain</b></div><div class="badge">📥 Compras de mercancía</div></div>
+<div class="wrap">
+<div class="hero">
+  <h1>Compras de <span>mercancía</span></h1>
+  <p>Registra tus <b>facturas de proveedor</b> y SellerBrain calcula el <b>coste real por unidad</b> (la base sin IVA que va a tu producto) y las <b>obligaciones fiscales según el origen</b> (nacional, intracomunitario o importación). En <b>recargo de equivalencia</b> te suma el IVA + recargo no deducible y te avisa del <b>modelo 309</b> y del <b>349</b>. Todo se guarda en tu navegador.</p>
+</div>
+
+<div class="card">
+  <div class="ct"><span class="ci">➕</span> Añade una compra</div>
+  <div class="inf" id="compras-perfil"></div>
+  <div class="form">
+    <div class="fi"><label>Producto / SKU</label><input id="c-sku" placeholder="TM31-PRO"></div>
+    <div class="fi"><label>Proveedor</label><input id="c-prov" placeholder="Opcional"></div>
+    <div class="fi"><label>Origen</label><select id="c-origen">
+      <option value="nac">Nacional (proveedor ES)</option>
+      <option value="intra">Intracomunitario (proveedor UE)</option>
+      <option value="imp">Importación (fuera UE)</option>
+    </select></div>
+    <div class="fi"><label>Tipo IVA</label><select id="c-iva">
+      <option value="21">21%</option><option value="10">10%</option><option value="4">4%</option>
+    </select></div>
+    <div class="fi"><label>Base (€, sin IVA)</label><input id="c-base" type="number" step="0.01" min="0" placeholder="280.00"></div>
+    <div class="fi"><label>Unidades</label><input id="c-uds" type="number" step="1" min="0" placeholder="100"></div>
+    <button class="btn" onclick="cAdd()">Añadir</button>
+  </div>
+  <div style="font-size:11px;color:var(--mu);margin-top:8px">La <b>base</b> es el importe sin IVA de tu factura de compra. El IVA (y el recargo, si aplica) los calcula la herramienta.</div>
+</div>
+
+<div id="compras-res" style="display:none">
+  <div class="kpis" id="compras-kpis"></div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">📋</span> Modelos que te tocan por tus compras</div>
+    <div id="compras-modelos"></div>
+  </div>
+
+  <div class="card">
+    <div class="ct"><span class="ci">🧾</span> Tus compras</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Producto</th><th>Proveedor</th><th>Origen</th><th>IVA</th><th>Base</th><th>IVA €</th><th id="th-rec">Recargo</th><th>Total</th><th>€/ud (base)</th><th></th></tr></thead>
+      <tbody id="compras-tbody"></tbody>
+    </table></div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-sec" onclick="cExport()">⬇️ Exportar compras (CSV para el gestor)</button>
+      <button class="btn-sec" onclick="cAplicarCostes()">💾 Usar €/ud como coste de mis productos</button>
+    </div>
+  </div>
+</div>
+
+<div class="disclaimer">
+⚠️ Herramienta de apoyo, no asesoramiento fiscal. El <b>coste que va a tu producto es la base sin IVA ni recargo</b> — en régimen general el IVA se recupera; en recargo de equivalencia el IVA + recargo son coste, pero la herramienta ya los suma en el P&amp;L, no los metas en el coste. Confirma siempre el 309/349 con tu gestor. Todo se procesa y guarda en tu navegador.
+</div>
+</div>
+
+<script>
+function f(n,d){d=d==null?2:d;return (Math.round((+n||0)*Math.pow(10,d))/Math.pow(10,d)).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+var RECBAND={'21':0.052,'10':0.014,'4':0.005};
+var ORIG={nac:{lab:'Nacional',cls:'p-nac'},intra:{lab:'Intracom.',cls:'p-intra'},imp:{lab:'Importación',cls:'p-imp'}};
+
+var COMPRAS=[];
+try{ COMPRAS=JSON.parse(localStorage.getItem('sb_compras')||'[]')||[]; }catch(e){ COMPRAS=[]; }
+
+function perfil(){
+  var P=null; try{ P=JSON.parse(localStorage.getItem('sb_perfil_fiscal')||'null'); }catch(e){}
+  return P;
+}
+function esRE(){ var P=perfil(); return !!(P && P.regimen==='re' && P.forma!=='sociedad'); }
+
+function pintarPerfil(){
+  var P=perfil(), re=esRE();
+  var el=document.getElementById('compras-perfil');
+  if(P){ el.innerHTML='Tu perfil: <b>'+(P.forma==='sociedad'?'Sociedad':'Autónomo')+' · '+(re?'recargo de equivalencia':'régimen general')+'</b>. '+(re?'En cada compra te sumo el IVA + recargo no deducible y controlo el 309/349.':'El IVA de tus compras es deducible → el coste real es la base. Sin recargo.'); }
+  else{ el.innerHTML='<span style="color:var(--am)">Define tu <b>Perfil fiscal</b> (Ajustes → Perfil fiscal) para ajustar el tratamiento. Asumo régimen general.</span>'; }
+  // IVA por defecto según perfil
+  if(P && P.iva && document.getElementById('c-iva')) document.getElementById('c-iva').value=P.iva;
+  document.getElementById('th-rec').style.display = re?'':'none';
+}
+
+function cAdd(){
+  var sku=(document.getElementById('c-sku').value||'').trim();
+  var prov=(document.getElementById('c-prov').value||'').trim();
+  var origen=document.getElementById('c-origen').value;
+  var iva=document.getElementById('c-iva').value;
+  var base=parseFloat(String(document.getElementById('c-base').value).replace(',','.'))||0;
+  var uds=parseInt(document.getElementById('c-uds').value,10)||0;
+  if(base<=0){ alert('Mete la base (importe sin IVA) de la compra.'); return; }
+  COMPRAS.push({sku:sku,prov:prov,origen:origen,iva:iva,base:base,uds:uds});
+  guardar();
+  document.getElementById('c-sku').value=''; document.getElementById('c-prov').value='';
+  document.getElementById('c-base').value=''; document.getElementById('c-uds').value='';
+  render();
+}
+function cDel(i){ COMPRAS.splice(i,1); guardar(); render(); }
+function guardar(){ try{ localStorage.setItem('sb_compras', JSON.stringify(COMPRAS)); }catch(e){} }
+
+function calcLinea(c){
+  var re=esRE();
+  var ivaRate=(+c.iva||21)/100, recRate=re?(RECBAND[c.iva]||0.052):0;
+  var ivaEur=c.base*ivaRate;
+  var recEur=c.base*recRate;
+  var total=c.base+ivaEur+recEur;                 // desembolso real (nac: pagas iva+recargo; intra/imp: lo autoliquidas)
+  var udBase=c.uds>0?c.base/c.uds:0;              // coste unitario que va al producto (base, sin IVA)
+  // 309: IVA+recargo autoliquidado en RE por intracom/importación
+  var en309=re&&(c.origen==='intra'||c.origen==='imp')?(ivaEur+recEur):0;
+  return {ivaEur:ivaEur,recEur:recEur,total:total,udBase:udBase,en309:en309};
+}
+
+function render(){
+  pintarPerfil();
+  var re=esRE();
+  var res=document.getElementById('compras-res');
+  if(!COMPRAS.length){ res.style.display='none'; return; }
+  res.style.display='block';
+  var tb=document.getElementById('compras-tbody');
+  var tBase=0,tIva=0,tRec=0,tTot=0,t309=0, hayIntra=false, hayImp=false;
+  tb.innerHTML=COMPRAS.map(function(c,i){
+    var L=calcLinea(c); tBase+=c.base; tIva+=L.ivaEur; tRec+=L.recEur; tTot+=L.total; t309+=L.en309;
+    if(c.origen==='intra')hayIntra=true; if(c.origen==='imp')hayImp=true;
+    var o=ORIG[c.origen]||ORIG.nac;
+    return '<tr>'+
+      '<td>'+(esc(c.sku)||'<span style="color:var(--mu)">—</span>')+'</td>'+
+      '<td style="text-align:left;color:var(--mu2)">'+(esc(c.prov)||'—')+'</td>'+
+      '<td style="text-align:left"><span class="pill '+o.cls+'">'+o.lab+'</span></td>'+
+      '<td>'+c.iva+'%</td>'+
+      '<td>'+f(c.base,2)+'€</td>'+
+      '<td style="color:var(--mu2)">'+f(L.ivaEur,2)+'€</td>'+
+      (re?('<td style="color:var(--am)">'+f(L.recEur,2)+'€</td>'):'<td style="display:none"></td>')+
+      '<td style="font-weight:700">'+f(L.total,2)+'€</td>'+
+      '<td style="color:var(--or2)">'+(c.uds>0?f(L.udBase,2)+'€':'—')+'</td>'+
+      '<td><button class="x" onclick="cDel('+i+')" title="Eliminar">✕</button></td></tr>';
+  }).join('')+
+    '<tr class="tot"><td>Σ Total</td><td></td><td></td><td></td><td>'+f(tBase,2)+'€</td><td>'+f(tIva,2)+'€</td>'+
+    (re?('<td>'+f(tRec,2)+'€</td>'):'<td style="display:none"></td>')+
+    '<td>'+f(tTot,2)+'€</td><td></td><td></td></tr>';
+
+  // KPIs
+  var kpis=[
+    {n:f(tBase,2)+'€', l:'Base de compras (coste real, régimen general)'},
+    {n:f(tIva,2)+'€', l:re?'IVA soportado (NO deducible en RE)':'IVA soportado (deducible)', c:re?'var(--am)':'var(--gn)'}
+  ];
+  if(re){ kpis.push({n:f(tRec,2)+'€', l:'Recargo de equivalencia', c:'var(--am)'}); }
+  kpis.push({n:f(tTot,2)+'€', l:re?'Coste fiscal real (base + IVA + recargo)':'Desembolso (base + IVA, IVA recuperable)'});
+  document.getElementById('compras-kpis').innerHTML=kpis.map(function(k){return '<div class="kpi"><div class="n" style="color:'+(k.c||'var(--tx)')+'">'+k.n+'</div><div class="l">'+k.l+'</div></div>';}).join('');
+
+  // Modelos por compras
+  var rows=[];
+  if(re && t309>0.005){
+    rows.push({cod:'309',nom:'IVA autoliquidado (RE)',estado:f(t309,2)+'€ a ingresar',color:'var(--am)',
+      accion:'Suma del IVA + recargo de tus compras intracomunitarias e importaciones. En recargo de equivalencia lo autoliquidas con el modelo 309 (no es deducible, ya es coste).'});
+  }
+  if(hayIntra){
+    rows.push({cod:'349',nom:'Declaración recapitulativa intracomunitaria',estado:'Revisar',color:'var(--am)',
+      accion:'Tienes compras a proveedores de otro país UE → debes declararlas en el modelo 349. Necesitas tu VIES/ROI activo.'});
+  }
+  if(hayImp){
+    rows.push({cod:'DUA',nom:'Importación (aduana)',estado:'Revisar',color:'var(--mu2)',
+      accion:'En importaciones el IVA se liquida en aduana (DUA) y puede haber aranceles. '+(re?'En RE ese IVA + recargo no es deducible.':'El IVA de importación es deducible en régimen general.')});
+  }
+  if(!re && (hayIntra||hayImp)){
+    rows.push({cod:'303',nom:'IVA — compras intracom/importación',estado:'Neutro',color:'var(--gn)',
+      accion:'En régimen general autoliquidas el IVA de estas compras pero lo deduces a la vez → efecto neutro. El coste real es la base.'});
+  }
+  var host=document.getElementById('compras-modelos');
+  if(!rows.length){ host.innerHTML='<div style="color:var(--mu);font-size:12.5px">Con estas compras no detecto obligaciones específicas'+(re?'':' (régimen general: IVA deducible)')+'. Si compras fuera de '+((perfil()&&perfil().pais_est)||'ES')+', aquí saldrán el 309/349.</div>'; }
+  else{
+    host.innerHTML='<div style="overflow-x:auto"><table><thead><tr><th>Modelo</th><th style="text-align:left">Qué es</th><th>Estado</th></tr></thead><tbody>'+
+      rows.map(function(r){return '<tr><td><b>'+r.cod+'</b></td><td style="text-align:left">'+r.nom+'<div style="font-weight:400;color:var(--mu);font-size:11px;white-space:normal;max-width:560px;margin-top:2px">'+r.accion+'</div></td><td style="color:'+r.color+';font-weight:700">'+r.estado+'</td></tr>';}).join('')+
+      '</tbody></table></div>';
+  }
+}
+
+function cExport(){
+  var re=esRE();
+  var lin=['sku;proveedor;origen;iva_pct;base_eur;iva_eur;recargo_eur;total_eur;unidades;coste_unit_base_eur;en_309_eur'];
+  COMPRAS.forEach(function(c){ var L=calcLinea(c);
+    lin.push([c.sku,c.prov,(ORIG[c.origen]||{}).lab||c.origen,c.iva,f(c.base,2),f(L.ivaEur,2),f(L.recEur,2),f(L.total,2),c.uds,f(L.udBase,2),f(L.en309,2)].join(';'));
+  });
+  var blob=new Blob([lin.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='compras_mercancia.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+}
+
+// Guarda el €/ud (base, sin IVA) como coste del SKU en localStorage (modo CSV/local).
+// En modo API, el coste se guarda desde el Dashboard; aquí avisamos.
+function cAplicarCostes(){
+  var costes={}; try{ costes=JSON.parse(localStorage.getItem('sb_costes')||'{}')||{}; }catch(e){ costes={}; }
+  // último €/ud por SKU (la compra más reciente manda)
+  var n=0;
+  COMPRAS.forEach(function(c){ if(c.sku && c.uds>0){ var L=calcLinea(c); costes[c.sku]=+L.udBase.toFixed(2); n++; } });
+  if(!n){ alert('Añade al menos una compra con SKU y unidades para calcular el coste por unidad.'); return; }
+  try{ localStorage.setItem('sb_costes', JSON.stringify(costes)); }catch(e){}
+  alert('✅ Guardado el coste (base sin IVA) de '+Object.keys(costes).length+' producto(s) en este navegador.\n\nSi usas datos en vivo por API, revisa/guarda el coste también desde el Dashboard (clic en el producto → Editar coste). Recuerda: siempre la base, sin IVA ni recargo.');
+}
+
+// Refresca si cambia el perfil fiscal (desde otra pestaña/iframe).
+window.addEventListener('storage', function(e){ if(e.key==='sb_perfil_fiscal'){ render(); } });
+
+render();
+</script>
+</body>
+</html>
