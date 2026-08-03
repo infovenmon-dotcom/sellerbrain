@@ -887,7 +887,8 @@ function renderImpactoFiscal(){
   var paises=window.VP_PAISES||[], totV=window.VP_TOTAL||0, vNac=0, hayVP=paises.length>0;
   paises.forEach(function(p){ if((p.pais||'').toUpperCase()===(P.pais_est||'ES')) vNac+=(+p.ventas||0); });
   if(!hayVP) vNac=(PNL.ventas||0);   // sin reparto por país → asume todo nacional (y avisa)
-  var ivaRepKept=vNac*prodIva;
+  var shareNac=(hayVP&&totV>0)?(vNac/totV):1;            // fracción nacional del periodo
+  var ivaRepKept=(PNL.iva_rep||0)*shareNac;              // IVA repercutido REAL × parte nacional (coherente con el P&L)
   var ivaFees=(PNL.iva_sop||0);                          // IVA de tarifas Amazon (recuperable en general)
   var costeProdIva=(PNL.prod||0)*(prodIva+recBand);      // IVA + recargo del producto (base)
   var benRE=benGen+ivaRepKept-ivaFees-costeProdIva, delta=benRE-benGen;
