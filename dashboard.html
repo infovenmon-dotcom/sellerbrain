@@ -202,7 +202,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <span class="chip" style="background:rgba(46,230,160,.15);border-color:rgba(46,230,160,.45);color:var(--or2);font-weight:700" onclick="togglePanel()">📥 Cargar mis datos</span>
     <span class="chip on">🇪🇸 + 🇫🇷 + 🇮🇹</span>
     <span class="chip">Todos los SKUs</span>
-    <span class="sync"><span class="dot"></span> Datos: hace 2 h</span>
+    <span class="sync" title="Última sincronización con Amazon. Los datos se ingieren una vez al día (la publicidad, cada hora). Si ves algo raro, comprueba primero esta hora antes de dudar del número."><span class="dot"></span> Datos: hace 2 h</span>
   </div>
 </div>
 
@@ -642,7 +642,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
   </div>
 
   <div class="card">
-    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleSat()"><h2><span class="ci">⭐</span> Satisfacción del cliente <span style="font-size:11px;color:var(--mu);font-weight:400">· según motivos de devolución</span> <span id="sat-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
+    <div class="ch" style="cursor:pointer;user-select:none" onclick="toggleSat()"><h2><span class="ci">🩺</span> Salud del producto <span style="font-size:11px;color:var(--mu);font-weight:400">· según devoluciones (solo ve a quien devuelve, no al insatisfecho que no devuelve)</span> <span id="sat-caret" style="float:right;color:var(--mu);font-weight:400;font-size:13px">▸ ver</span></h2></div>
     <div id="satisfaccion" style="display:none"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
   </div>
 
