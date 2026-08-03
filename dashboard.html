@@ -2294,7 +2294,24 @@ function pintarDetalle(p,d){
     '<div style="overflow-x:auto;max-height:280px;overflow-y:auto"><table class="tbl" style="font-size:11.5px"><thead><tr><th>Fecha</th><th>Operación</th><th>Cant.</th><th>Importe</th></tr></thead><tbody>'+
     ls.map(function(l){return '<tr><td style="white-space:nowrap">'+String(l.fecha).slice(0,10)+'</td><td>'+conceptoBonito(l.concepto)+'</td><td>'+(l.cantidad||'')+'</td><td style="color:'+(l.importe<0?'var(--rd)':'var(--gn)')+'">'+(l.importe>=0?'+':'')+f(+l.importe,2)+'€</td></tr>';}).join('')+
     '</tbody></table></div>'):'<div style="color:var(--mu);font-size:12px;margin-top:10px">Sin operaciones de settlement todavía para este SKU (Amazon aún no ha liquidado sus ventas).</div>';
-  body.innerHTML=resumenP+bloqueRE(p,ivaRec)+explica+tblRes+tblL;
+  body.innerHTML=resumenP+bloqueDependencia(p)+bloqueRE(p,ivaRec)+explica+tblRes+tblL;
+}
+// Dependencia de publicidad de un producto: % de ventas atribuidas a PPC vs total.
+// Proxy del "% orgánico vs pagado" (informe de David #3/#11). El ranking orgánico
+// por keyword no lo expone Amazon; a nivel de producto sí se puede estimar.
+function bloqueDependencia(p){
+  var vt=+p.ventas||0, vppc=+p.ppc_ventas||0;
+  if(vt<=0 || vppc<=0) return '';
+  var dep=Math.min(100, vppc/vt*100);
+  var col = dep>=50?'#E84040':dep>=30?'#F5A623':'#1DB87A';
+  var msg = dep>=50 ? 'Alta dependencia de publicidad: más de la mitad de tus ventas vienen de anuncios. Antes de bajar el PPC de este producto, ten en cuenta que puede reducir las ventas totales (y el ranking orgánico que sostienen).'
+    : dep>=30 ? 'Dependencia media de publicidad. Vigila que el ACoS se mantenga por debajo del break-even.'
+    : 'Mayoría de ventas orgánicas: el producto se sostiene sin depender de los anuncios. 👍';
+  return '<div style="background:#111;border:1px solid var(--bd2);border-radius:10px;padding:11px 13px;margin-bottom:12px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-weight:700;font-size:12.5px">📈 Dependencia de publicidad</div><div style="font-weight:800;color:'+col+'">'+f(dep,0)+'% vía PPC</div></div>'+
+    '<div style="height:7px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden"><i style="display:block;height:100%;width:'+f(dep,0)+'%;background:'+col+'"></i></div>'+
+    '<div style="font-size:11px;color:var(--mu2);margin-top:7px">'+msg+' <span style="color:var(--mu)">('+f(vppc,2)+'€ de publicidad sobre '+f(vt,2)+'€ de ventas en el periodo.)</span></div>'+
+    '</div>';
 }
 // Bloque aditivo: beneficio real de ESTE producto en recargo de equivalencia (mismo criterio que la tarjeta global del P&L).
 function bloqueRE(p, ivaRec){
