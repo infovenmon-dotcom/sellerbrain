@@ -1107,8 +1107,8 @@ if (new URLSearchParams(location.search).get('embed') === '1') {
       </label>
     </div>
     <div class="fi"><label>Precio de venta (IVA incluido)</label><div class="iw pl pr"><span class="ip">&euro;</span><input type="number" id="m-pvp" placeholder="9.99" step="0.01" min="0"><span class="is">PVP</span></div></div>
-    <div class="fi"><label>Coste del producto puesto en Amazon <b>(sin IVA)</b></label><div class="iw pl"><span class="ip">&euro;</span><input type="number" id="m-coste" placeholder="2.50" step="0.01" min="0"></div>
-      <div style="font-size:10.5px;color:var(--mu);margin-top:3px">Mete la <b>base sin IVA</b> (la de tu factura de compra). En <b>régimen general</b> el IVA se recupera → no es coste. En <b>recargo de equivalencia</b> te sumamos el <b>21% + 5,2%</b> automáticamente (no lo metas tú, evita el doble conteo).</div></div>
+    <div class="fi"><label>Coste del producto puesto en Amazon <b>(sin IVA ni recargo)</b></label><div class="iw pl"><span class="ip">&euro;</span><input type="number" id="m-coste" placeholder="2.50" step="0.01" min="0"></div>
+      <div style="font-size:10.5px;color:var(--mu);margin-top:3px">Mete la <b>base</b>, <b>sin IVA ni recargo de equivalencia</b> (la de tu factura de compra). En <b>régimen general</b> el IVA se recupera → no es coste. En <b>recargo de equivalencia</b> te sumamos el <b>21% + 5,2%</b> automáticamente (no lo metas tú, evita el doble conteo).</div></div>
     <div class="fr">
       <div class="fi"><label>Tienda Amazon (pa&iacute;s de venta)</label>
         <select id="m-tienda" onchange="updIVA();updDSTinfo()">
@@ -6069,7 +6069,7 @@ function csvMostrarNuevos() {
     html += '<div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">'+item.nombre+'</div>';
     html += '<div style="font-size:11px;color:var(--mu);margin-bottom:8px">'+mktsLabel+' &middot; SKU: '+d.sku+'</div>';
     html += '<div class="fr" style="gap:8px">';
-    html += '<div class="fi"><label style="font-size:11px">Coste puesto en Amazon (&euro;)</label>';
+    html += '<div class="fi"><label style="font-size:11px">Coste puesto en Amazon (&euro;) <b>(sin IVA ni recargo)</b></label>';
     html += '<div class="iw pl" style="margin:0"><span class="ip">&euro;</span>';
     html += '<input type="number" id="csv-coste-'+i+'" data-sku="'+d.sku+'" placeholder="3.50" step="0.01" min="0" style="width:100%"></div></div>';
     html += '<div class="fi"><label style="font-size:11px">Categor&iacute;a</label>';

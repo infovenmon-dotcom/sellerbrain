@@ -943,6 +943,7 @@ function renderImpactoFiscal(){
   h+=row('− IVA + recargo del producto (no deducible)', -costeProdIva, '#C0392B');
   h+='<div class="row total"><div class="n">Beneficio real (recargo de equivalencia)</div><div class="v" style="color:'+(benRE>=0?'var(--gn)':'var(--rd)')+'">'+(benRE>=0?'+':'')+f(benRE,2)+'€</div><div class="p"></div></div>';
   h+='<div style="font-size:11.5px;color:'+(delta>=0?'var(--gn)':'var(--am)')+';margin-top:8px">'+(delta>=0?'✅ En este periodo el RE te deja <b>'+f(delta,2)+'€ más</b>':'⚠️ En este periodo el RE te cuesta <b>'+f(-delta,2)+'€</b>')+' que el régimen general.</div>';
+  h+='<div style="font-size:11px;color:var(--am);margin-top:8px;padding:7px 9px;background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);border-radius:8px">⚠️ <b>Importante:</b> el coste de tus productos debe estar metido <b>sin IVA ni recargo</b> (solo la base de tu factura de compra). Aquí te sumamos el <b>IVA '+Math.round(prodIva*100)+'% + recargo '+String(recBand*100).replace('.',',')+'%</b> automáticamente. Si ya lo metiste con IVA, este cálculo saldrá inflado.</div>';
   h+='<div style="font-size:10.5px;color:var(--mu);margin-top:5px">Estimación según tu Perfil fiscal. «Nacional» = ventas de '+(P.pais_est||'ES')+(hayVP?(' ('+Math.round((totV>0?vNac/totV:1)*100)+'% del periodo)'):' (asumido 100% — abre «Ventas por país» para afinar')+'; el IVA de ventas OSS se remite (mira Ventanilla Única). Conviene validarlo con tu gestor.</div>';
   el.innerHTML=h;
 }
@@ -2124,7 +2125,7 @@ document.addEventListener('click',function(ev){
 /* Guarda el coste de un SKU (servidor en API, local en CSV) y refresca. */
 function editarCoste(sku){
   var actual=COSTES[sku]||'';
-  var v=prompt('Coste unitario (€, puesto en tu almacén) de '+sku+':',actual);
+  var v=prompt('Coste unitario de '+sku+' (€, puesto en tu almacén).\n\n⚠️ IMPORTANTE: mete la BASE, SIN IVA ni recargo de equivalencia.\nSi tu régimen es recargo de equivalencia, la herramienta ya suma el IVA + recargo por su cuenta — si lo metes tú, el beneficio saldrá mal.',actual);
   if(v===null)return;
   var coste=parseFloat(String(v).replace(',','.'))||0;
   COSTES[sku]=coste;
