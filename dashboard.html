@@ -747,7 +747,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 </div>
 
 <script>
-function f(n,d){return (+n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function f(n,d){var x=+n;if(!isFinite(x))x=0;return x.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
 
 /* ================= CAPA DE DATOS =================
    Contrato JSON estable: el dashboard SIEMPRE consume este formato,
