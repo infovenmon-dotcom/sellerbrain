@@ -68,3 +68,47 @@ Equivalencia. Si algo se rompe o no convence, se vuelve aquí sin problema.
 ## Siguiente fase (cuando se decida)
 - **Motor Fiscal Recargo de Equivalencia** — spec en `docs/recargo-equivalencia.md`.
   Requiere confirmar detalle con el gestor antes de codificar supuestos.
+
+---
+
+# ✅ CHECKPOINT 2 — agosto 2026 (motor fiscal desplegado)
+
+Segundo punto estable, **ya con el Motor Fiscal en producción** (Fases 0-3). Todo aditivo:
+nada de lo del checkpoint 1 se rompió.
+
+- **Rama de respaldo (en remoto):** `checkpoint-2026-08-motor-fiscal` — commit `90f5e07`.
+- **Worker:** sigue `v75-backoff-largo` (no cambió el backend en esta fase).
+- **Cómo volver a este punto:** igual que arriba pero con la rama
+  `checkpoint-2026-08-motor-fiscal`.
+
+## Qué se añadió (frontend, desplegado)
+- **Perfil fiscal (Fase 0):** `fiscal.html` — forma jurídica, régimen (general / recargo de
+  equivalencia; Sociedad fuerza general), país de establecimiento, países con IVA, OSS, tipo
+  de IVA y escenario de facturación de Amazon. Se guarda en `sb_perfil_fiscal`. Al guardar,
+  refresca el dashboard al instante.
+- **Calculadora de margen (Fase 1a):** aplica el perfil. En RE suma IVA + recargo al coste y
+  21% a tarifas/PPC. Coste **siempre base sin IVA ni recargo**.
+- **P&L · tarjeta "Impacto fiscal" (Fase 1b):** en RE desglosa Beneficio general → + IVA
+  nacional que te quedas − IVA de tarifas − IVA+recargo del producto → **Beneficio real (RE)**,
+  con el delta vs general. En general/Sociedad: nota de que el P&L ya es real. Usa
+  `PNL.iva_rep` real × fracción nacional.
+- **P&L neto correcto:** `pnl_periodo` devuelve `iva_rep` (ventas − neto); el dashboard lo
+  resta → el "Beneficio neto" es real (sin IVA de ventas). Eliminada la versión antigua que
+  devolvía `iva=0` (beneficio inflado).
+- **Ventanilla Única · panel "Modelos que te tocan" (Fase 3):** según perfil + informe subido
+  lista 369 (importe real), 303 (general) / no-303 (RE), 349 + registro local si hay trasiego,
+  y 309 (recordatorio RE). Importes con € del informe; el resto "revisar".
+- **Menú lateral con scroll propio** (ya no se cortan las últimas pestañas) y **hub de Ajustes**
+  real con accesos a Perfil fiscal, Ventanilla Única, Conexión y Cumplimiento UE, con estado.
+- **Aviso "coste sin IVA ni recargo"** en los 4 puntos de entrada/cálculo del coste.
+
+## Migraciones SQL de este checkpoint (correr en Supabase)
+- `sql/margen-real.sql` — `v_pnl_mes` y `pnl_periodo` con `iva_rep` (P&L neto correcto).
+- `sql/pnl-periodo.sql` — misma firma con `iva_rep` (ya no deja `iva=0`). Basta correr uno.
+
+## Fases del motor fiscal
+- Fase 0 (perfil) ✅ · Fase 1 (IVA deducible/no en calculadora y P&L) ✅ · Fase 3 (avisos de
+  modelos) ✅ base.
+- **Pendiente:** Fase 2 (recargo en compras de mercancía por tipo de IVA + origen — necesita
+  subir facturas de compra) · Beneficio **por producto** con tratamiento RE por SKU en el
+  dashboard (hoy el desglose RE está en el P&L global, no por SKU) · validación del gestor.
