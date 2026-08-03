@@ -110,6 +110,9 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 .pill.gn{background:rgba(46,204,113,.12);color:var(--gn)}
 .pill.am{background:rgba(245,166,35,.12);color:var(--am)}
 .pill.rd{background:rgba(232,64,64,.12);color:var(--rd)}
+.pill.mu{background:rgba(255,255,255,.06);color:var(--mu)}
+.acc-cp{margin-top:5px;background:rgba(74,158,222,.12);border:1px solid rgba(74,158,222,.35);color:#8fc4f0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;cursor:pointer}
+.acc-cp:hover{background:rgba(74,158,222,.2)}
 .spark{width:64px;height:20px}
 
 /* ===== COLUMNA DERECHA ===== */
@@ -748,6 +751,15 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 
 <script>
 function f(n,d){var x=+n;if(!isFinite(x))x=0;return x.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
+// Copia un término al portapapeles (para pegarlo como negativo en la Consola de Anuncios) y da feedback en el botón.
+function copiarTermino(btn,txt){
+  function ok(){ var o=btn.textContent; btn.textContent='✓ copiado'; setTimeout(function(){btn.textContent=o;},1500); }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok,function(){fallback();}); }
+    else fallback();
+  }catch(e){ fallback(); }
+  function fallback(){ try{ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); ok(); }catch(_){ prompt('Copia el término:',txt); } }
+}
 
 /* ================= CAPA DE DATOS =================
    Contrato JSON estable: el dashboard SIEMPRE consume este formato,
@@ -3082,9 +3094,14 @@ function renderPPCTerminos(){
     var gasto=+t.gasto,clics=+t.clics,ped=+(t.pedidos_ppc||0),ven=+(t.ventas_ppc||0);
     var a=ven>0?gasto/ven:999;
     var ver,pill;
-    if(clics>=8&&ped===0){ver='Negativizar';pill='rd';acciones.push({t:'Negativiza «'+t.termino+'»',p:clics+' clics · 0 pedidos en 30 días',v:gasto});recuperable+=gasto;}
+    // Umbral de confianza: solo se negativiza con datos suficientes (≥15 clics y 0 ventas).
+    // Con pocos clics el dato es frágil → "Techo de puja" (no negativizar aún) y NO cuenta al € recuperable.
+    var NEGC=15;
+    if(clics>=NEGC&&ped===0){ver='Negativizar';pill='rd';acciones.push({t:'Negativiza «'+t.termino+'»',p:clics+' clics · 0 pedidos en 30 días',v:gasto,term:t.termino,camp:t.campana||t.keyword||''});recuperable+=gasto;}
+    else if(clics>=5&&ped===0){ver='Techo de puja';pill='am';acciones.push({t:'Pon techo de puja a «'+t.termino+'»',p:clics+' clics · 0 pedidos — dato aún frágil, no negativices todavía',v:gasto,soft:true,term:t.termino,camp:t.campana||t.keyword||''});}
     else if(ven>0&&a>be){ver='Bajar puja';pill='am';}
     else if(ven>0&&a<=be*0.7&&ped>=2){ver='Escalar';pill='gn';}
+    else if(clics>0&&clics<5&&ped===0){ver='Datos insuf.';pill='mu';}
     else {ver='Vigilar';pill='am';}
     return '<tr><td style="max-width:190px;overflow:hidden;text-overflow:ellipsis"><b>'+t.termino+'</b></td>'+
       '<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(t.keyword||'')+'</td>'+
@@ -3096,12 +3113,15 @@ function renderPPCTerminos(){
   // Acciones del cerebro PPC
   document.getElementById('ppc-brain-total').textContent='+'+f(recuperable,2)+'€';
   var doneP=accHechas(), nHp=0;
+  acciones.sort(function(a,b){return (a.soft?1:0)-(b.soft?1:0);});   // primero las de € real, luego techo de puja
   var htmlP=acciones.slice(0,6).map(function(a){
     var k=accKey(a.t);
+    var ic=a.soft?'🔧':'❌', bgc=a.soft?'rgba(245,166,35,.15)':'rgba(232,64,64,.15)';
     if(doneP.has(k)){ nHp++; return _verAccHechas
-      ? '<div class="accion" style="opacity:.5"><div class="aic" style="background:rgba(232,64,64,.15)">❌</div><div style="flex:1"><div class="at">'+a.t+'</div><div class="ap">gestionada</div></div>'+btnReact(k)+'</div>' : ''; }
-    return '<div class="accion"><div class="aic" style="background:rgba(232,64,64,.15)">❌</div>'+
-      '<div style="flex:1"><div class="at">'+a.t+'</div><div class="av" style="color:var(--gn)">+'+f(a.v,2)+'€/mes</div><div class="ap">'+a.p+'</div></div>'+btnHecho(k)+'</div>';
+      ? '<div class="accion" style="opacity:.5"><div class="aic" style="background:'+bgc+'">'+ic+'</div><div style="flex:1"><div class="at">'+a.t+'</div><div class="ap">gestionada</div></div>'+btnReact(k)+'</div>' : ''; }
+    var cp=a.term?'<button class="acc-cp" title="Copiar el término para pegarlo en la Consola de Anuncios" onclick="copiarTermino(this,\''+a.term.replace(/'/g,"\\'")+'\')">📋 copiar</button>':'';
+    return '<div class="accion"><div class="aic" style="background:'+bgc+'">'+ic+'</div>'+
+      '<div style="flex:1"><div class="at">'+a.t+'</div><div class="av" style="color:'+(a.soft?'var(--am)':'var(--gn)')+'">'+(a.soft?'revisa en 30 días':'+'+f(a.v,2)+'€/mes')+'</div><div class="ap">'+a.p+'</div>'+cp+'</div>'+btnHecho(k)+'</div>';
   }).join('')+linkHechas(nHp);
   document.getElementById('ppc-acciones').innerHTML=htmlP.trim()?htmlP:'<div style="font-size:12px;color:var(--mu)">Sin fugas detectadas en los términos actuales. 👌</div>';
   // Por país (del rango activo)
