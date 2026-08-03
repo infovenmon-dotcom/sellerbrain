@@ -866,24 +866,28 @@ function renderPnl(){
 function renderImpactoFiscal(){
   var card=document.getElementById('card-fiscal'); if(!card) return;
   var el=document.getElementById('impacto-fiscal'), reg=document.getElementById('fiscal-reg');
-  if(!window.PNL_REAL || !PNL || !PNL.ventas){ card.style.display='none'; return; }
   card.style.display='block';
   var P=null; try{ P=JSON.parse(localStorage.getItem('sb_perfil_fiscal')||'null'); }catch(e){}
   var esRE = P && P.regimen==='re' && P.forma!=='sociedad';
   if(!esRE){
-    reg.textContent = P?('· '+(P.forma==='sociedad'?'Sociedad':'Autónomo')+' · régimen general'):'';
+    reg.textContent = P?('· '+(P.forma==='sociedad'?'Sociedad':'Autónomo')+' · régimen general'):'· sin perfil';
     el.innerHTML = P
-      ? '<div style="font-size:13px;color:var(--gn);padding:6px 2px">✅ <b>Régimen general:</b> el IVA que soportas es <b>recuperable</b> → no es coste. El P&L de arriba <b>ya es tu beneficio real</b>. Sin ajuste fiscal.</div>'
-      : '<div style="font-size:13px;color:var(--mu);padding:6px 2px">Define tu <b>Perfil fiscal</b> (en el menú) para ver el impacto de tu régimen de IVA. Por defecto asumimos régimen general (IVA recuperable).</div>';
+      ? '<div style="font-size:13px;color:var(--gn);padding:6px 2px">✅ <b>Régimen general'+(P.forma==='sociedad'?' (Sociedad)':'')+':</b> el IVA que soportas es <b>recuperable</b> → no es coste. El P&L de arriba <b>ya es tu beneficio real</b>. Sin ajuste fiscal.</div>'
+      : '<div style="font-size:13px;color:var(--mu);padding:6px 2px">Define tu <b>Perfil fiscal</b> (menú lateral → 🧮 Perfil fiscal) para ver el impacto de tu régimen de IVA. Por defecto asumimos régimen general.</div>';
     return;
   }
   reg.textContent='· Autónomo · recargo de equivalencia';
+  if(!window.PNL_REAL || !PNL || !PNL.ventas){
+    el.innerHTML='<div style="font-size:13px;color:var(--am);padding:6px 2px">🧮 <b>Recargo de equivalencia</b> activo. Elige un <b>rango de fechas</b> arriba (que se cargue el «P&L del periodo» real) y aquí verás tu <b>beneficio real</b> ajustado por el IVA no deducible.</div>';
+    return;
+  }
   var prodIva=P.iva==='10'?0.10:P.iva==='4'?0.04:0.21, recBand=P.iva==='10'?0.014:P.iva==='4'?0.005:0.052;
   var benGen=(PNL.ventas||0)-(PNL.iva_rep||0)-(PNL.prod||0)-(PNL.fba||0)-(PNL.com||0)-(PNL.ppc||0)-(PNL.dev||0)-(PNL.alm||0)+(PNL.otros||0);
-  var paises=window.VP_PAISES||[], totV=window.VP_TOTAL||0, vNac=0;
+  // Ventas nacionales (del país de establecimiento) → el IVA que TE QUEDAS = ventas nac. × tipo.
+  var paises=window.VP_PAISES||[], totV=window.VP_TOTAL||0, vNac=0, hayVP=paises.length>0;
   paises.forEach(function(p){ if((p.pais||'').toUpperCase()===(P.pais_est||'ES')) vNac+=(+p.ventas||0); });
-  var shareNac = totV>0 ? vNac/totV : 1;
-  var ivaRepKept=(PNL.iva_rep||0)*shareNac;
+  if(!hayVP) vNac=(PNL.ventas||0);   // sin reparto por país → asume todo nacional (y avisa)
+  var ivaRepKept=vNac*prodIva;
   var ivaFees=(PNL.iva_sop||0);                          // IVA de tarifas Amazon (recuperable en general)
   var costeProdIva=(PNL.prod||0)*(prodIva+recBand);      // IVA + recargo del producto (base)
   var benRE=benGen+ivaRepKept-ivaFees-costeProdIva, delta=benRE-benGen;
@@ -895,9 +899,11 @@ function renderImpactoFiscal(){
   h+=row('− IVA + recargo del producto (no deducible)', -costeProdIva, '#C0392B');
   h+='<div class="row total"><div class="n">Beneficio real (recargo de equivalencia)</div><div class="v" style="color:'+(benRE>=0?'var(--gn)':'var(--rd)')+'">'+(benRE>=0?'+':'')+f(benRE,2)+'€</div><div class="p"></div></div>';
   h+='<div style="font-size:11.5px;color:'+(delta>=0?'var(--gn)':'var(--am)')+';margin-top:8px">'+(delta>=0?'✅ En este periodo el RE te deja <b>'+f(delta,2)+'€ más</b>':'⚠️ En este periodo el RE te cuesta <b>'+f(-delta,2)+'€</b>')+' que el régimen general.</div>';
-  h+='<div style="font-size:10.5px;color:var(--mu);margin-top:5px">Estimación según tu Perfil fiscal. «Nacional» = ventas de '+(P.pais_est||'ES')+' ('+Math.round(shareNac*100)+'% del periodo)'+(totV>0?'':' — sube el reparto por país para afinar')+'; el IVA de ventas OSS se remite (mira Ventanilla Única). Conviene validarlo con tu gestor.</div>';
+  h+='<div style="font-size:10.5px;color:var(--mu);margin-top:5px">Estimación según tu Perfil fiscal. «Nacional» = ventas de '+(P.pais_est||'ES')+(hayVP?(' ('+Math.round((totV>0?vNac/totV:1)*100)+'% del periodo)'):' (asumido 100% — abre «Ventas por país» para afinar')+'; el IVA de ventas OSS se remite (mira Ventanilla Única). Conviene validarlo con tu gestor.</div>';
   el.innerHTML=h;
 }
+// Refresca la capa fiscal cuando cambias el perfil (se guarda en la pestaña Perfil fiscal → dispara storage).
+window.addEventListener('storage', function(e){ if(e.key==='sb_perfil_fiscal'){ try{ renderImpactoFiscal(); }catch(_){} } });
 
 var CHART_SERIE=null;
 function fechaCorta(s){ // 'YYYY-MM-DD' -> 'D MMM'
@@ -2802,6 +2808,7 @@ function cambiarVista(v){
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
+  if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} }   // refresca la capa fiscal con el perfil actual
   if(TOOL_SRC[v]){
     var meta=TOOL_SRC[v], f=document.getElementById('if-tool');
     if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
