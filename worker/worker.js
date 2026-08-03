@@ -30,6 +30,15 @@
  *   wrangler secret put SUPABASE_SERVICE_KEY
  *   wrangler deploy
  *
+ * ALERTAS POR EMAIL (opcional) — resumen diario de stock bajo / ACoS alto /
+ * sobrecostes. Se envía a las 07:00 UTC solo si hay algo que contar:
+ *   ALERTAS_EMAIL=1                 (interruptor: sin esto, no se envía nada)
+ *   ALERTAS_TO=tucorreo@dominio     (destinatario; si falta, usa EMAIL_SOPORTE)
+ *   ALERTAS_STOCK_DIAS=14           (opcional; avisa si cobertura <= N días)
+ *   ALERTAS_ACOS=40                 (opcional; avisa si ACoS 7d > N%)
+ *   ALERTAS_SOBRECOSTE=20           (opcional; avisa si recuperable >= N €/mes)
+ *   Prueba sin esperar al cron:  GET /v1/alertas-test?to=tucorreo
+ *
  * CRON (wrangler.toml) — HORARIO, no diario:
  *   [triggers]
  *   crons = ["0 * * * *"]   # cada hora: foto PPC + refresco de ventas; 03:00 ingesta completa
@@ -37,7 +46,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v75-backoff-largo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v76-alertas-email'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -797,6 +806,17 @@ export default {
         return json({ enviado: r, nota: r && r.saltado ? 'Falta RESEND_API_KEY en Cloudflare' : 'Revisa tu bandeja (y spam)' }, cors);
       }
 
+      // --- ALERTAS por email (admin/prueba): calcula las alertas del día y, si hay,
+      //     las envía. /v1/alertas-test?to=tucorreo (sin 'to' solo las devuelve, no envía) ---
+      if (url.pathname === '/v1/alertas-test') {
+        const to = (url.searchParams.get('to') || '').trim();
+        const alertas = await calcularAlertas(env);
+        if (!to) return json({ alertas, nota: 'Vista previa (no se ha enviado). Añade ?to=email para enviar.' }, cors);
+        if (!alertas.length) return json({ alertas, nota: 'No hay alertas hoy → no se envía correo.' }, cors);
+        const r = await enviarEmailAlertas(env, to, alertas);
+        return json({ alertas, enviado: r, nota: r && r.saltado ? 'Falta RESEND_API_KEY en Cloudflare' : 'Revisa tu bandeja (y spam)' }, cors);
+      }
+
       // --- DEMO de correos (admin): envía uno o TODOS los correos del ciclo para verlos.
       //     /v1/email-demo?to=tucorreo&tipo=todos   (tipo: acceso|seguimiento|renovacion|ultimo|cancelacion|todos) ---
       if (url.pathname === '/v1/email-demo') {
@@ -1189,6 +1209,9 @@ export default {
         try { await corregirCierrePPCHora(env); } catch (_) {}
         try { await traerPresupuestosAds(env); } catch (_) {}
       }
+      // A las 07:00 UTC (~09:00 España): alertas proactivas por email (stock bajo,
+      // ACoS alto, sobrecostes recuperables). Solo si ALERTAS_EMAIL=1. Digest diario.
+      if (hora === 7) { try { await procesarAlertas(env); } catch (_) {} }
       // A las 08:00 UTC (~10:00 España): ciclo de vida de fundadores — correos de
       // seguimiento/renovación/último aviso, bajas y (si BORRADO_AUTO=1) borrado.
       if (hora === 8) { try { await procesarFundadores(env); } catch (_) {} }
@@ -2996,6 +3019,149 @@ function suscripcionEsAnual(sub) {
     const rec = (it.price && it.price.recurring) || it.plan || {};
     return rec.interval === 'year';
   });
+}
+
+/* =====================================================================
+ * ALERTAS PROACTIVAS POR EMAIL — "fuera de la app" (petición del informe de
+ * David). Detecta stock bajo/rotura, ACoS fuera de rango y sobrecostes
+ * recuperables, y manda un resumen diario. Se activa con ALERTAS_EMAIL=1 y
+ * se envía a ALERTAS_TO (o al soporte). Umbrales configurables por env.
+ * =================================================================== */
+async function calcularAlertas(env) {
+  const A = [];
+  const STOCK_DIAS = +(env.ALERTAS_STOCK_DIAS || 14);
+  const ACOS_MAX = +(env.ALERTAS_ACOS || 40);
+  const SOBRE_MIN = +(env.ALERTAS_SOBRECOSTE || 20);
+
+  // 1) STOCK bajo / rotura (misma lógica que /v1/stock: uds/día 30d → cobertura)
+  try {
+    const inv = {};
+    for (const r of (await selSafe(env, 'inventario?select=sku,disponible,entrante', []))) {
+      inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0 };
+    }
+    const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const vel = {};
+    for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds', []))) {
+      const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0);
+    }
+    const cat = {};
+    try { for (const c of (await selSafe(env, 'productos_catalogo?select=sku,nombre', []))) cat[c.sku] = c.nombre; } catch (_) {}
+    const items = [];
+    for (const s of new Set([...Object.keys(inv), ...Object.keys(vel)])) {
+      if (/^amzn\.gr\./i.test(s)) continue;
+      const disp = (inv[s] && inv[s].disp) || 0, ent = (inv[s] && inv[s].ent) || 0;
+      const v = (vel[s] || 0) / 30;
+      if (v <= 0) continue;                       // sin ventas → no hay riesgo de rotura
+      const dias = Math.floor(disp / v);
+      if (dias <= STOCK_DIAS) items.push({ sku: s, nombre: cat[s] || s, dias, disp, ent, v: +v.toFixed(2) });
+    }
+    items.sort((a, b) => a.dias - b.dias);
+    for (const it of items.slice(0, 15)) {
+      const critico = it.disp === 0 || it.dias <= Math.max(3, Math.round(STOCK_DIAS / 3));
+      A.push({
+        nivel: critico ? 'critico' : 'aviso', cat: 'stock', ic: '📦',
+        titulo: it.disp === 0 ? ('Sin stock: ' + it.nombre) : (it.nombre + ' — ' + it.dias + ' días de cobertura'),
+        detalle: it.disp + ' uds' + (it.ent ? (' (+' + it.ent + ' en camino)') : ' · sin reposición registrada') + ' · vende ' + it.v + ' uds/día'
+      });
+    }
+  } catch (_) {}
+
+  // 2) ACoS fuera de rango (últimos 7 días: global y peor país)
+  try {
+    const hace7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    const filas = await selSafe(env, 'ppc_dia?fecha=gte.' + hace7 + '&select=pais,gasto,ventas_ppc', []);
+    let g = 0, v = 0; const porPais = {};
+    for (const r of (filas || [])) {
+      const gg = +r.gasto || 0, vv = +r.ventas_ppc || 0; g += gg; v += vv;
+      const p = r.pais || '?'; if (!porPais[p]) porPais[p] = { g: 0, v: 0 }; porPais[p].g += gg; porPais[p].v += vv;
+    }
+    if (v > 0) {
+      const acos = g / v * 100;
+      if (acos > ACOS_MAX) A.push({
+        nivel: acos > ACOS_MAX * 1.3 ? 'critico' : 'aviso', cat: 'acos', ic: '📣',
+        titulo: 'ACoS alto: ' + acos.toFixed(0) + '% (últimos 7 días)',
+        detalle: 'Gasto ' + g.toFixed(2) + '€ frente a ' + v.toFixed(2) + '€ de ventas de publicidad. Objetivo por debajo del ' + ACOS_MAX + '%.'
+      });
+      // peor país (si hay varios y alguno se dispara aún más)
+      let peor = null;
+      for (const p of Object.keys(porPais)) { const x = porPais[p]; if (x.v > 0) { const a = x.g / x.v * 100; if (a > ACOS_MAX && (!peor || a > peor.a)) peor = { p, a, g: x.g }; } }
+      if (peor && peor.p !== '?' && Object.keys(porPais).length > 1) A.push({
+        nivel: 'aviso', cat: 'acos', ic: '🌍',
+        titulo: 'ACoS por país: ' + peor.p + ' al ' + peor.a.toFixed(0) + '%',
+        detalle: 'Es el mercado con peor ACoS esta semana (gasto ' + peor.g.toFixed(2) + '€). Revisa sus campañas.'
+      });
+    }
+  } catch (_) {}
+
+  // 3) Sobrecostes de logística recuperables
+  try {
+    const filas = await selSafe(env, 'v_fuga_tarifa?select=sobrecoste_mes', []);
+    const tot = (filas || []).reduce((a, x) => a + (+x.sobrecoste_mes || 0), 0);
+    if (tot >= SOBRE_MIN) A.push({
+      nivel: 'aviso', cat: 'sobrecoste', ic: '🔍',
+      titulo: 'Sobrecostes de logística recuperables: ≈' + tot.toFixed(0) + '€/mes',
+      detalle: 'Amazon está cobrando tarifa cross-border en parte de tus envíos. Ábrelo en el Detector de sobrecostes y reclama.'
+    });
+  } catch (_) {}
+
+  return A;
+}
+
+// Orquestador diario: solo actúa si ALERTAS_EMAIL=1. Envía el resumen a
+// ALERTAS_TO (o EMAIL_SOPORTE). Como el cron dispara una vez al día (07:00 UTC),
+// el resumen es diario y solo se manda si hay algo que contar.
+async function procesarAlertas(env) {
+  if (String(env.ALERTAS_EMAIL || '') !== '1') return { saltado: 'ALERTAS_EMAIL != 1' };
+  const to = (env.ALERTAS_TO || env.EMAIL_SOPORTE || '').trim();
+  if (!to) return { saltado: 'sin ALERTAS_TO' };
+  const alertas = await calcularAlertas(env);
+  if (!alertas.length) return { ok: true, alertas: 0 };
+  const r = await enviarEmailAlertas(env, to, alertas);
+  return { ok: !!(r && r.ok), enviadas: alertas.length, detalle: r };
+}
+
+// Email de resumen de alertas (HTML compatible con clientes de correo).
+async function enviarEmailAlertas(env, email, alertas) {
+  if (!env.RESEND_API_KEY) return { saltado: 'sin RESEND_API_KEY' };
+  const from = env.EMAIL_FROM || 'SellerBrain <hola@sellersbrain.io>';
+  const soporte = env.EMAIL_SOPORTE || 'hola@sellersbrain.io';
+  const replyTo = env.EMAIL_REPLYTO || soporte;
+  const portalBase = env.PORTAL_URL || 'https://sellersbrain.io/portal.html';
+  let panel = 'https://sellersbrain.io/dashboard.html';
+  try { panel = new URL(portalBase).origin + '/dashboard.html'; } catch (_) {}
+  const nCrit = alertas.filter(a => a.nivel === 'critico').length;
+  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const filas = alertas.map(a => {
+    const col = a.nivel === 'critico' ? '#c0392b' : '#b8860b';
+    const bg = a.nivel === 'critico' ? '#fdecea' : '#fdf6e3';
+    return '<tr><td style="padding:10px 12px;border-bottom:1px solid #eee;vertical-align:top">' +
+      '<div style="font-size:15px">' + a.ic + '</div></td>' +
+      '<td style="padding:10px 12px;border-bottom:1px solid #eee">' +
+      '<div style="font-weight:700;color:' + col + ';font-size:14px">' + esc(a.titulo) + '</div>' +
+      '<div style="color:#5b6b63;font-size:12.5px;margin-top:2px">' + esc(a.detalle) + '</div></td>' +
+      '<td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:right"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:' + col + ';background:' + bg + ';padding:2px 8px;border-radius:100px">' + (a.nivel === 'critico' ? 'crítico' : 'aviso') + '</span></td></tr>';
+  }).join('');
+  const html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#1c2b24">' +
+    '<div style="padding:18px 4px"><span style="font-family:Arial;font-weight:800;font-size:18px">Seller<span style="color:#14663f">Brain</span></span></div>' +
+    '<div style="background:#14663f;color:#fff;border-radius:12px 12px 0 0;padding:18px 20px">' +
+    '<div style="font-size:18px;font-weight:800">Tus alertas de hoy</div>' +
+    '<div style="font-size:13px;opacity:.9;margin-top:3px">' + alertas.length + ' cosa' + (alertas.length > 1 ? 's' : '') + ' que revisar' + (nCrit ? (' · ' + nCrit + ' crítica' + (nCrit > 1 ? 's' : '')) : '') + '</div></div>' +
+    '<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3ece7;border-top:none">' + filas + '</table>' +
+    '<div style="text-align:center;padding:20px 0"><a href="' + panel + '" style="background:#14663f;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:11px 22px;border-radius:10px;display:inline-block">Abrir el panel</a></div>' +
+    '<div style="color:#8a978f;font-size:11px;line-height:1.6;padding:0 4px 20px">Resumen diario automático de SellerBrain. Se envía solo cuando hay algo que revisar. ¿No quieres recibirlo? Responde a este correo. · Soporte: ' + esc(soporte) + '</div>' +
+    '</div>';
+  const text = 'Tus alertas de hoy (' + alertas.length + '):\n\n' +
+    alertas.map(a => '- [' + (a.nivel === 'critico' ? 'CRITICO' : 'aviso') + '] ' + a.titulo + ' — ' + a.detalle).join('\n') +
+    '\n\nAbre el panel: ' + panel + '\n\nSellerBrain · VENMON NATURALMENTE SL';
+  const asunto = (nCrit ? '⚠️ ' : '') + 'SellerBrain — ' + alertas.length + ' alerta' + (alertas.length > 1 ? 's' : '') + ' hoy';
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [email], subject: asunto, html, text, reply_to: replyTo })
+  });
+  let detalle = null; try { detalle = await r.json(); } catch (_) {}
+  return { ok: r.ok, status: r.status, detalle };
 }
 
 // Envía el email de acceso vía Resend (si hay RESEND_API_KEY). Si no, no rompe:
