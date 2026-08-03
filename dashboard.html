@@ -736,6 +736,13 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <div class="aju-st" id="aju-cx-st">Ver estado</div>
     </a>
 
+    <a class="aju-card" onclick="cambiarVista('alertas')">
+      <div class="aju-ic">🔔</div>
+      <div class="aju-t">Alertas por email</div>
+      <div class="aju-d">Recibe un resumen cuando se te agote el stock, el ACoS se dispare o haya sobrecostes recuperables. Activa/desactiva y ajusta los umbrales.</div>
+      <div class="aju-st" id="aju-al-st">Configurar</div>
+    </a>
+
     <a class="aju-card" onclick="cambiarVista('epr')">
       <div class="aju-ic">♻️</div>
       <div class="aju-t">Cumplimiento UE · EPR + GPSR</div>
@@ -743,6 +750,39 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <div class="aju-st">Abrir</div>
     </a>
 
+  </div>
+</div>
+
+<!-- ============ ALERTAS POR EMAIL ============ -->
+<div id="vista-alertas" style="display:none">
+  <h2 style="font-family:'Satoshi',sans-serif;font-size:20px;font-weight:800;margin:2px 0 4px">🔔 Alertas por email</h2>
+  <p style="font-size:13px;color:var(--mu2);margin:0 0 18px;max-width:640px">Te avisamos <b>fuera de la app</b> cuando pasa algo que merece tu atención. Un solo correo al día, y solo si hay algo que revisar. Se envía a tu email de acceso.</p>
+  <div class="card" style="max-width:640px" id="card-alertas">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:14px">
+      <input type="checkbox" id="al-on" style="width:18px;height:18px;accent-color:var(--or)"> Recibir alertas por email
+    </label>
+    <div id="al-campos" style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:3px">📦 Aviso de stock</div>
+        <div style="font-size:11.5px;color:var(--mu);margin-bottom:6px">Avísame cuando a un producto le queden <b>N días de cobertura</b> o menos (según su velocidad de venta).</div>
+        <div style="display:flex;align-items:center;gap:8px"><input type="number" id="al-stock" min="1" max="120" style="width:90px;background:#111;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);padding:8px 10px;font-size:13px"><span style="font-size:12.5px;color:var(--mu2)">días o menos</span></div>
+      </div>
+      <div>
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:3px">📣 Aviso de ACoS</div>
+        <div style="font-size:11.5px;color:var(--mu);margin-bottom:6px">Avísame cuando el <b>ACoS de los últimos 7 días</b> supere este porcentaje.</div>
+        <div style="display:flex;align-items:center;gap:8px"><input type="number" id="al-acos" min="5" max="300" style="width:90px;background:#111;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);padding:8px 10px;font-size:13px"><span style="font-size:12.5px;color:var(--mu2)">% o más</span></div>
+      </div>
+      <div>
+        <div style="font-size:12.5px;font-weight:600;margin-bottom:3px">🔍 Aviso de sobrecostes</div>
+        <div style="font-size:11.5px;color:var(--mu);margin-bottom:6px">Avísame cuando los <b>sobrecostes de logística recuperables</b> lleguen a este importe.</div>
+        <div style="display:flex;align-items:center;gap:8px"><input type="number" id="al-sobre" min="0" style="width:90px;background:#111;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);padding:8px 10px;font-size:13px"><span style="font-size:12.5px;color:var(--mu2)">€/mes o más</span></div>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;align-items:center;gap:12px">
+      <button class="chip on" style="cursor:pointer" onclick="guardarAlertasPrefs()">Guardar</button>
+      <span id="al-msg" style="font-size:12px;color:var(--mu)"></span>
+    </div>
+    <div style="font-size:10.5px;color:var(--mu);margin-top:12px;border-top:1px solid var(--bd);padding-top:10px">Hoy los avisos de ACoS y sobrecostes están disponibles para la cuenta propia; el de stock, para todos. El correo llega a tu email de acceso. ¿No quieres recibirlo? Desmarca la casilla de arriba.</div>
   </div>
 </div>
 
@@ -989,6 +1029,44 @@ function pintarAjustes(){
     stC.textContent=on?'🟢 Conectado':'⚪ Sin conectar';
     stC.style.color=on?'var(--gn)':'var(--mu)';
   }
+}
+
+// ---- Alertas por email: preferencias del vendedor (opt-in + umbrales) ----
+function _alSetCamposEnabled(){ var on=document.getElementById('al-on').checked; document.getElementById('al-campos').style.opacity=on?'1':'.45'; document.getElementById('al-campos').style.pointerEvents=on?'auto':'none'; var st=document.getElementById('aju-al-st'); if(st){ st.textContent=on?'🟢 Activadas':'⚪ Desactivadas'; st.style.color=on?'var(--gn)':'var(--mu)'; } }
+function cargarAlertasPrefs(){
+  var msg=document.getElementById('al-msg'); if(msg){ msg.textContent='Cargando…'; msg.style.color='var(--mu)'; }
+  var onEl=document.getElementById('al-on');
+  onEl.onchange=_alSetCamposEnabled;
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){
+    if(msg){ msg.textContent='Conecta tu cuenta (Ajustes → Conexión) para configurar las alertas.'; msg.style.color='var(--am)'; }
+    onEl.checked=true; document.getElementById('al-stock').value=14; document.getElementById('al-acos').value=40; document.getElementById('al-sobre').value=20; _alSetCamposEnabled();
+    return;
+  }
+  fetch(SB_CONFIG.apiBase+'/v1/alertas-prefs',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var p=(d&&d.prefs)||{on:true,stock_dias:14,acos:40,sobrecoste:20};
+      onEl.checked=p.on!==false;
+      document.getElementById('al-stock').value=p.stock_dias;
+      document.getElementById('al-acos').value=p.acos;
+      document.getElementById('al-sobre').value=p.sobrecoste;
+      _alSetCamposEnabled();
+      if(msg) msg.textContent='';
+    })
+    .catch(function(){ if(msg){ msg.textContent='No se pudieron cargar tus preferencias.'; msg.style.color='var(--am)'; } _alSetCamposEnabled(); });
+}
+function guardarAlertasPrefs(){
+  var msg=document.getElementById('al-msg');
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ if(msg){ msg.textContent='Conecta tu cuenta para guardar.'; msg.style.color='var(--am)'; } return; }
+  var body={ on:document.getElementById('al-on').checked,
+    stock_dias:+document.getElementById('al-stock').value||14,
+    acos:+document.getElementById('al-acos').value||40,
+    sobrecoste:+document.getElementById('al-sobre').value||20 };
+  if(msg){ msg.textContent='Guardando…'; msg.style.color='var(--mu)'; }
+  fetch(SB_CONFIG.apiBase+'/v1/alertas-prefs',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},authHdr()),body:JSON.stringify(body)})
+    .then(function(r){return r.json();})
+    .then(function(d){ if(d&&d.ok){ if(msg){ msg.textContent='✓ Guardado'; msg.style.color='var(--gn)'; } _alSetCamposEnabled(); } else { throw new Error((d&&d.error)||'error'); } })
+    .catch(function(e){ if(msg){ msg.textContent='No se pudo guardar ('+e.message+').'; msg.style.color='var(--am)'; } });
 }
 
 var CHART_SERIE=null;
@@ -2913,7 +2991,9 @@ function cambiarVista(v){
   document.getElementById('vista-sobre').style.display = v==='sobre'?'block':'none';
   document.getElementById('vista-soon').style.display = SOON[v]?'block':'none';
   document.getElementById('vista-ajustes').style.display = v==='ajustes'?'block':'none';
+  document.getElementById('vista-alertas').style.display = v==='alertas'?'block':'none';
   if(v==='ajustes'){ try{ pintarAjustes(); }catch(e){} }
+  if(v==='alertas'){ try{ cargarAlertasPrefs(); }catch(e){} }
   document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();

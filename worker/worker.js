@@ -164,7 +164,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -821,6 +821,41 @@ export default {
         if (!alertas.length) return json({ alertas, nota: 'No hay alertas hoy → no se envía correo.' }, cors);
         const r = await enviarEmailAlertas(env, to, alertas);
         return json({ alertas, enviado: r, nota: r && r.saltado ? 'Falta RESEND_API_KEY en Cloudflare' : 'Revisa tu bandeja (y spam)' }, cors);
+      }
+
+      // --- Preferencias de ALERTAS del vendedor (opt-in + umbrales). El vendedor
+      //     lo gestiona desde Ajustes con su token de login. GET lee, POST guarda. ---
+      if (url.pathname === '/v1/alertas-prefs') {
+        const auth = (request.headers.get('Authorization') || '').replace('Bearer ', '');
+        const payload = await verificarJWT(env, auth);
+        let email = ((payload && payload.email) || '').trim().toLowerCase();
+        // Admin (clave maestra) puede gestionar/probar un vendedor con ?seller=
+        if (!email && url.searchParams.get('seller')) email = url.searchParams.get('seller').trim().toLowerCase();
+        if (!email) return json({ error: 'sin_sesion' }, cors, 401);
+        const defs = { on: true, stock_dias: +(env.ALERTAS_STOCK_DIAS || 14), acos: +(env.ALERTAS_ACOS || 40), sobrecoste: +(env.ALERTAS_SOBRECOSTE || 20) };
+        if (request.method === 'POST') {
+          let b; try { b = await request.json(); } catch (_) { b = {}; }
+          const clamp = (v, lo, hi, d) => v == null || v === '' ? null : Math.max(lo, Math.min(hi, isFinite(+v) ? +v : d));
+          const row = {
+            seller: email, email,
+            activo: b.on === false ? false : true,
+            stock_dias: clamp(b.stock_dias, 1, 120, defs.stock_dias),
+            acos: clamp(b.acos, 5, 300, defs.acos),
+            sobrecoste: clamp(b.sobrecoste, 0, 100000, defs.sobrecoste),
+            actualizado: new Date().toISOString()
+          };
+          try { await upsertSupabase(env, 'alertas_prefs', [row]); } catch (e) { return json({ error: 'no_guardado', detalle: e.message }, cors, 500); }
+          return json({ ok: true, prefs: { on: row.activo, stock_dias: row.stock_dias ?? defs.stock_dias, acos: row.acos ?? defs.acos, sobrecoste: row.sobrecoste ?? defs.sobrecoste } }, cors);
+        }
+        // GET
+        let m = null; try { m = (await selSafe(env, 'alertas_prefs?seller=eq.' + encodeURIComponent(email) + '&select=activo,stock_dias,acos,sobrecoste&limit=1', []))[0]; } catch (_) {}
+        const prefs = {
+          on: m && m.activo != null ? !!m.activo : defs.on,
+          stock_dias: m && m.stock_dias != null ? +m.stock_dias : defs.stock_dias,
+          acos: m && m.acos != null ? +m.acos : defs.acos,
+          sobrecoste: m && m.sobrecoste != null ? +m.sobrecoste : defs.sobrecoste
+        };
+        return json({ ok: true, email, prefs, defaults: defs }, cors);
       }
 
       // --- DEMO de correos (admin): envía uno o TODOS los correos del ciclo para verlos.
@@ -3038,11 +3073,12 @@ function suscripcionEsAnual(sub) {
 // alertas de ACoS y sobrecostes (PPC/settlement) hoy son de la cuenta propia
 // (aún no multi-tenant), así que solo se calculan para el owner → nunca se mezcla
 // ni se filtra el dato de un vendedor a otro.
-async function calcularAlertas(env, seller) {
+async function calcularAlertas(env, seller, opts) {
   const A = [];
-  const STOCK_DIAS = +(env.ALERTAS_STOCK_DIAS || 14);
-  const ACOS_MAX = +(env.ALERTAS_ACOS || 40);
-  const SOBRE_MIN = +(env.ALERTAS_SOBRECOSTE || 20);
+  opts = opts || {};
+  const STOCK_DIAS = +(opts.stock_dias != null ? opts.stock_dias : (env.ALERTAS_STOCK_DIAS || 14));
+  const ACOS_MAX = +(opts.acos != null ? opts.acos : (env.ALERTAS_ACOS || 40));
+  const SOBRE_MIN = +(opts.sobrecoste != null ? opts.sobrecoste : (env.ALERTAS_SOBRECOSTE || 20));
   const ownerSeller = env.OWNER_SELLER || 'venmon';
   const esOwner = !seller || seller === ownerSeller;
   const sf = '&seller=eq.' + encodeURIComponent(seller || ownerSeller);   // filtro de tablas con columna seller
@@ -3146,12 +3182,19 @@ async function procesarAlertas(env) {
   const ownerTo = (env.ALERTAS_TO || '').trim();
   if (ownerTo) lista.push({ email: ownerTo, seller: ownerSeller });
 
+  // Preferencias por vendedor (opt-in + umbrales). Se cargan de una vez.
+  const prefs = {};
+  try { for (const p of (await selSafe(env, 'alertas_prefs?select=seller,activo,stock_dias,acos,sobrecoste', []))) prefs[p.seller] = p; } catch (_) {}
+
   const vistos = new Set(), res = [];
   for (const d of lista) {
     const key = d.email.toLowerCase();
     if (vistos.has(key)) continue; vistos.add(key);
+    const p = prefs[d.seller] || prefs[d.email] || null;
+    if (p && p.activo === false) continue;   // el vendedor ha desactivado sus alertas
+    const opts = p ? { stock_dias: p.stock_dias, acos: p.acos, sobrecoste: p.sobrecoste } : {};
     let alertas = [];
-    try { alertas = await calcularAlertas(env, d.seller); } catch (_) {}
+    try { alertas = await calcularAlertas(env, d.seller, opts); } catch (_) {}
     if (!alertas.length) continue;
     const r = await enviarEmailAlertas(env, d.email, alertas);
     res.push({ email: d.email, enviadas: alertas.length, ok: !!(r && r.ok) });
