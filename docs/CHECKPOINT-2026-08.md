@@ -112,3 +112,46 @@ nada de lo del checkpoint 1 se rompió.
 - **Pendiente:** Fase 2 (recargo en compras de mercancía por tipo de IVA + origen — necesita
   subir facturas de compra) · Beneficio **por producto** con tratamiento RE por SKU en el
   dashboard (hoy el desglose RE está en el P&L global, no por SKU) · validación del gestor.
+
+---
+
+# ✅ CHECKPOINT 3 — agosto 2026 (Fase 2 + informe David + alertas por email)
+
+Tercer punto estable. Todo aditivo: nada de los checkpoints 1 y 2 se rompió.
+
+- **Rama de respaldo (en remoto):** `checkpoint-2026-08-alertas-david` — commit `3497ba8`.
+- **Worker:** `v76-alertas-email` (SB_VERSION). **Requiere pegarlo en Cloudflare.**
+- **Cómo volver a este punto:** igual que arriba con la rama `checkpoint-2026-08-alertas-david`.
+
+## Qué se añadió (frontend, desplegado)
+- **Motor fiscal · Fase 2 — Compras de mercancía** (`compras.html`, en Ajustes): registra
+  facturas de proveedor → coste real por unidad (base sin IVA) + obligaciones por origen
+  (309/349/DUA) en recargo de equivalencia. Export CSV. Guarda en `sb_compras`.
+- **Beneficio real (RE) por producto** en el detalle del SKU (aditivo, mismo criterio que el
+  P&L global).
+- **Informe de David (quick wins):**
+  - Bug **`+NaN€` arreglado** de raíz (formateador a prueba de NaN, global).
+  - **Umbral de confianza en veredictos PPC**: solo 'Negativizar' con ≥15 clics y 0 ventas;
+    5-14 → 'Techo de puja' (no infla el € recuperable); <5 → 'Datos insuf.'.
+  - **Botón 📋 copiar término** en cada acción PPC.
+  - **'Satisfacción del cliente' → 'Salud del producto (según devoluciones)'** con su límite.
+  - **Tooltip de sincronización** para reducir dudas de 'esto no cuadra'.
+
+## Alertas proactivas por email (backend, requiere desplegar worker v76)
+- Motor diario (07:00 UTC) que manda resumen SOLO si hay algo: **stock bajo/rotura, ACoS
+  alto (7d) y sobrecostes recuperables**. Email HTML con niveles crítico/aviso.
+- **Multi-tenant**: cada vendedor recibe SUS alertas en SU email (seller = email). Stock se
+  filtra por seller; ACoS/sobrecostes hoy solo para la cuenta propia (PPC/settlement aún
+  single-tenant) → nunca se mezcla dato entre vendedores.
+- **Opt-in por usuario** (Ajustes → 🔔 Alertas por email): on/off + umbrales (días stock,
+  % ACoS, €/mes sobrecoste). Endpoints `GET/POST /v1/alertas-prefs` (JWT del miembro).
+- Activación: `ALERTAS_EMAIL=1` (interruptor), `ALERTAS_TO` (solo la cuenta propia VENMON).
+  Prueba: `GET /v1/alertas-test?to=correo[&seller=email_cliente]`.
+
+## Migraciones SQL de este checkpoint (correr en Supabase)
+- `sql/alertas-prefs.sql` — tabla `alertas_prefs` (opt-in + umbrales por vendedor, con RLS).
+
+## Pendientes (no bloquean)
+- Fase 2 fiscal por SKU / avisos automáticos · ACoS y sobrecostes por cliente cuando Ads y
+  settlement sean multi-tenant · alerta de 'producto en pérdidas' · Buy Box / hijacking ·
+  ranking orgánico para veredictos VIP · validación del gestor (David).
