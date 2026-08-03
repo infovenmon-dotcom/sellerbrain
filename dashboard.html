@@ -113,6 +113,8 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 .pill.mu{background:rgba(255,255,255,.06);color:var(--mu)}
 .acc-cp{margin-top:5px;background:rgba(74,158,222,.12);border:1px solid rgba(74,158,222,.35);color:#8fc4f0;font-size:11px;font-weight:600;padding:3px 9px;border-radius:8px;cursor:pointer}
 .acc-cp:hover{background:rgba(74,158,222,.2)}
+.pnl-i{display:inline-block;font-size:11px;color:var(--mu);cursor:help;margin-left:3px;opacity:.7}
+.pnl-i:hover{opacity:1;color:var(--or2)}
 .spark{width:64px;height:20px}
 
 /* ===== COLUMNA DERECHA ===== */
@@ -936,20 +938,21 @@ function renderPnl(){
   }
   document.getElementById('pnl-per').textContent='· '+lab;
   var rows=[
-    {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true},
-    {n:'IVA repercutido (a Hacienda)',v:-(PNL.iva_rep||0)*esc,c:'#7a7a7a'},
-    {n:'Coste de producto',v:-PNL.prod*esc,c:'#2EE6A0'},
-    {n:'Tarifas FBA',v:-PNL.fba*esc,c:'#E84040'},
-    {n:'Comisión Amazon',v:-PNL.com*esc,c:'#F5A623'},
-    {n:'PPC',v:-PNL.ppc*esc,c:'#9B59B6'},
-    {n:'Devoluciones',v:-PNL.dev*esc,c:'#C0392B'},
-    {n:'Almacenaje',v:-PNL.alm*esc,c:'#888'},
-    {n:'Otros ajustes',v:PNL.otros*esc,c:'#666'}
+    {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true,m:'Ventas CON IVA, como en Seller Central (lo que paga el cliente).'},
+    {n:'IVA repercutido (a Hacienda)',v:-(PNL.iva_rep||0)*esc,c:'#7a7a7a',m:'El IVA de tus ventas que ingresas a Hacienda (ventas − base sin IVA). Se resta porque no es tuyo, va al Estado.'},
+    {n:'Coste de producto',v:-PNL.prod*esc,c:'#2EE6A0',m:'Unidades vendidas × tu coste unitario (base SIN IVA). Se introduce por producto (o desde Compras de mercancía).'},
+    {n:'Tarifas FBA',v:-PNL.fba*esc,c:'#E84040',m:'Tarifa REAL de logística por unidad, del settlement de Amazon (sin IVA), aplicada a las unidades del periodo. Resuelve el desfase de liquidación.'},
+    {n:'Comisión Amazon',v:-PNL.com*esc,c:'#F5A623',m:'Comisión real de venta por unidad, del settlement (sin IVA).'},
+    {n:'PPC',v:-PNL.ppc*esc,c:'#9B59B6',m:'Gasto de publicidad del periodo (Amazon Ads API).'},
+    {n:'Devoluciones',v:-PNL.dev*esc,c:'#C0392B',m:'Reembolsos y costes de devolución del settlement (sin IVA).'},
+    {n:'Almacenaje',v:-PNL.alm*esc,c:'#888',m:'Tarifas de almacenaje FBA del settlement (sin IVA).'},
+    {n:'Otros ajustes',v:PNL.otros*esc,c:'#666',m:'Otros conceptos del settlement: reembolsos a tu favor, ajustes de inventario, etc.'}
   ];
   var ben=rows.reduce(function(a,r){return a+r.v;},0);
   var h='';
   rows.forEach(function(r){
-    h+='<div class="row"><div class="n"><span class="dot" style="background:'+r.c+'"></span>'+r.n+'</div>'+
+    var inf=r.m?' <span class="pnl-i" title="'+r.m.replace(/"/g,'&quot;')+'">ⓘ</span>':'';
+    h+='<div class="row"><div class="n"><span class="dot" style="background:'+r.c+'"></span>'+r.n+inf+'</div>'+
        '<div class="v" style="color:'+(r.v>=0?'var(--tx)':'var(--mu2)')+'">'+(r.v>=0?'+':'')+f(r.v,2)+'€</div>'+
        '<div class="p">'+f(Math.abs(r.v)/(PNL.ventas*esc)*100,1)+'%</div></div>';
   });
@@ -959,6 +962,7 @@ function renderPnl(){
     h+='<div class="row" style="margin-top:6px;opacity:.85"><div class="n"><span class="dot" style="background:#4A9EDE"></span>IVA soportado (recuperable) <span style="color:var(--mu);font-size:10px">· no afecta al beneficio</span></div>'+
        '<div class="v" style="color:#4A9EDE">+'+f(PNL.iva_sop*esc,2)+'€</div><div class="p"></div></div>';
   }
+  h+='<div style="font-size:10.5px;color:var(--mu);margin-top:10px;line-height:1.5">ⓘ Pasa el ratón por cada línea para ver cómo se calcula. Criterio: ventas <b>sin IVA</b> menos costes <b>sin IVA</b> (tarifas por unidad reales del settlement, coste que introduces tú). El semáforo de productos mide el margen <b>antes</b> de PPC; el beneficio de aquí ya <b>incluye</b> PPC.</div>';
   document.getElementById('pnl').innerHTML=h;
   try{ renderImpactoFiscal(); }catch(e){}
 }
