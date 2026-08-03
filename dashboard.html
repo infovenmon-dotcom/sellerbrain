@@ -23,7 +23,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 .logo{font-family:'Satoshi',sans-serif;font-weight:800;font-size:17px;padding:4px 10px 16px;display:flex;align-items:center;gap:8px}
 .logo b{color:#14B87A}
 .logo .brain{width:26px;height:26px;background:linear-gradient(135deg,var(--or),#14B87A);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px}
-.nav{display:flex;flex-direction:column;gap:2px;flex:1}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto;min-height:0}
 .nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--mu2);text-decoration:none;font-weight:500;font-size:12.5px;cursor:pointer;border:1px solid transparent}
 .nav a:hover{background:rgba(255,255,255,.04);color:var(--tx)}
 .nav a.on{background:rgba(46,230,160,.12);color:var(--or2);border-color:rgba(46,230,160,.25);font-weight:700}
@@ -31,6 +31,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 .nav .sep{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);padding:14px 10px 4px}
 .side-foot{padding:10px;border-top:1px solid var(--bd);font-size:11px;color:var(--mu)}
 .side-foot b{color:var(--mu2)}
+.aju-card{display:flex;flex-direction:column;gap:6px;padding:16px;background:var(--panel);border:1px solid var(--bd);border-radius:12px;cursor:pointer;text-decoration:none;transition:border-color .15s,transform .1s}
+.aju-card:hover{border-color:rgba(46,230,160,.4);transform:translateY(-1px)}
+.aju-ic{font-size:22px}
+.aju-t{font-weight:700;font-size:14px;color:var(--tx)}
+.aju-d{font-size:12px;color:var(--mu2);line-height:1.45;flex:1}
+.aju-st{font-size:11px;font-weight:600;color:var(--or2);margin-top:2px}
 
 /* ===== MAIN ===== */
 .main{padding:0 22px 40px;min-width:0}
@@ -171,9 +177,9 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <a id="nav-nichos" onclick="cambiarVista('nichos')"><span class="ic">🔎</span> Investigación de marca</a>
     <a id="nav-calc" onclick="cambiarVista('calc')"><span class="ic">🧮</span> Calculadora EU / USA</a>
     <a id="nav-epr" onclick="cambiarVista('epr')"><span class="ic">♻️</span> Cumplimiento UE · EPR + GPSR</a>
-    <a id="nav-iva" onclick="cambiarVista('iva')"><span class="ic">🧾</span> Ventanilla Única · IVA</a>
+    <div class="sep">Fiscal y ajustes</div>
     <a id="nav-fiscal" onclick="cambiarVista('fiscal')"><span class="ic">🧮</span> Perfil fiscal</a>
-    <div class="sep"></div>
+    <a id="nav-iva" onclick="cambiarVista('iva')"><span class="ic">🧾</span> Ventanilla Única · IVA</a>
     <a id="nav-ajustes" onclick="cambiarVista('ajustes')"><span class="ic">⚙️</span> Ajustes</a>
   </nav>
   <div class="side-foot">Plan <b>Fundador</b> · 53 SKUs<br>hola@sellersbrain.io</div>
@@ -692,6 +698,43 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
   </div>
 </div>
 
+<!-- ============ AJUSTES (hub) ============ -->
+<div id="vista-ajustes" style="display:none">
+  <h2 style="font-family:'Satoshi',sans-serif;font-size:20px;font-weight:800;margin:2px 0 4px">⚙️ Ajustes</h2>
+  <p style="font-size:13px;color:var(--mu2);margin:0 0 18px">Tu configuración fiscal y de conexión, todo en un sitio. Defínelo una vez y el resto de la herramienta se ajusta sola.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;max-width:900px">
+
+    <a class="aju-card" onclick="cambiarVista('fiscal')">
+      <div class="aju-ic">🧮</div>
+      <div class="aju-t">Perfil fiscal</div>
+      <div class="aju-d">Forma jurídica, régimen de IVA (general / recargo de equivalencia), tipo de IVA y escenario de facturación de Amazon. Marca el criterio de todo el P&amp;L.</div>
+      <div class="aju-st" id="aju-fiscal-st">Sin definir</div>
+    </a>
+
+    <a class="aju-card" onclick="cambiarVista('iva')">
+      <div class="aju-ic">🧾</div>
+      <div class="aju-t">Ventanilla Única · IVA</div>
+      <div class="aju-d">IVA intracomunitario por país de destino (OSS). Sube el informe de transacciones de IVA y ve cuánto declarar en cada país.</div>
+      <div class="aju-st">Abrir</div>
+    </a>
+
+    <a class="aju-card" onclick="cambiarVista('dash');setTimeout(function(){var e=document.getElementById('card-conexion')||document.querySelector('.app main');if(e)e.scrollIntoView({behavior:'smooth'});},60)">
+      <div class="aju-ic">🔌</div>
+      <div class="aju-t">Conexión y datos</div>
+      <div class="aju-d">Estado de la conexión con Amazon, clave de API (admin) y carga de informes (CSV). En el Dashboard, arriba del todo.</div>
+      <div class="aju-st" id="aju-cx-st">Ver estado</div>
+    </a>
+
+    <a class="aju-card" onclick="cambiarVista('epr')">
+      <div class="aju-ic">♻️</div>
+      <div class="aju-t">Cumplimiento UE · EPR + GPSR</div>
+      <div class="aju-d">Registros de responsabilidad del productor (PPWR) y requisitos GPSR por país. Config de cumplimiento normativo.</div>
+      <div class="aju-st">Abrir</div>
+    </a>
+
+  </div>
+</div>
+
 </main>
 </div>
 
@@ -904,7 +947,28 @@ function renderImpactoFiscal(){
   el.innerHTML=h;
 }
 // Refresca la capa fiscal cuando cambias el perfil (se guarda en la pestaña Perfil fiscal → dispara storage).
-window.addEventListener('storage', function(e){ if(e.key==='sb_perfil_fiscal'){ try{ renderImpactoFiscal(); }catch(_){} } });
+window.addEventListener('storage', function(e){ if(e.key==='sb_perfil_fiscal'){ try{ renderImpactoFiscal(); pintarAjustes(); }catch(_){} } });
+
+// Rellena los estados de las tarjetas del hub de Ajustes.
+function pintarAjustes(){
+  var stF=document.getElementById('aju-fiscal-st');
+  if(stF){
+    var P=null; try{ P=JSON.parse(localStorage.getItem('sb_perfil_fiscal')||'null'); }catch(e){}
+    if(!P){ stF.textContent='Sin definir'; stF.style.color='var(--am)'; }
+    else{
+      var forma=P.forma==='sociedad'?'Sociedad':'Autónomo';
+      var reg=(P.regimen==='re'&&P.forma!=='sociedad')?'recargo de equivalencia':'régimen general';
+      stF.textContent='✓ '+forma+' · '+reg+' · IVA '+(P.iva||'21')+'%';
+      stF.style.color='var(--or2)';
+    }
+  }
+  var stC=document.getElementById('aju-cx-st');
+  if(stC){
+    var on=(SB_CONFIG.apiKey||SB_CONFIG.mode==='api');
+    stC.textContent=on?'🟢 Conectado':'⚪ Sin conectar';
+    stC.style.color=on?'var(--gn)':'var(--mu)';
+  }
+}
 
 var CHART_SERIE=null;
 function fechaCorta(s){ // 'YYYY-MM-DD' -> 'D MMM'
@@ -2780,7 +2844,7 @@ var TOOL_SRC = {
   stock:   { src:'stock.html',                     title:'Stock y reposición' }
 };
 // Secciones aún no construidas → aviso "en desarrollo":
-var SOON = { ajustes:'Ajustes' };
+var SOON = {};
 
 // Barra lateral plegable: en escritorio pliega/despliega (y lo recuerda);
 // en móvil abre/cierra el menú deslizante.
@@ -2804,6 +2868,8 @@ function cambiarVista(v){
   document.getElementById('vista-tool').style.display = TOOL_SRC[v]?'block':'none';
   document.getElementById('vista-sobre').style.display = v==='sobre'?'block':'none';
   document.getElementById('vista-soon').style.display = SOON[v]?'block':'none';
+  document.getElementById('vista-ajustes').style.display = v==='ajustes'?'block':'none';
+  if(v==='ajustes'){ try{ pintarAjustes(); }catch(e){} }
   document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();

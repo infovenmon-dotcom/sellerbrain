@@ -176,6 +176,8 @@ function pintarResumen(){
 function guardar(){
   P.pais_est=document.getElementById('pais-est').value;
   try{ localStorage.setItem('sb_perfil_fiscal', JSON.stringify(P)); }catch(e){}
+  // Refresca el dashboard al instante (estamos embebidos como iframe, mismo origen).
+  try{ if(window.parent && window.parent!==window){ if(window.parent.renderImpactoFiscal) window.parent.renderImpactoFiscal(); if(window.parent.pintarAjustes) window.parent.pintarAjustes(); } }catch(e){}
   var g=document.getElementById('guardado'); g.style.display='inline'; setTimeout(function(){g.style.display='none';},2500);
 }
 
