@@ -31,13 +31,18 @@
  *   wrangler deploy
  *
  * ALERTAS POR EMAIL (opcional) — resumen diario de stock bajo / ACoS alto /
- * sobrecostes. Se envía a las 07:00 UTC solo si hay algo que contar:
- *   ALERTAS_EMAIL=1                 (interruptor: sin esto, no se envía nada)
- *   ALERTAS_TO=tucorreo@dominio     (destinatario; si falta, usa EMAIL_SOPORTE)
+ * sobrecostes. Se envía a las 07:00 UTC solo si hay algo que contar. MULTI-TENANT:
+ * cada vendedor recibe SUS alertas en SU email de registro (el identificador de
+ * vendedor en SellerBrain ES su email). Stock se filtra por vendedor; ACoS y
+ * sobrecostes (aún de la cuenta propia) solo se envían al owner.
+ *   ALERTAS_EMAIL=1                 (interruptor global: sin esto, no se envía nada)
+ *   ALERTAS_TO=tucorreo@dominio     (a dónde van las alertas de TU cuenta, VENMON)
+ *   OWNER_SELLER=venmon             (opcional; identificador de la cuenta propia)
  *   ALERTAS_STOCK_DIAS=14           (opcional; avisa si cobertura <= N días)
  *   ALERTAS_ACOS=40                 (opcional; avisa si ACoS 7d > N%)
  *   ALERTAS_SOBRECOSTE=20           (opcional; avisa si recuperable >= N €/mes)
- *   Prueba sin esperar al cron:  GET /v1/alertas-test?to=tucorreo
+ *   Los clientes de pago reciben las suyas automáticamente (tabla miembros).
+ *   Prueba:  GET /v1/alertas-test?to=tucorreo[&seller=email_del_cliente]
  *
  * CRON (wrangler.toml) — HORARIO, no diario:
  *   [triggers]
@@ -810,8 +815,9 @@ export default {
       //     las envía. /v1/alertas-test?to=tucorreo (sin 'to' solo las devuelve, no envía) ---
       if (url.pathname === '/v1/alertas-test') {
         const to = (url.searchParams.get('to') || '').trim();
-        const alertas = await calcularAlertas(env);
-        if (!to) return json({ alertas, nota: 'Vista previa (no se ha enviado). Añade ?to=email para enviar.' }, cors);
+        const seller = (url.searchParams.get('seller') || '').trim();   // opcional: prueba un vendedor concreto (su email)
+        const alertas = await calcularAlertas(env, seller || undefined);
+        if (!to) return json({ seller: seller || '(cuenta propia)', alertas, nota: 'Vista previa (no se ha enviado). Añade ?to=email para enviar.' }, cors);
         if (!alertas.length) return json({ alertas, nota: 'No hay alertas hoy → no se envía correo.' }, cors);
         const r = await enviarEmailAlertas(env, to, alertas);
         return json({ alertas, enviado: r, nota: r && r.saltado ? 'Falta RESEND_API_KEY en Cloudflare' : 'Revisa tu bandeja (y spam)' }, cors);
@@ -3027,25 +3033,33 @@ function suscripcionEsAnual(sub) {
  * recuperables, y manda un resumen diario. Se activa con ALERTAS_EMAIL=1 y
  * se envía a ALERTAS_TO (o al soporte). Umbrales configurables por env.
  * =================================================================== */
-async function calcularAlertas(env) {
+// Calcula las alertas de UN vendedor. seller = su identificador (en SellerBrain,
+// el email de registro). Las tablas de stock/ventas se filtran por seller. Las
+// alertas de ACoS y sobrecostes (PPC/settlement) hoy son de la cuenta propia
+// (aún no multi-tenant), así que solo se calculan para el owner → nunca se mezcla
+// ni se filtra el dato de un vendedor a otro.
+async function calcularAlertas(env, seller) {
   const A = [];
   const STOCK_DIAS = +(env.ALERTAS_STOCK_DIAS || 14);
   const ACOS_MAX = +(env.ALERTAS_ACOS || 40);
   const SOBRE_MIN = +(env.ALERTAS_SOBRECOSTE || 20);
+  const ownerSeller = env.OWNER_SELLER || 'venmon';
+  const esOwner = !seller || seller === ownerSeller;
+  const sf = '&seller=eq.' + encodeURIComponent(seller || ownerSeller);   // filtro de tablas con columna seller
 
-  // 1) STOCK bajo / rotura (misma lógica que /v1/stock: uds/día 30d → cobertura)
+  // 1) STOCK bajo / rotura (misma lógica que /v1/stock: uds/día 30d → cobertura). Por vendedor.
   try {
     const inv = {};
-    for (const r of (await selSafe(env, 'inventario?select=sku,disponible,entrante', []))) {
+    for (const r of (await selSafe(env, 'inventario?select=sku,disponible,entrante' + sf, []))) {
       inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0 };
     }
     const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
     const vel = {};
-    for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds', []))) {
+    for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds' + sf, []))) {
       const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0);
     }
     const cat = {};
-    try { for (const c of (await selSafe(env, 'productos_catalogo?select=sku,nombre', []))) cat[c.sku] = c.nombre; } catch (_) {}
+    try { for (const c of (await selSafe(env, 'productos_catalogo?select=sku,nombre' + sf, []))) cat[c.sku] = c.nombre; } catch (_) {}
     const items = [];
     for (const s of new Set([...Object.keys(inv), ...Object.keys(vel)])) {
       if (/^amzn\.gr\./i.test(s)) continue;
@@ -3065,6 +3079,11 @@ async function calcularAlertas(env) {
       });
     }
   } catch (_) {}
+
+  // 2) y 3) ACoS y sobrecostes: hoy PPC y settlement son de la cuenta propia
+  // (aún no multi-tenant) → solo se calculan para el owner. Así ningún vendedor
+  // recibe datos de otro por error.
+  if (!esOwner) return A;
 
   // 2) ACoS fuera de rango (últimos 7 días: global y peor país)
   try {
@@ -3107,17 +3126,37 @@ async function calcularAlertas(env) {
   return A;
 }
 
-// Orquestador diario: solo actúa si ALERTAS_EMAIL=1. Envía el resumen a
-// ALERTAS_TO (o EMAIL_SOPORTE). Como el cron dispara una vez al día (07:00 UTC),
-// el resumen es diario y solo se manda si hay algo que contar.
+// Orquestador diario (07:00 UTC): solo actúa si ALERTAS_EMAIL=1. MULTI-TENANT —
+// cada vendedor recibe SUS alertas en SU email de registro (en SellerBrain el
+// identificador de vendedor ES su email). La cuenta propia (VENMON) se envía a
+// ALERTAS_TO si está configurado. Solo se manda correo a quien tenga algo que revisar.
 async function procesarAlertas(env) {
   if (String(env.ALERTAS_EMAIL || '') !== '1') return { saltado: 'ALERTAS_EMAIL != 1' };
-  const to = (env.ALERTAS_TO || env.EMAIL_SOPORTE || '').trim();
-  if (!to) return { saltado: 'sin ALERTAS_TO' };
-  const alertas = await calcularAlertas(env);
-  if (!alertas.length) return { ok: true, alertas: 0 };
-  const r = await enviarEmailAlertas(env, to, alertas);
-  return { ok: !!(r && r.ok), enviadas: alertas.length, detalle: r };
+  const ownerSeller = env.OWNER_SELLER || 'venmon';
+  const lista = [];
+  // 1) Cada miembro activo → sus alertas a su email (seller = su email).
+  try {
+    const socios = await selSafe(env, 'miembros?estado=in.(activo,renovado)&select=email,seller', []);
+    for (const m of (socios || [])) {
+      const email = (m.email || '').trim();
+      if (email) lista.push({ email, seller: (m.seller || email) });
+    }
+  } catch (_) {}
+  // 2) Cuenta propia (VENMON): a ALERTAS_TO si está configurado.
+  const ownerTo = (env.ALERTAS_TO || '').trim();
+  if (ownerTo) lista.push({ email: ownerTo, seller: ownerSeller });
+
+  const vistos = new Set(), res = [];
+  for (const d of lista) {
+    const key = d.email.toLowerCase();
+    if (vistos.has(key)) continue; vistos.add(key);
+    let alertas = [];
+    try { alertas = await calcularAlertas(env, d.seller); } catch (_) {}
+    if (!alertas.length) continue;
+    const r = await enviarEmailAlertas(env, d.email, alertas);
+    res.push({ email: d.email, enviadas: alertas.length, ok: !!(r && r.ok) });
+  }
+  return { ok: true, correos: res.length, detalle: res };
 }
 
 // Email de resumen de alertas (HTML compatible con clientes de correo).
