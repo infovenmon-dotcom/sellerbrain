@@ -41,6 +41,7 @@
  *   ALERTAS_STOCK_DIAS=14           (opcional; avisa si cobertura <= N días)
  *   ALERTAS_ACOS=40                 (opcional; avisa si ACoS 7d > N%)
  *   ALERTAS_SOBRECOSTE=20           (opcional; avisa si recuperable >= N €/mes)
+ *   ALERTAS_PERDIDA_MIN=30          (opcional; avisa de productos en pérdidas con ventas >= N €/30d)
  *   Los clientes de pago reciben las suyas automáticamente (tabla miembros).
  *   Prueba:  GET /v1/alertas-test?to=tucorreo[&seller=email_del_cliente]
  *
@@ -51,7 +52,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v76-alertas-email'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v77-alerta-perdidas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -3157,6 +3158,28 @@ async function calcularAlertas(env, seller, opts) {
       titulo: 'Sobrecostes de logística recuperables: ≈' + tot.toFixed(0) + '€/mes',
       detalle: 'Amazon está cobrando tarifa cross-border en parte de tus envíos. Ábrelo en el Detector de sobrecostes y reclama.'
     });
+  } catch (_) {}
+
+  // 4) Productos EN PÉRDIDAS (beneficio − PPC < 0) en los últimos 30 días
+  try {
+    const LOSS_MIN = +(env.ALERTAS_PERDIDA_MIN || 30);   // ventas mínimas para no avisar por ruido
+    const hoy = new Date().toISOString().slice(0, 10);
+    const hace30d = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    const prods = await productosPeriodo(env, hace30d, hoy);
+    const perdedores = [];
+    for (const p of (prods || [])) {
+      if (!(p.coste > 0)) continue;                       // sin coste conocido → no se puede afirmar pérdida
+      const net = (+p.ben || 0) - (+p.ppc || 0);          // beneficio DESPUÉS de publicidad
+      if (net < 0 && (+p.ventas || 0) >= LOSS_MIN) perdedores.push({ nom: p.nom, net: +net.toFixed(2), mg: p.mg, ppc: +p.ppc || 0 });
+    }
+    perdedores.sort((a, b) => a.net - b.net);
+    for (const it of perdedores.slice(0, 10)) {
+      A.push({
+        nivel: 'critico', cat: 'perdida', ic: '🔻',
+        titulo: 'Producto en pérdidas: ' + it.nom,
+        detalle: 'Pierde ' + Math.abs(it.net).toFixed(2) + '€ en 30 días (margen ' + it.mg + '%' + (it.ppc ? ', ' + it.ppc.toFixed(2) + '€ de PPC' : '') + '). Sube precio, baja coste o revisa la publicidad.'
+      });
+    }
   } catch (_) {}
 
   return A;
