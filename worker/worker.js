@@ -45,6 +45,11 @@
  *   Los clientes de pago reciben las suyas automáticamente (tabla miembros).
  *   Prueba:  GET /v1/alertas-test?to=tucorreo[&seller=email_del_cliente]
  *
+ * EJECUCIÓN vía Ads API (opcional, OFF por defecto) — pausar/reactivar campañas
+ * REALES desde el panel. Doble seguridad: clave admin + interruptor.
+ *   ADS_WRITE=1   (sin esto, /v1/ads/campana-estado devuelve 403). El frontend
+ *   siempre pide confirmación antes de enviar el cambio a Amazon.
+ *
  * CRON (wrangler.toml) — HORARIO, no diario:
  *   [triggers]
  *   crons = ["0 * * * *"]   # cada hora: foto PPC + refresco de ventas; 03:00 ingesta completa
@@ -52,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v79-buybox'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v80-ads-write'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -711,6 +716,35 @@ export default {
         const n = Math.max(1, Math.min(60, +(url.searchParams.get('n') || 15)));
         const r = await ingestaBuyBox(env, undefined, n);
         return json({ ok: true, ...r, nota: 'getItemOffers va limitado; repite para cubrir el resto de ASIN.' }, cors);
+      }
+
+      // --- EJECUCIÓN vía Ads API: pausar / reactivar una campaña (SP v3).
+      //     Doble seguridad: exige la clave admin (no está en MIEMBRO_OK) Y el
+      //     interruptor ADS_WRITE=1. Cambia campañas REALES → siempre con confirmación
+      //     en el frontend. body: { pais, campania_id, estado: PAUSED|ENABLED } ---
+      if (url.pathname === '/v1/ads/campana-estado' && request.method === 'POST') {
+        if (String(env.ADS_WRITE || '') !== '1') return json({ error: 'ads_write_off', nota: 'Escritura desactivada. Pon ADS_WRITE=1 en Cloudflare para permitir cambios en Amazon.' }, cors, 403);
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const pais = (b.pais || '').toUpperCase(), cid = String(b.campania_id || ''), estado = (b.estado || '').toUpperCase();
+        const profileId = ADS_PROFILES[pais];
+        if (!profileId) return json({ error: 'pais_sin_perfil', pais }, cors, 400);
+        if (!cid) return json({ error: 'falta_campania_id' }, cors, 400);
+        if (estado !== 'PAUSED' && estado !== 'ENABLED') return json({ error: 'estado_invalido' }, cors, 400);
+        const token = await lwaToken(env, 'ads');
+        const r = await fetch(ADS_HOST + '/sp/campaigns', {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+            'Amazon-Advertising-API-Scope': profileId,
+            'Content-Type': 'application/vnd.spCampaign.v3+json',
+            'Accept': 'application/vnd.spCampaign.v3+json'
+          },
+          body: JSON.stringify({ campaigns: [{ campaignId: cid, state: estado }] })
+        });
+        let d = null; try { d = await r.json(); } catch (_) {}
+        const aplicado = !!(d && d.campaigns && d.campaigns.success && d.campaigns.success.length);
+        return json({ ok: r.ok, status: r.status, estado, aplicado, detalle: d }, cors);
       }
 
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---

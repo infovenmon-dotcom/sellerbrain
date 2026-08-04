@@ -384,7 +384,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div class="ch"><h2><span class="ci">🎯</span> Campañas <span id="ppc-titulo-camp" style="font-weight:400;color:var(--mu)">· últimos 30 días</span></h2></div>
         <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Ventas (pedidos) atribuidas a los clics de la publicidad — es la base del CVR (ventas ÷ clics).">Ventas (uds)</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th title="Objetivo de la campaña: ajusta el criterio del veredicto (cuánto ACoS es aceptable).">Objetivo</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Ventas (pedidos) atribuidas a los clics de la publicidad — es la base del CVR (ventas ÷ clics).">Ventas (uds)</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th title="Objetivo de la campaña: ajusta el criterio del veredicto (cuánto ACoS es aceptable).">Objetivo</th><th>Estado</th><th>Acción</th></tr></thead>
           <tbody id="ppc-campanas"></tbody>
         </table>
         </div>
@@ -2935,6 +2935,29 @@ var PPC_OBJ_DEF=[
 function ppcObjThr(v){ for(var i=0;i<PPC_OBJ_DEF.length;i++) if(PPC_OBJ_DEF[i].v===v) return PPC_OBJ_DEF[i].thr; return [25,40]; }
 // Badge de tipo de concordancia (match type) de un término.
 function mtBadge(t){ t=(t||'').toUpperCase(); var m={EXACT:['Exacta','#2EE6A0'],PHRASE:['Frase','#F5A623'],BROAD:['Amplia','#4A9EDE']}; var x=m[t]; if(!x) return t?('<span style="color:var(--mu);font-size:10px">'+t+'</span>'):'<span style="color:var(--mu)">—</span>'; return '<span style="font-size:10px;font-weight:700;color:'+x[1]+'">'+x[0]+'</span>'; }
+// Ejecución vía Ads API: botones de pausar/reactivar campaña (SOLO admin, con confirmación).
+function ppcAccionCampana(x){
+  var esAdmin=(typeof SB_CONFIG!=='undefined' && !!SB_CONFIG.apiKey);
+  if(!esAdmin || !x.campania_id) return '<span style="color:var(--mu);font-size:10px">—</span>';
+  var nm=encodeURIComponent(x.nombre||'');
+  return '<button class="acc-cp" title="Pausar esta campaña en Amazon" onclick="cambiarEstadoCampana(\''+x.campania_id+'\',\''+x.pais+'\',\'PAUSED\',\''+nm+'\')">⏸</button> '+
+    '<button class="acc-cp" style="background:rgba(46,204,113,.12);border-color:rgba(46,204,113,.35);color:#7fe0a8" title="Reactivar esta campaña en Amazon" onclick="cambiarEstadoCampana(\''+x.campania_id+'\',\''+x.pais+'\',\'ENABLED\',\''+nm+'\')">▶</button>';
+}
+function cambiarEstadoCampana(cid,pais,estado,nmEnc){
+  var nombre=decodeURIComponent(nmEnc||'');
+  var accion=estado==='PAUSED'?'PAUSAR':'REACTIVAR';
+  if(!confirm(accion+' la campaña en Amazon:\n\n«'+nombre+'» ('+pais+')\n\nEsto cambia tu campaña REAL en Amazon Ads. ¿Continuar?')) return;
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Necesitas la clave admin (🔌 Conexión) para ejecutar cambios en Amazon.'); return; }
+  fetch(SB_CONFIG.apiBase+'/v1/ads/campana-estado',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:pais,campania_id:cid,estado:estado})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.aplicado){ alert('✅ Hecho: «'+nombre+'» ahora está '+(estado==='PAUSED'?'PAUSADA':'ACTIVA')+' en Amazon.'); if(PPC_DATA) _ppcRerender(); }
+      else if(d && d.error==='ads_write_off'){ alert('⚠️ La ejecución está desactivada por seguridad. Para activarla, pon ADS_WRITE=1 en Cloudflare (Worker → Variables) y vuelve a intentarlo.'); }
+      else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
+    })
+    .catch(function(e){ alert('Error: '+e.message); });
+}
 function ppcObjSelect(nombre,val){
   var c=String(nombre).replace(/"/g,'&quot;');
   var o=PPC_OBJ_DEF.map(function(d){return '<option value="'+d.v+'"'+(d.v===val?' selected':'')+'>'+d.n+'</option>';}).join('');
@@ -2961,7 +2984,8 @@ function campanasRango(){
     if(!ppcEnRango(c.fecha)) return;
     if(PPC_PAIS!=='all' && (c.pais||'')!==PPC_PAIS) return;   // filtro maestro de país
     var k=c.pais+'·'+c.nombre;
-    if(!by[k]) by[k]={pais:c.pais,nombre:c.nombre,gasto:0,clics:0,ventas_ppc:0,pedidos_ppc:0};
+    if(!by[k]) by[k]={pais:c.pais,nombre:c.nombre,campania_id:c.campania_id||'',gasto:0,clics:0,ventas_ppc:0,pedidos_ppc:0};
+    if(!by[k].campania_id && c.campania_id) by[k].campania_id=c.campania_id;
     by[k].gasto+=+c.gasto||0; by[k].clics+=+c.clics||0; by[k].ventas_ppc+=+c.ventas_ppc||0; by[k].pedidos_ppc+=+c.pedidos_ppc||0;
   });
   return Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){return b.gasto-a.gasto;});
@@ -3185,13 +3209,14 @@ function cargarPPC(){
       var porCamp={};
       camp.forEach(function(c){
         var k=c.pais+'·'+c.nombre;
-        if(!porCamp[k])porCamp[k]={pais:c.pais,nombre:c.nombre,gasto:0,clics:0,impresiones:0,ventas_ppc:0,pedidos_ppc:0};
+        if(!porCamp[k])porCamp[k]={pais:c.pais,nombre:c.nombre,campania_id:c.campania_id||'',gasto:0,clics:0,impresiones:0,ventas_ppc:0,pedidos_ppc:0};
+        if(!porCamp[k].campania_id && c.campania_id) porCamp[k].campania_id=c.campania_id;
         porCamp[k].gasto+=+c.gasto;porCamp[k].clics+=c.clics;porCamp[k].impresiones+=c.impresiones;
         porCamp[k].ventas_ppc+=+c.ventas_ppc;porCamp[k].pedidos_ppc+=c.pedidos_ppc;
       });
       PPC_DATA={dias:dias.map(function(d){return{fecha:d.fecha,gasto:+d.gasto,ventas_ppc:+d.ventas_ppc,pais:d.pais};}),
                 campanas:Object.values(porCamp).sort(function(a,b){return b.gasto-a.gasto;}),
-                campanas_dia:camp.map(function(c){return{fecha:c.fecha,pais:c.pais,nombre:c.nombre,gasto:+c.gasto,clics:+c.clics||0,ventas_ppc:+c.ventas_ppc,pedidos_ppc:+c.pedidos_ppc||0};}),
+                campanas_dia:camp.map(function(c){return{fecha:c.fecha,pais:c.pais,nombre:c.nombre,campania_id:c.campania_id||'',gasto:+c.gasto,clics:+c.clics||0,ventas_ppc:+c.ventas_ppc,pedidos_ppc:+c.pedidos_ppc||0};}),
                 terminos:term};
       renderPPC('datos reales de tu Ads API');
     }).catch(function(){ PPC_DATA=PPC_DEMO; renderPPC('demo (API no disponible)'); });
@@ -3301,8 +3326,9 @@ function renderPPC(fuente){
       '<td>'+(x.ventas_ppc>0?f(a,1)+'%':'—')+'</td>'+
       '<td>'+(roas>0?f(roas,2)+'x':'—')+'</td>'+
       '<td>'+ppcObjSelect(x.nombre,obj)+'</td>'+
-      '<td><span class="pill '+est[0]+'">'+est[1]+'</span></td></tr>';
-  }).join('')||'<tr><td colspan="11" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
+      '<td><span class="pill '+est[0]+'">'+est[1]+'</span></td>'+
+      '<td style="white-space:nowrap">'+ppcAccionCampana(x)+'</td></tr>';
+  }).join('')||'<tr><td colspan="12" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
   renderPPCTerminos();
 }
 
