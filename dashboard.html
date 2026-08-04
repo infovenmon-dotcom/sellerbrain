@@ -284,6 +284,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae el ACoS por ubicación del anuncio (Ads API, 30 días, por país). Puede tardar 1-3 min.</span>
         <div id="cx-placement-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
+
+      <div style="margin-top:12px">
+        <button class="chip" id="btn-keywords" onclick="cargarKeywordsAdmin()">🎯 Cargar keywords (pujas)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Lista tus keywords con su puja actual (Ads API) para poder ajustarlas. ~1 min.</span>
+        <div id="cx-keywords-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
     </div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
@@ -413,6 +419,15 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div class="ch"><h2><span class="ci">📍</span> Rendimiento por ubicación (placement) <span style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
         <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Dónde convierte mejor tu publicidad: <b>Top of Search</b> (arriba de la búsqueda), <b>páginas de producto</b> o <b>resto de la búsqueda</b>. Si el ACoS de Top of Search es mucho mejor, sube el <b>ajuste de puja</b> de esa ubicación (y baja el del resto) en vez de tocar la puja base.</div>
         <div id="ppc-placement"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="ch" style="justify-content:space-between;align-items:center">
+          <h2><span class="ci">🎯</span> Keywords y pujas</h2>
+          <input id="kw-buscar" placeholder="Buscar keyword…" oninput="renderKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 9px;width:170px">
+        </div>
+        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Tus palabras clave con su <b>puja actual</b>. Con clave admin puedes <b>cambiar la puja</b> directamente en Amazon (✏️). La decisión de subir/bajar sale del análisis de términos y del ACoS objetivo de arriba.</div>
+        <div id="ppc-keywords"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
       </div>
     </div>
 
@@ -1193,6 +1208,65 @@ function renderPlacement(){
   h+='</tbody></table></div>';
   if(best) h+='<div style="font-size:11.5px;color:var(--mu2);margin-top:8px">💡 Ubicación más rentable: <b>'+_placLabel(best.k)+'</b> (ACoS '+f(best.a,1)+'%). Si es «Top of Search», súbele el <b>ajuste de puja</b> de esa ubicación para capturar más de ahí.</div>';
   el.innerHTML=h;
+}
+
+// ---- Keywords y pujas ----
+var KW_DATA=null;
+function cargarKeywords(){
+  var el=document.getElementById('ppc-keywords'); if(!el) return;
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Disponible con tus datos reales.</div>'; return; }
+  if(KW_DATA){ renderKeywords(); return; }
+  el.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/ads/keywords',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ KW_DATA=(d&&d.datos)||[]; renderKeywords(); })
+    .catch(function(){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">No se pudo cargar ahora mismo.</div>'; });
+}
+function _campNombre(cid){ var c=((PPC_DATA&&PPC_DATA.campanas)||[]).filter(function(x){return String(x.campania_id)===String(cid);})[0]; return c?c.nombre:''; }
+function renderKeywords(){
+  var el=document.getElementById('ppc-keywords'); if(!el) return;
+  var datos=(KW_DATA||[]).slice();
+  if(PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  var q=((document.getElementById('kw-buscar')||{}).value||'').toLowerCase().trim();
+  if(q) datos=datos.filter(function(x){return (x.keyword||'').toLowerCase().indexOf(q)>-1;});
+  if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">'+(KW_DATA&&KW_DATA.length?'Ningún resultado con ese filtro.':'Aún no hay keywords. Se cargan a diario (o desde 🔌 Conexión → «Cargar keywords»).')+'</div>'; return; }
+  datos.sort(function(a,b){return (+b.puja||0)-(+a.puja||0);});
+  var total=datos.length, tope=200; datos=datos.slice(0,tope);
+  var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
+  var h='<div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D"><th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Concord.</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
+  datos.forEach(function(k){
+    var mt=mtBadge(k.concordancia);
+    var nm=encodeURIComponent(k.keyword||'');
+    var edit=esAdmin?('<button class="acc-cp" title="Cambiar la puja en Amazon" onclick="editarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+(+k.puja||0)+')">✏️</button>'):'';
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+      '<td style="padding:7px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis"><b>'+(k.keyword||'')+'</b></td>'+
+      '<td style="padding:7px 8px;max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(_campNombre(k.campania_id)||'')+'</td>'+
+      '<td style="padding:7px 8px">'+mt+'</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:var(--or2)">'+(k.puja!=null?f(k.puja,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+((k.estado||'').toLowerCase()==='enabled'?'<span style="color:var(--gn)">activa</span>':'<span style="color:var(--mu)">'+(k.estado||'').toLowerCase()+'</span>')+'</td>'+
+      (esAdmin?('<td style="padding:7px 8px">'+edit+'</td>'):'')+'</tr>';
+  });
+  h+='</tbody></table></div>';
+  if(total>tope) h+='<div style="font-size:11px;color:var(--mu);margin-top:6px">Mostrando 200 de '+total+' keywords. Usa el buscador para acotar.</div>';
+  el.innerHTML=h;
+}
+function editarPuja(kid,pais,nmEnc,pujaAct){
+  var nombre=decodeURIComponent(nmEnc||'');
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Necesitas la clave admin (🔌 Conexión) para cambiar pujas.'); return; }
+  var v=prompt('Nueva puja (€) para la keyword:\n\n«'+nombre+'» ('+pais+')\nPuja actual: '+(pujaAct?pujaAct.toFixed(2)+'€':'—')+'\n\nEsto cambia tu puja REAL en Amazon Ads.', pujaAct?String(pujaAct):'');
+  if(v===null) return;
+  var p=parseFloat(String(v).replace(',','.'));
+  if(!(p>0)){ alert('Introduce una puja válida (mayor que 0).'); return; }
+  fetch(SB_CONFIG.apiBase+'/v1/ads/puja',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:pais,keyword_id:kid,puja:p})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.aplicado){ alert('✅ Puja de «'+nombre+'» cambiada a '+p.toFixed(2)+'€ en Amazon.'); if(KW_DATA){ for(var i=0;i<KW_DATA.length;i++) if(KW_DATA[i].keyword_id===kid) KW_DATA[i].puja=p; } renderKeywords(); }
+      else if(d && d.error==='ads_write_off'){ alert('⚠️ La ejecución está desactivada. Pon ADS_WRITE=1 en Cloudflare (Worker → Variables).'); }
+      else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
+    })
+    .catch(function(e){ alert('Error: '+e.message); });
 }
 
 // ---- Buy Box y competencia por ASIN ----
@@ -2809,6 +2883,25 @@ function preguntarFCs(fcs){
   try{ document.execCommand('copy'); alert('✓ Mensaje copiado. Ábrelo en Seller Central → Ayuda → Abrir un caso, y pégalo. Cuando te respondan, dime el país de cada centro y lo dejo fijo.'); }catch(e){ prompt('Copia el mensaje:', txt); }
   document.body.removeChild(ta);
 }
+// Lanza la ingesta de keywords (lista de pujas).
+async function cargarKeywordsAdmin(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-keywords-res'), btn=document.getElementById('btn-keywords');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Listando keywords desde Amazon… ~1 min.</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/ads/keywords-ingest?key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.error){ box.innerHTML='<span style="color:var(--rd)">'+d.error+'</span>'; }
+    else{
+      var resumen=(d.pasos||[]).map(function(p){return p.pais+': '+(p.error?('⚠️ '+p.error):(p.filas+' kw'));}).join(' · ');
+      box.innerHTML='<div style="color:var(--gn)">✅ Keywords cargadas.</div><div style="color:var(--mu);margin-top:4px">'+(resumen||'—')+'</div><div style="color:var(--mu);margin-top:4px">Míralo en PPC · En vivo → «Keywords y pujas».</div>';
+      KW_DATA=null;
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
 // Lanza la ingesta de placement (informe de Ads por ubicación).
 async function cargarPlacementAdmin(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3169,7 +3262,7 @@ function filtrarPPCPais(code){
 }
 function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; dibujarPPCChart(); }
 // ---- Controles del filtro maestro de fechas ----
-function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} }
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} }
 function ppcPreset(p){
   var hoy=new Date();
   if(p==='30d'){ PPC_RANGO=null; }
@@ -3320,7 +3413,7 @@ function cambiarVista(v){
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
-  if(v==='ppc'){ try{ cargarPlacement(); }catch(e){} }
+  if(v==='ppc'){ try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} }
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} try{ mostrarBienvenida(); }catch(e){} }   // refresca la capa fiscal y el banner de bienvenida
   if(TOOL_SRC[v]){
