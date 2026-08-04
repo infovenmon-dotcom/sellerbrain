@@ -222,3 +222,38 @@ como petición **aparte y opcional** más adelante.
 2. `SPAPI_APP_BETA=false` en Cloudflare (quita `version=beta`).
 3. Probar conexión con una cuenta de vendedor REAL (no la propia).
 4. (Alertas por email ya listas: `ALERTAS_EMAIL=1` + `ALERTAS_TO`.)
+
+---
+
+# ✅ CHECKPOINT 4 — agosto 2026 (Buy Box + ejecución vía Ads API)
+
+Cuarto punto estable. Todo aditivo.
+
+- **Rama de respaldo (en remoto):** `checkpoint-2026-08-alertas-david` — commit `3173ed8`.
+- **Worker:** `v82-ads-presupuesto` (SB_VERSION). **Requiere pegarlo en Cloudflare.**
+
+## Qué se añadió
+- **🏆 Buy Box y competencia por ASIN** (worker v79): getItemOffers (rol Pricing) → ¿tengo la
+  Buy Box?, precio Buy Box, mi precio, competidor más barato, nº ofertas. Vista propia + botón
+  admin «Cargar Buy Box» + cron 05:00. Tabla `buybox` (sql/buybox.sql). Marketplace ES (FR/IT
+  a futuro).
+- **PPC · objetivo de campaña** (David F): columna con selector (beneficio/cuota/ranking/
+  liquidar) que ajusta el umbral de ACoS del veredicto. Guardado en `sb_ppc_obj` (localStorage).
+- **PPC · veredicto "Sin actividad"** (0 clics, David #9) + **match type** en términos (David B).
+- **Ejecución vía Ads API — el "moat" de David** (OFF por defecto):
+  - **⏸/▶ Pausar / reactivar campaña** (worker v80): `/v1/ads/campana-estado`.
+  - **🚫 Negativizar término** a nivel campaña (worker v81): `/v1/ads/negativo` + modal para
+    elegir campaña y concordancia.
+  - **💰 Cambiar presupuesto diario** de campaña (worker v82): `/v1/ads/presupuesto`.
+  - **Triple seguridad:** solo admin (clave maestra) · interruptor `ADS_WRITE=1` (sin él, 403) ·
+    confirmación en cada acción. Botones solo visibles con clave admin.
+  - Pendiente: **puja por keyword** (necesita capturar `keywordId`).
+
+## Migraciones SQL de este checkpoint
+- `sql/buybox.sql` — tabla `buybox` (PK seller+asin, RLS).
+
+## Para desplegar
+- **Supabase:** `sql/buybox.sql`.
+- **Cloudflare:** worker **v82**. Para habilitar la ejecución en Amazon: `ADS_WRITE=1`
+  (dejarlo sin poner mantiene la escritura apagada).
+- **Netlify:** frontend ya está (sale de `main`).
