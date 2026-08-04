@@ -160,15 +160,23 @@ Tercer punto estable. Todo aditivo: nada de los checkpoints 1 y 2 se rompió.
   ventas PPC / ventas totales (proxy del % orgánico vs pagado, #3/#11 de David).
 - **Worker final del bloque: `v78-dependencia-ppc`.** Rama de respaldo movida a este punto.
 
-### Del informe de David — hecho vs pendiente
+### Del informe de David — hecho vs pendiente (actualizado)
 - **Hecho:** bug `+NaN€` · veredictos PPC con umbral de confianza (techo de puja) · copiar
   término · "Salud del producto" · tooltip de sincronización · alertas por email (stock,
-  ACoS, sobrecostes, pérdidas) con opt-in · supuestos del P&L · dependencia de PPC.
-- **Pendiente (requieren datos/ingesta nuevos, son "proyectos"):** Buy Box / precio de
-  competencia por ASIN + detector de hijacking · placement (ToS vs resto) · match type ·
-  Sponsored Brands + Display · Search Query Performance · comparativa interanual ·
-  ejecución directa vía Ads API (negativizar/pausar con confirmación) · ranking orgánico
-  por keyword (limitación de Amazon; a nivel producto ya cubierto con la dependencia PPC).
+  ACoS, sobrecostes, pérdidas) con opt-in · supuestos del P&L · dependencia de PPC ·
+  **Buy Box y competencia por ASIN** (worker v79) · **objetivo de campaña** (F, ajusta el
+  veredicto) · **veredicto "Sin actividad"** (#9) · **match type** en términos (B).
+- **Pendiente (requieren NUEVOS informes de Amazon / son proyectos):**
+  - **Placement** (Top of Search vs resto) — informe de Ads con segmento placement.
+  - **Sponsored Brands + Sponsored Display** — nuevos tipos de informe de Ads (hoy solo SP).
+  - **Search Query Performance** — informe Brand Analytics específico.
+  - **Impression Share perdida por presupuesto vs puja** — parcial: `v_ppc_limitadas` ya
+    detecta las limitadas por presupuesto; falta la parte de puja.
+  - **Comparativa interanual** por keyword/campaña — ya guardamos histórico; hace falta +12 meses.
+  - **Ejecución directa vía Ads API** (negativizar/pausar/ajustar puja con confirmación) —
+    su "moat"; requiere scope de escritura + UI de confirmación.
+  - **Detector de hijacking del listing** — vigilar cambios de ficha/Buy Box perdida.
+  - Ranking orgánico **por keyword**: limitación de Amazon (a nivel producto ya cubierto).
 
 ## Pendientes generales (no bloquean)
 - Fase 2 fiscal por SKU / avisos automáticos · ACoS y sobrecostes por cliente cuando Ads y
