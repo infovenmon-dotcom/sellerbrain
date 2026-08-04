@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v84-pujas-keyword'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v85-sqp'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -170,7 +170,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -802,6 +802,20 @@ export default {
         return json({ ok: r.ok, status: r.status, aplicado, presupuesto, detalle: d }, cors);
       }
 
+      // --- SEARCH QUERY PERFORMANCE (SQP): tu cuota del embudo por búsqueda. Lectura. ---
+      if (url.pathname === '/v1/sqp') {
+        const filas = await selSafe(env, 'busquedas_sqp?order=volumen.desc.nullslast&limit=500', []);
+        let actualizado = null, semana = null;
+        for (const f of (filas || [])) { if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha; if (f.semana && (!semana || f.semana > semana)) semana = f.semana; }
+        return json({ datos: filas || [], actualizado, semana }, cors);
+      }
+
+      // --- Ingesta SQP (admin). ~1-4 min. ---
+      if (url.pathname === '/v1/sqp-ingest') {
+        try { const r = await ingestaSQP(env); return json({ ok: true, ...r }, cors); }
+        catch (e) { return json({ error: (e && e.message) || String(e) }, cors, 200); }
+      }
+
       // --- KEYWORDS: lista de palabras clave con su puja actual (para ajustar puja). Lectura. ---
       if (url.pathname === '/v1/ads/keywords') {
         const filas = await selSafe(env, 'ppc_keywords?order=fecha.desc&limit=8000', []);
@@ -1420,6 +1434,8 @@ export default {
       if (hora === 5) { try { await ingestaBuyBoxTodas(env); } catch (_) {} }
       // A las 06:00 UTC: placement (ACoS por ubicación del anuncio, Ads API).
       if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} try { await ingestaKeywords(env); } catch (_) {} }
+      // Lunes 06:00 UTC: Search Query Performance (Brand Analytics, semanal).
+      if (hora === 6 && new Date().getUTCDay() === 1) { try { await ingestaSQP(env); } catch (_) {} }
       // A las 07:00 UTC (~09:00 España): alertas proactivas por email (stock bajo,
       // ACoS alto, sobrecostes recuperables). Solo si ALERTAS_EMAIL=1. Digest diario.
       if (hora === 7) { try { await procesarAlertas(env); } catch (_) {} }
@@ -1981,6 +1997,43 @@ async function ingestaKeywords(env, opts) {
     } catch (e) { res.pasos.push({ pais, error: e.message }); }
   }
   return res;
+}
+
+/* =====================================================================
+ * SEARCH QUERY PERFORMANCE (SQP) — informe de Brand Analytics (SP-API) que
+ * compara, por búsqueda, tu cuota en cada paso del embudo (impresiones →
+ * clics → compras) frente al total del mercado. David #E. Requiere Brand
+ * Registry (rol Brand Analytics ya aprobado). Formato JSON anidado → parseo
+ * TOLERANTE (varios nombres de campo posibles). Semanal.
+ * =================================================================== */
+async function ingestaSQP(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const fin = new Date(Date.now() - 2 * 86400000);          // margen para que el dato ya exista
+  const ini = new Date(fin.getTime() - 6 * 86400000);
+  const iniS = ini.toISOString().slice(0, 10), finS = fin.toISOString().slice(0, 10);
+  const txt = await pedirInforme(env, 'GET_BRAND_ANALYTICS_SEARCH_QUERY_PERFORMANCE_REPORT',
+    iniS + 'T00:00:00Z', finS + 'T23:59:59Z', [MARKETPLACES.ES], { reportPeriod: 'WEEK' }, ctx);
+  let j; try { j = JSON.parse(txt); } catch (_) { j = {}; }
+  const arr = j.dataByAsin || j.dataByDepartmentAndSearchQuery || j.dataBySearchQuery || j.data || [];
+  const num = v => (v == null || v === '' ? null : (+v || 0));
+  const pick = (o, keys) => { for (const k of keys) if (o && o[k] != null) return o[k]; return null; };
+  const rows = [];
+  for (const r of arr) {
+    const q = pick(r, ['searchQuery', 'search_query']) || (r.searchQueryData && r.searchQueryData.searchQuery) || '';
+    if (!q) continue;
+    const vol = num(pick(r, ['searchQueryVolume']) || (r.searchQueryData && r.searchQueryData.searchQueryVolume));
+    const imp = r.impressionData || {}, clk = r.clickData || {}, pur = r.purchaseData || {};
+    rows.push({
+      seller, semana: iniS, query: String(q).slice(0, 200), volumen: vol,
+      imp_share: num(pick(imp, ['asinImpressionShare', 'impressionShare'])),
+      click_share: num(pick(clk, ['asinClickShare', 'clickShare'])),
+      purchase_share: num(pick(pur, ['asinPurchaseShare', 'purchaseShare'])),
+      compras_total: num(pick(pur, ['totalPurchaseCount', 'totalCount'])),
+      fecha: new Date().toISOString()
+    });
+  }
+  if (rows.length) await upsertSupabase(env, 'busquedas_sqp', rows.slice(0, 2000));
+  return { semana: iniS, filas: rows.length, formato: arr.length ? 'ok' : 'vacio_o_formato_distinto' };
 }
 
 /* =====================================================================

@@ -290,6 +290,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Lista tus keywords con su puja actual (Ads API) para poder ajustarlas. ~1 min.</span>
         <div id="cx-keywords-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
+
+      <div style="margin-top:12px">
+        <button class="chip" id="btn-sqp" onclick="cargarSQPAdmin()">🔬 Cargar SQP (Search Query Performance)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Informe semanal de Brand Analytics (requiere Brand Registry). Puede tardar 1-4 min.</span>
+        <div id="cx-sqp-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
     </div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
@@ -428,6 +434,15 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         </div>
         <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Tus palabras clave con su <b>puja actual</b>. Con clave admin puedes <b>cambiar la puja</b> directamente en Amazon (✏️). La decisión de subir/bajar sale del análisis de términos y del ACoS objetivo de arriba.</div>
         <div id="ppc-keywords"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+      </div>
+
+      <div class="card">
+        <div class="ch" style="justify-content:space-between;align-items:center">
+          <h2><span class="ci">🔬</span> Rendimiento de búsquedas (SQP) <span style="font-size:10px;color:var(--am);font-weight:400">· beta</span></h2>
+          <span id="sqp-act" style="font-size:11px;color:var(--mu)"></span>
+        </div>
+        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Por cada búsqueda del mercado (Brand Analytics): su <b>volumen</b> y <b>tu cuota</b> en cada paso del embudo — impresiones → clics → compras. Donde tengas <b>mucho volumen pero poca cuota de compra</b> hay oportunidad (o amenaza) que el PPC solo no ve.</div>
+        <div id="ppc-sqp"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
       </div>
     </div>
 
@@ -1267,6 +1282,45 @@ function editarPuja(kid,pais,nmEnc,pujaAct){
       else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
     })
     .catch(function(e){ alert('Error: '+e.message); });
+}
+
+// ---- Search Query Performance (SQP) ----
+var SQP_DATA=null;
+function _sqpPct(v){ if(v==null) return null; v=+v; if(!isFinite(v)) return null; return v<=1?v*100:v; }
+function cargarSQP(){
+  var el=document.getElementById('ppc-sqp'); if(!el) return;
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Disponible con tus datos reales.</div>'; return; }
+  if(SQP_DATA){ renderSQP(); return; }
+  el.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/sqp',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ SQP_DATA=d||{datos:[]}; renderSQP(); })
+    .catch(function(){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">No se pudo cargar ahora mismo.</div>'; });
+}
+function renderSQP(){
+  var el=document.getElementById('ppc-sqp'); if(!el) return;
+  var d=SQP_DATA||{}, datos=(d.datos||[]).slice();
+  var act=document.getElementById('sqp-act'); if(act) act.textContent=d.semana?('semana del '+d.semana):'';
+  if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Aún no hay datos de SQP. Requiere Brand Registry. Cárgalo desde 🔌 Conexión → «Cargar SQP» (semanal).</div>'; return; }
+  datos.sort(function(a,b){return (+b.volumen||0)-(+a.volumen||0);});
+  datos=datos.slice(0,60);
+  var h='<div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D"><th style="padding:6px 8px">Búsqueda</th><th style="padding:6px 8px">Volumen</th><th style="padding:6px 8px" title="Tu cuota de impresiones">Imp.</th><th style="padding:6px 8px" title="Tu cuota de clics">Clic</th><th style="padding:6px 8px" title="Tu cuota de compras">Compra</th></tr></thead><tbody>';
+  datos.forEach(function(x){
+    var ip=_sqpPct(x.imp_share), cp=_sqpPct(x.click_share), pp=_sqpPct(x.purchase_share);
+    // oportunidad: volumen alto y cuota de compra baja
+    var oportun=(pp!=null&&pp<10);
+    var pcol=pp==null?'var(--mu)':pp>=25?'var(--gn)':pp>=10?'var(--am)':'#ff8a8a';
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(oportun?';background:rgba(245,166,35,.05)':'')+'">'+
+      '<td style="padding:7px 8px;max-width:220px;overflow:hidden;text-overflow:ellipsis"><b>'+(x.query||'')+'</b>'+(oportun?' <span style="color:var(--am);font-size:10px">· oportunidad</span>':'')+'</td>'+
+      '<td style="padding:7px 8px">'+(x.volumen!=null?f(x.volumen,0):'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(ip!=null?f(ip,1)+'%':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(cp!=null?f(cp,1)+'%':'—')+'</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:'+pcol+'">'+(pp!=null?f(pp,1)+'%':'—')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="font-size:10.5px;color:var(--mu);margin-top:6px">Beta: los nombres de campo del informe de Amazon pueden variar; si ves columnas vacías, avísame y ajusto el parser.</div>';
+  el.innerHTML=h;
 }
 
 // ---- Buy Box y competencia por ASIN ----
@@ -2883,6 +2937,24 @@ function preguntarFCs(fcs){
   try{ document.execCommand('copy'); alert('✓ Mensaje copiado. Ábrelo en Seller Central → Ayuda → Abrir un caso, y pégalo. Cuando te respondan, dime el país de cada centro y lo dejo fijo.'); }catch(e){ prompt('Copia el mensaje:', txt); }
   document.body.removeChild(ta);
 }
+// Lanza la ingesta de SQP (Search Query Performance, Brand Analytics).
+async function cargarSQPAdmin(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-sqp-res'), btn=document.getElementById('btn-sqp');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Pidiendo el informe SQP a Amazon… 1-4 min, no cierres.</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/sqp-ingest?key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.error){ box.innerHTML='<span style="color:var(--rd)">'+d.error+'</span><div style="color:var(--mu);margin-top:4px">Si menciona el rol o Brand Registry, es que tu cuenta aún no da ese informe.</div>'; }
+    else{
+      box.innerHTML='<div style="color:'+(d.filas>0?'var(--gn)':'var(--am)')+'">'+(d.filas>0?'✅':'⚠️')+' SQP: '+(d.filas||0)+' búsquedas (semana '+(d.semana||'?')+'). Formato: '+(d.formato||'?')+'.</div><div style="color:var(--mu);margin-top:4px">Míralo en PPC · En vivo → «Rendimiento de búsquedas».</div>';
+      SQP_DATA=null;
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
 // Lanza la ingesta de keywords (lista de pujas).
 async function cargarKeywordsAdmin(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3413,7 +3485,7 @@ function cambiarVista(v){
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
-  if(v==='ppc'){ try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} }
+  if(v==='ppc'){ try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} }
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} try{ mostrarBienvenida(); }catch(e){} }   // refresca la capa fiscal y el banner de bienvenida
   if(TOOL_SRC[v]){
