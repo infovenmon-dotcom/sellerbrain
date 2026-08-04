@@ -3037,15 +3037,19 @@ async function cargarPlacementAdmin(){
   var box=document.getElementById('cx-placement-res'), btn=document.getElementById('btn-placement');
   if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
   btn.disabled=true;btn.style.opacity=.5;
-  box.innerHTML='<span style="color:var(--mu)">⏳ Pidiendo el informe de placement a Amazon… 1-3 min, no cierres.</span>';
+  box.innerHTML='<span style="color:var(--mu)">⏳ Lanzando el informe de placement…</span>';
   try{
     var r=await fetch(SB_CONFIG.apiBase+'/v1/ads/placement-ingest?key='+encodeURIComponent(key));
     var d=await r.json();
     if(d.error){ box.innerHTML='<span style="color:var(--rd)">'+d.error+'</span>'; }
+    else if(d.lanzado){
+      box.innerHTML='<div style="color:var(--or2)">🚀 '+(d.nota||'Lanzado en segundo plano.')+'</div>';
+      PLAC_DATA=null;   // fuerza recarga al abrir PPC
+    }
     else{
       var resumen=(d.pasos||[]).map(function(p){return p.pais+': '+(p.error?('⚠️ '+p.error):(p.filas+' filas'));}).join(' · ');
       box.innerHTML='<div style="color:var(--gn)">✅ Placement cargado ('+d.desde+' → '+d.hasta+').</div><div style="color:var(--mu);margin-top:4px">'+(resumen||'—')+'</div><div style="color:var(--mu);margin-top:4px">Míralo en PPC · En vivo → «Rendimiento por ubicación».</div>';
-      PLAC_DATA=null;   // fuerza recarga al abrir PPC
+      PLAC_DATA=null;
     }
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;

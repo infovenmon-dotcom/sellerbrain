@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v86-hijacking'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v87-placement-bg'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -140,7 +140,7 @@ async function ingestaEnvios(env, ctx, diasArg, offArg) {
 
 export default {
   // ============ HTTP ============
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const cors = {
       'Access-Control-Allow-Origin': env.CORS_ORIGIN || 'https://www.sellersbrain.io',
@@ -885,9 +885,15 @@ export default {
         return json({ datos: filas || [], actualizado }, cors);
       }
 
-      // --- Ingesta de placement (admin). ?pais=ES opcional. ~1-3 min por país. ---
+      // --- Ingesta de placement (admin). El informe tarda 1-3 min POR PAÍS, así que
+      //     NO se espera en la petición (se colgaría): se lanza en segundo plano y se
+      //     devuelve al instante. ?pais=ES procesa solo uno. ---
       if (url.pathname === '/v1/ads/placement-ingest') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
+        if (ctx && ctx.waitUntil) {
+          ctx.waitUntil(ingestaPlacement(env, { pais }).catch(() => {}));
+          return json({ ok: true, lanzado: true, nota: 'Lanzado en segundo plano (el informe tarda 1-3 min por país). Abre «Rendimiento por ubicación» en unos minutos.' }, cors);
+        }
         const r = await ingestaPlacement(env, { pais });
         return json({ ok: true, ...r }, cors);
       }
