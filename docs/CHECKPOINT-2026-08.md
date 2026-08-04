@@ -257,3 +257,44 @@ Cuarto punto estable. Todo aditivo.
 - **Cloudflare:** worker **v82**. Para habilitar la ejecución en Amazon: `ADS_WRITE=1`
   (dejarlo sin poner mantiene la escritura apagada).
 - **Netlify:** frontend ya está (sale de `main`).
+
+---
+
+# ✅ CHECKPOINT 5 — agosto 2026 (Ads completo: placement, pujas, SQP, hijacking)
+
+Quinto punto estable. Todo aditivo. Cierra casi todo el informe de David.
+
+- **Rama de respaldo (en remoto):** `checkpoint-2026-08-alertas-david` — commit `47510a4`.
+- **Worker:** `v86-hijacking` (SB_VERSION). **Requiere pegarlo en Cloudflare.**
+
+## Qué se añadió (v83 → v86)
+- **📍 Placement** (v83, David #8): informe Ads `spCampaigns groupBy campaignPlacement` →
+  ACoS por ubicación (Top of Search / páginas / resto) + recomendación. `sql/ppc-placement.sql`.
+- **🎯 Keywords y pujas** (v84, cierra la ejecución): lista de keywords con `keywordId` y puja
+  (`POST /sp/keywords/list`), y **cambiar puja** (`/v1/ads/puja`, admin + ADS_WRITE).
+  `sql/ppc-keywords.sql`.
+- **🔬 Search Query Performance** (v85, David #E, **beta**): `GET_BRAND_ANALYTICS_SEARCH_QUERY_
+  PERFORMANCE_REPORT` semanal, parseo tolerante. `sql/sqp.sql`. Validar formato con datos reales.
+- **🛡️ Vigilancia de ficha / hijacking** (v86): snapshot del título por ASIN (Catalog Items),
+  detecta cambios; cruza con Buy Box perdida; integrado en alertas por email. `sql/fichas.sql`.
+
+## Ejecución vía Ads API — COMPLETA (el "moat" de David)
+- ⏸/▶ pausar/reactivar (v80) · 🚫 negativizar (v81) · 💰 presupuesto (v82) · ✏️ puja keyword (v84).
+- Triple seguridad: solo admin · `ADS_WRITE=1` (off por defecto) · confirmación.
+
+## Migraciones SQL de este checkpoint (correr en Supabase)
+- `sql/ppc-placement.sql` · `sql/ppc-keywords.sql` · `sql/sqp.sql` · `sql/fichas.sql`
+
+## Para desplegar
+- **Supabase:** las 4 tablas de arriba (+ `sql/buybox.sql` si aún no).
+- **Cloudflare:** worker **v86**. Ejecución en Amazon: `ADS_WRITE=1` (opcional). Alertas:
+  `ALERTAS_EMAIL=1` + `ALERTAS_TO` (opcional).
+- **Netlify:** frontend ya está.
+
+## Informe de David — estado final
+- **Hecho:** casi todo (NaN, veredictos + confianza, copiar término, Salud del producto,
+  sincronización, alertas email + opt-in, supuestos P&L, dependencia PPC, Buy Box, objetivo de
+  campaña, sin actividad, match type, placement, keywords/pujas, ejecución vía Ads API completa,
+  SQP beta, hijacking).
+- **Pendiente:** Sponsored Brands / Display (solo si se corren esas campañas) · comparativa
+  interanual (acumular +12 meses de histórico) · validar SQP contra datos reales.
