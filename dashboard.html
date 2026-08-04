@@ -548,6 +548,28 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     </div>
   </div>
 
+  <!-- MODAL NEGATIVIZAR TÉRMINO (ejecución vía Ads API) -->
+  <div id="neg-modal" style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.6);backdrop-filter:blur(2px)" onclick="if(event.target===this)cerrarNeg()">
+    <div style="max-width:460px;margin:12vh auto;background:#0D0D0D;border:1px solid var(--bd2);border-radius:16px;padding:20px">
+      <div style="font-family:'Satoshi',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px">🚫 Negativizar término en Amazon</div>
+      <div style="font-size:12px;color:var(--mu2);margin-bottom:14px">Añade el término como <b>palabra negativa</b> en la campaña que elijas. Es un cambio <b>real</b> en tu cuenta de Amazon Ads.</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:3px">Término</div>
+      <div id="neg-termino" style="font-weight:700;font-size:14px;margin-bottom:12px;word-break:break-word"></div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:3px">Campaña (país <b id="neg-pais"></b>)</div>
+      <select id="neg-camp" style="width:100%;background:#111;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);padding:9px 10px;font-size:13px;margin-bottom:12px"></select>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:3px">Concordancia negativa</div>
+      <select id="neg-tipo" style="width:100%;background:#111;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);padding:9px 10px;font-size:13px;margin-bottom:16px">
+        <option value="EXACT">Exacta (solo esta búsqueda exacta)</option>
+        <option value="PHRASE">Frase (cualquier búsqueda que la contenga)</option>
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="chip" onclick="cerrarNeg()">Cancelar</button>
+        <button class="chip on" id="neg-ok" onclick="confirmarNegativo()">🚫 Negativizar</button>
+      </div>
+      <div id="neg-msg" style="font-size:12px;margin-top:10px"></div>
+    </div>
+  </div>
+
   <!-- TABLA PRODUCTOS -->
   <div class="card">
     <div class="ch">
@@ -2958,6 +2980,40 @@ function cambiarEstadoCampana(cid,pais,estado,nmEnc){
     })
     .catch(function(e){ alert('Error: '+e.message); });
 }
+// Negativizar un término: abre el modal para elegir campaña + concordancia.
+var NEG_CTX=null;
+function negativizarTermino(termEnc,pais){
+  var termino=decodeURIComponent(termEnc||'');
+  var camps=((PPC_DATA&&PPC_DATA.campanas)||[]).filter(function(c){return (c.pais||'')===pais && c.campania_id;});
+  if(!camps.length){ alert('No hay campañas con identificador para «'+pais+'». Sincroniza el PPC y reintenta.'); return; }
+  NEG_CTX={termino:termino,pais:pais};
+  document.getElementById('neg-termino').textContent=termino;
+  document.getElementById('neg-pais').textContent=pais;
+  document.getElementById('neg-camp').innerHTML=camps.map(function(c){return '<option value="'+c.campania_id+'">'+String(c.nombre).replace(/</g,'&lt;').replace(/"/g,'&quot;')+'</option>';}).join('');
+  document.getElementById('neg-tipo').value='EXACT';
+  document.getElementById('neg-msg').textContent='';
+  document.getElementById('neg-modal').style.display='block';
+}
+function cerrarNeg(){ document.getElementById('neg-modal').style.display='none'; NEG_CTX=null; }
+function confirmarNegativo(){
+  if(!NEG_CTX) return;
+  var sel=document.getElementById('neg-camp'), cid=sel.value, tipo=document.getElementById('neg-tipo').value;
+  var campNombre=(sel.selectedOptions&&sel.selectedOptions[0])?sel.selectedOptions[0].textContent:'';
+  var msg=document.getElementById('neg-msg'), btn=document.getElementById('neg-ok');
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ msg.style.color='var(--am)'; msg.textContent='Necesitas la clave admin (🔌 Conexión).'; return; }
+  if(!confirm('Negativizar «'+NEG_CTX.termino+'» en la campaña «'+campNombre+'» ('+NEG_CTX.pais+').\n\nEsto añade una palabra negativa REAL en Amazon. ¿Continuar?')) return;
+  btn.disabled=true; btn.style.opacity=.5; msg.style.color='var(--mu)'; msg.textContent='Enviando a Amazon…';
+  fetch(SB_CONFIG.apiBase+'/v1/ads/negativo',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:NEG_CTX.pais,campania_id:cid,termino:NEG_CTX.termino,tipo:tipo})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.aplicado){ msg.style.color='var(--gn)'; msg.textContent='✅ Negativizado en Amazon.'; setTimeout(cerrarNeg,1400); }
+      else if(d && d.error==='ads_write_off'){ msg.style.color='var(--am)'; msg.textContent='⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.'; }
+      else { msg.style.color='var(--am)'; msg.textContent='No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300); }
+      btn.disabled=false; btn.style.opacity=1;
+    })
+    .catch(function(e){ msg.style.color='var(--am)'; msg.textContent='Error: '+e.message; btn.disabled=false; btn.style.opacity=1; });
+}
 function ppcObjSelect(nombre,val){
   var c=String(nombre).replace(/"/g,'&quot;');
   var o=PPC_OBJ_DEF.map(function(d){return '<option value="'+d.v+'"'+(d.v===val?' selected':'')+'>'+d.n+'</option>';}).join('');
@@ -3368,13 +3424,15 @@ function renderPPCTerminos(){
     else if(ven>0&&a<=be*0.7&&ped>=2){ver='Escalar';pill='gn';}
     else if(clics>0&&clics<5&&ped===0){ver='Datos insuf.';pill='mu';}
     else {ver='Vigilar';pill='am';}
+    var esAdmin=!!(typeof SB_CONFIG!=='undefined' && SB_CONFIG.apiKey);
+    var negBtn=(esAdmin && (ver==='Negativizar'||ver==='Techo de puja')) ? ' <button class="acc-cp" style="padding:2px 7px" title="Negativizar este término en Amazon" onclick="negativizarTermino(\''+encodeURIComponent(t.termino)+'\',\''+(t.pais||'')+'\')">🚫</button>' : '';
     return '<tr><td style="max-width:190px;overflow:hidden;text-overflow:ellipsis"><b>'+t.termino+'</b></td>'+
       '<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(t.keyword||'')+'</td>'+
       '<td>'+mtBadge(t.tipo)+'</td>'+
       '<td>'+clics+'</td><td style="color:#B983D6">'+f(gasto,2)+'€</td><td>'+ped+'</td>'+
       '<td>'+(clics>0?f(ped/clics*100,1)+'%':'—')+'</td>'+
       '<td>'+(ven>0?f(a*100,1)+'%':'—')+'</td>'+
-      '<td><span class="pill '+pill+'">'+ver+'</span></td></tr>';
+      '<td style="white-space:nowrap"><span class="pill '+pill+'">'+ver+'</span>'+negBtn+'</td></tr>';
   }).join('')||'<tr><td colspan="9" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
   // Acciones del cerebro PPC
   document.getElementById('ppc-brain-total').textContent='+'+f(recuperable,2)+'€';
