@@ -397,7 +397,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         </div>
         <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Término del cliente</th><th>Keyword</th><th>Clics</th><th>Gasto</th><th>Pedidos</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>ACoS</th><th>Veredicto</th></tr></thead>
+          <thead><tr><th>Término del cliente</th><th>Keyword</th><th title="Tipo de concordancia: Exacta / Frase / Amplia">Tipo</th><th>Clics</th><th>Gasto</th><th>Pedidos</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>ACoS</th><th>Veredicto</th></tr></thead>
           <tbody id="ppc-terminos"></tbody>
         </table>
         </div>
@@ -2933,6 +2933,8 @@ var PPC_OBJ_DEF=[
   {v:'liquidar',  n:'Liquidar stock',     thr:[80,120]}
 ];
 function ppcObjThr(v){ for(var i=0;i<PPC_OBJ_DEF.length;i++) if(PPC_OBJ_DEF[i].v===v) return PPC_OBJ_DEF[i].thr; return [25,40]; }
+// Badge de tipo de concordancia (match type) de un término.
+function mtBadge(t){ t=(t||'').toUpperCase(); var m={EXACT:['Exacta','#2EE6A0'],PHRASE:['Frase','#F5A623'],BROAD:['Amplia','#4A9EDE']}; var x=m[t]; if(!x) return t?('<span style="color:var(--mu);font-size:10px">'+t+'</span>'):'<span style="color:var(--mu)">—</span>'; return '<span style="font-size:10px;font-weight:700;color:'+x[1]+'">'+x[0]+'</span>'; }
 function ppcObjSelect(nombre,val){
   var c=String(nombre).replace(/"/g,'&quot;');
   var o=PPC_OBJ_DEF.map(function(d){return '<option value="'+d.v+'"'+(d.v===val?' selected':'')+'>'+d.n+'</option>';}).join('');
@@ -3342,11 +3344,12 @@ function renderPPCTerminos(){
     else {ver='Vigilar';pill='am';}
     return '<tr><td style="max-width:190px;overflow:hidden;text-overflow:ellipsis"><b>'+t.termino+'</b></td>'+
       '<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(t.keyword||'')+'</td>'+
+      '<td>'+mtBadge(t.tipo)+'</td>'+
       '<td>'+clics+'</td><td style="color:#B983D6">'+f(gasto,2)+'€</td><td>'+ped+'</td>'+
       '<td>'+(clics>0?f(ped/clics*100,1)+'%':'—')+'</td>'+
       '<td>'+(ven>0?f(a*100,1)+'%':'—')+'</td>'+
       '<td><span class="pill '+pill+'">'+ver+'</span></td></tr>';
-  }).join('')||'<tr><td colspan="8" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
+  }).join('')||'<tr><td colspan="9" style="color:var(--mu)">Sin términos aún — sincroniza con /v1/ads/terminos o espera al informe.</td></tr>';
   // Acciones del cerebro PPC
   document.getElementById('ppc-brain-total').textContent='+'+f(recuperable,2)+'€';
   var doneP=accHechas(), nHp=0;
