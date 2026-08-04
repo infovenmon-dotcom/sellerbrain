@@ -173,3 +173,44 @@ Tercer punto estable. Todo aditivo: nada de los checkpoints 1 y 2 se rompió.
 ## Pendientes generales (no bloquean)
 - Fase 2 fiscal por SKU / avisos automáticos · ACoS y sobrecostes por cliente cuando Ads y
   settlement sean multi-tenant · validación del gestor (David).
+
+---
+
+# 📡 Estado de la API de Amazon (SP-API) — ago 2026
+
+Portal: **Solution Provider Portal (SPP)** (sustituye a Developer Central). Perfil de
+desarrollador: **VENMON NATURALMENTE SL** · contacto **fernando.gil@me.com**.
+
+- **App:** `Sellersbrain` · **App ID:** `amzn1.sp.solution.5406e62d-2666-4869-92b7-b6172bb261e4`
+  (= `SPAPI_APP_ID` en Cloudflare).
+- **Estado de la app:** **Borrador (Draft)**.
+- **Registro de desarrollador:** **EN REVISIÓN por Amazon** (banner SPP). Mientras dure, no se
+  pueden añadir nuevos clientes de aplicación ni publicar. Vigilar correo de contacto por si
+  Amazon pide aclaraciones.
+- **Roles concedidos (APPROVED):** Inventory & Order Mgmt, Finance & Accounting, Amazon
+  Fulfillment, Amazon Logistics, Amazon Warehousing & Distribution, Pricing, Brand Analytics,
+  Product Listing. → El núcleo del producto está aprobado.
+- **NO se ha pedido el rol fiscal (Tax/VAT):** por eso `GET_VAT_TRANSACTION_DATA` da 403 y el
+  IVA se sube por CSV en Ventanilla Única (funciona).
+
+## Mientras esté en revisión (qué se puede / no se puede)
+- ✅ VENMON (cuenta propia) conecta y opera en **modo beta** (`version=beta`, controlado por
+  `SPAPI_APP_BETA` ≠ 'false' en el worker).
+- ❌ Vendedores externos **no** pueden conectar hasta que la app salga de Borrador (tras la
+  revisión + publicar). No tocar la app para no reiniciar la revisión.
+- Dejar preparada la **Redirect URI** en la app:
+  `https://sellerbrain-api.info-venmon.workers.dev/auth/spapi/callback`. El Client Secret de
+  LWA va SOLO en Cloudflare (`LWA_CLIENT_SECRET`), nunca en repos/chats.
+
+## Decisión: rol fiscal (Tax/VAT) → PEDIR **DESPUÉS** de publicar
+Motivo: pedirlo ahora (a) el portal bloquea añadir clientes durante la revisión y podría
+**reiniciarla**, y (b) es un rol **PII-restringido** → mete la solicitud en la vía DPP
+reforzada (mucho más lenta) y cambia la postura "sin PII" del producto. No es bloqueante: el
+IVA ya se cubre por CSV. Plan: terminar la revisión actual → publicar → lanzar; el rol fiscal
+como petición **aparte y opcional** más adelante.
+
+## Cuando Amazon apruebe (checklist de lanzamiento)
+1. App pasa de Borrador → publicable.
+2. `SPAPI_APP_BETA=false` en Cloudflare (quita `version=beta`).
+3. Probar conexión con una cuenta de vendedor REAL (no la propia).
+4. (Alertas por email ya listas: `ALERTAS_EMAIL=1` + `ALERTAS_TO`.)
