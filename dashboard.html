@@ -384,7 +384,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div class="ch"><h2><span class="ci">🎯</span> Campañas <span id="ppc-titulo-camp" style="font-weight:400;color:var(--mu)">· últimos 30 días</span></h2></div>
         <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Ventas (pedidos) atribuidas a los clics de la publicidad — es la base del CVR (ventas ÷ clics).">Ventas (uds)</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Campaña</th><th>País</th><th>Gasto</th><th>Clics</th><th title="Ventas (pedidos) atribuidas a los clics de la publicidad — es la base del CVR (ventas ÷ clics).">Ventas (uds)</th><th title="Conversión: pedidos ÷ clics">CVR</th><th>Ventas</th><th>ACoS</th><th>ROAS</th><th title="Objetivo de la campaña: ajusta el criterio del veredicto (cuánto ACoS es aceptable).">Objetivo</th><th>Estado</th></tr></thead>
           <tbody id="ppc-campanas"></tbody>
         </table>
         </div>
@@ -2921,6 +2921,28 @@ var PPC_PAIS='all';   // filtro del gráfico PPC: 'all' o código de país (ES/F
 var PPC_CAMP='all';   // filtro del gráfico PPC: 'all' o nombre de campaña
 var PPC_RANGO=null;   // filtro maestro de fechas: null = todo (30 días); {desde,hasta} si hay selección
 var PPC_AGRUPA='dia'; // eje del gráfico: 'dia' | 'mes'
+
+// Objetivo declarado por campaña (informe David · F): ajusta el criterio del
+// veredicto (cuánto ACoS es "aceptable" según lo que persigas con la campaña).
+var PPC_OBJ={}; try{ PPC_OBJ=JSON.parse(localStorage.getItem('sb_ppc_obj')||'{}')||{}; }catch(e){ PPC_OBJ={}; }
+var PPC_OBJ_DEF=[
+  {v:'',          n:'—',                  thr:[25,40]},
+  {v:'beneficio', n:'Maximizar beneficio',thr:[20,30]},
+  {v:'cuota',     n:'Crecer cuota',       thr:[35,50]},
+  {v:'ranking',   n:'Defender ranking',   thr:[50,70]},
+  {v:'liquidar',  n:'Liquidar stock',     thr:[80,120]}
+];
+function ppcObjThr(v){ for(var i=0;i<PPC_OBJ_DEF.length;i++) if(PPC_OBJ_DEF[i].v===v) return PPC_OBJ_DEF[i].thr; return [25,40]; }
+function ppcObjSelect(nombre,val){
+  var c=String(nombre).replace(/"/g,'&quot;');
+  var o=PPC_OBJ_DEF.map(function(d){return '<option value="'+d.v+'"'+(d.v===val?' selected':'')+'>'+d.n+'</option>';}).join('');
+  return '<select onchange="ppcSetObj(this.getAttribute(\'data-c\'),this.value)" data-c="'+c+'" style="background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px;padding:3px 5px;max-width:135px">'+o+'</select>';
+}
+function ppcSetObj(nombre,val){
+  if(val) PPC_OBJ[nombre]=val; else delete PPC_OBJ[nombre];
+  try{ localStorage.setItem('sb_ppc_obj',JSON.stringify(PPC_OBJ)); }catch(e){}
+  _ppcRerender();
+}
 function _iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 // ¿la fecha ISO cae dentro del rango activo? (sin rango → siempre sí)
 function ppcEnRango(f){ if(!PPC_RANGO) return true; return f && f>=PPC_RANGO.desde && f<=PPC_RANGO.hasta; }
@@ -3259,17 +3281,26 @@ function renderPPC(fuente){
   document.getElementById('ppc-campanas').innerHTML=campsR.map(function(x){
     var a=x.ventas_ppc>0?x.gasto/x.ventas_ppc*100:999;
     var roas=x.gasto>0?x.ventas_ppc/x.gasto:0;
-    var est=a<=25?['gn','Rentable']:a<=40?['am','Vigilar']:x.ventas_ppc>0?['rd','ACoS alto']:['rd','Sin ventas'];
     var uds=x.pedidos_ppc||0;   // ventas (pedidos) atribuidas a los clics — base del CVR
-    return '<tr><td style="max-width:210px;overflow:hidden;text-overflow:ellipsis">'+x.nombre+'</td><td>'+x.pais+'</td>'+
+    var obj=(PPC_OBJ[x.nombre]||'');            // objetivo declarado de la campaña
+    var thr=ppcObjThr(obj);                     // [verde<=, ámbar<=] según objetivo
+    // Veredicto: primero casos sin datos; luego ACoS según el objetivo.
+    var est;
+    if(x.clics===0) est=['mu','Sin actividad'];
+    else if(x.ventas_ppc<=0) est=['rd','Sin ventas'];
+    else if(a<=thr[0]) est=['gn','Rentable'];
+    else if(a<=thr[1]) est=['am','Vigilar'];
+    else est=['rd','ACoS alto'];
+    return '<tr><td style="max-width:210px;overflow:hidden;text-overflow:ellipsis" title="'+String(x.nombre).replace(/"/g,'&quot;')+'">'+x.nombre+'</td><td>'+x.pais+'</td>'+
       '<td style="color:#B983D6">'+f(x.gasto,2)+'€</td><td>'+x.clics+'</td>'+
       '<td style="font-weight:600">'+uds+'</td>'+
       '<td>'+(x.clics>0?f(x.pedidos_ppc/x.clics*100,1)+'%':'—')+'</td>'+
       '<td style="color:var(--gn)">'+f(x.ventas_ppc,2)+'€</td>'+
       '<td>'+(x.ventas_ppc>0?f(a,1)+'%':'—')+'</td>'+
       '<td>'+(roas>0?f(roas,2)+'x':'—')+'</td>'+
+      '<td>'+ppcObjSelect(x.nombre,obj)+'</td>'+
       '<td><span class="pill '+est[0]+'">'+est[1]+'</span></td></tr>';
-  }).join('')||'<tr><td colspan="10" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
+  }).join('')||'<tr><td colspan="11" style="color:var(--mu)">Sin campañas guardadas aún — llegarán con el cron de esta noche.</td></tr>';
   renderPPCTerminos();
 }
 
