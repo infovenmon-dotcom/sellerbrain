@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v82-ads-presupuesto'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v83-placement'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -170,7 +170,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -802,6 +802,21 @@ export default {
         return json({ ok: r.ok, status: r.status, aplicado, presupuesto, detalle: d }, cors);
       }
 
+      // --- PLACEMENT: ACoS por ubicación del anuncio (Top of Search vs resto). Lectura. ---
+      if (url.pathname === '/v1/ads/placement') {
+        const filas = await selSafe(env, 'ppc_placement?order=gasto.desc', []);
+        let actualizado = null;
+        for (const f of (filas || [])) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
+        return json({ datos: filas || [], actualizado }, cors);
+      }
+
+      // --- Ingesta de placement (admin). ?pais=ES opcional. ~1-3 min por país. ---
+      if (url.pathname === '/v1/ads/placement-ingest') {
+        const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
+        const r = await ingestaPlacement(env, { pais });
+        return json({ ok: true, ...r }, cors);
+      }
+
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
       if (url.pathname === '/v1/ads/profiles') {
         if (!env.ADS_REFRESH_TOKEN) return json({ error: 'Falta el secreto ADS_REFRESH_TOKEN' }, cors, 400);
@@ -1359,6 +1374,8 @@ export default {
       }
       // A las 05:00 UTC: Buy Box / competencia por ASIN (SP-API Pricing).
       if (hora === 5) { try { await ingestaBuyBoxTodas(env); } catch (_) {} }
+      // A las 06:00 UTC: placement (ACoS por ubicación del anuncio, Ads API).
+      if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} }
       // A las 07:00 UTC (~09:00 España): alertas proactivas por email (stock bajo,
       // ACoS alto, sobrecostes recuperables). Solo si ALERTAS_EMAIL=1. Digest diario.
       if (hora === 7) { try { await procesarAlertas(env); } catch (_) {} }
@@ -1801,6 +1818,72 @@ async function adsInformeTerminos(env, profileId, desde, hasta) {
   }
   // Devolvemos el id para recogerlo luego si Amazon va lento
   throw new Error('timeout · reportId=' + reportId);
+}
+
+/* =====================================================================
+ * PLACEMENT (Top of Search vs resto vs páginas de producto) — informe de Ads
+ * spCampaigns agrupado por campaignPlacement (David #8). Con esto sabemos dónde
+ * convierte mejor tu publicidad y si conviene subir el ajuste de puja de
+ * "Top of Search". Se guarda en ppc_placement. Cuenta propia (Ads single-tenant).
+ * =================================================================== */
+async function adsInformePlacement(env, profileId, desde, hasta) {
+  const token = await lwaToken(env, 'ads');
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+    'Amazon-Advertising-API-Scope': profileId,
+    'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+  };
+  const body = {
+    name: 'sb-placement-' + desde + '-' + hasta,
+    startDate: desde, endDate: hasta,
+    configuration: {
+      adProduct: 'SPONSORED_PRODUCTS',
+      groupBy: ['campaignPlacement'],
+      columns: ['campaignName', 'placementClassification', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spCampaigns',
+      timeUnit: 'SUMMARY',
+      format: 'GZIP_JSON'
+    }
+  };
+  const reportId = await crearReporteAds(headers, body);
+  for (let i = 0; i < 16; i++) {
+    await sleep(15000);
+    const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
+    const j = await st.json();
+    if (j.status === 'COMPLETED') {
+      const gz = await fetch(j.url);
+      const ds = new DecompressionStream('gzip');
+      const txt = await new Response(new Response(await gz.arrayBuffer()).body.pipeThrough(ds)).text();
+      return JSON.parse(txt);
+    }
+    if (j.status === 'FAILURE') throw new Error('Ads placement FAILURE');
+  }
+  throw new Error('timeout placement · reportId=' + reportId);
+}
+
+async function ingestaPlacement(env, opts) {
+  opts = opts || {};
+  const hasta = new Date(Date.now() - 1 * 86400000).toISOString().slice(0, 10);   // ayer
+  const desde = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);  // 30 días
+  const perfiles = opts.pais ? (ADS_PROFILES[opts.pais] ? { [opts.pais]: ADS_PROFILES[opts.pais] } : {}) : ADS_PROFILES;
+  const res = { desde, hasta, pasos: [] };
+  for (const [pais, profileId] of Object.entries(perfiles)) {
+    try {
+      const data = await adsInformePlacement(env, profileId, desde, hasta);
+      const rows = (data || []).map(r => ({
+        seller: 'venmon', pais,
+        campania: r.campaignName || '',
+        placement: r.placementClassification || '?',
+        gasto: +(+r.cost || 0).toFixed(2), clics: +r.clicks || 0, impresiones: +r.impressions || 0,
+        ventas_ppc: +(+r.sales14d || 0).toFixed(2), pedidos_ppc: +r.purchases14d || 0,
+        desde, hasta, fecha: new Date().toISOString()
+      }));
+      if (rows.length) await upsertSupabase(env, 'ppc_placement', rows);
+      res.pasos.push({ pais, filas: rows.length });
+    } catch (e) { res.pasos.push({ pais, error: e.message }); }
+  }
+  return res;
 }
 
 /* =====================================================================
