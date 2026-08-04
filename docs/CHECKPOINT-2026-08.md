@@ -151,7 +151,25 @@ Tercer punto estable. Todo aditivo: nada de los checkpoints 1 y 2 se rompió.
 ## Migraciones SQL de este checkpoint (correr en Supabase)
 - `sql/alertas-prefs.sql` — tabla `alertas_prefs` (opt-in + umbrales por vendedor, con RLS).
 
-## Pendientes (no bloquean)
+## Cierre del bloque "informe de David" (añadido tras el CP3)
+- **Alerta de producto en pérdidas** (worker v77): beneficio − PPC < 0 en 30 días, con coste
+  conocido y ventas ≥ `ALERTAS_PERDIDA_MIN`. Cuarto tipo de alerta por email.
+- **Panel de "supuestos del cálculo"** en el P&L: ⓘ por línea (cómo se calcula) + nota de
+  criterio. Aclara que el semáforo mide margen ANTES de PPC y el beneficio ya INCLUYE PPC.
+- **Dependencia de publicidad por producto** (worker v78): en el detalle del SKU, barra
+  ventas PPC / ventas totales (proxy del % orgánico vs pagado, #3/#11 de David).
+- **Worker final del bloque: `v78-dependencia-ppc`.** Rama de respaldo movida a este punto.
+
+### Del informe de David — hecho vs pendiente
+- **Hecho:** bug `+NaN€` · veredictos PPC con umbral de confianza (techo de puja) · copiar
+  término · "Salud del producto" · tooltip de sincronización · alertas por email (stock,
+  ACoS, sobrecostes, pérdidas) con opt-in · supuestos del P&L · dependencia de PPC.
+- **Pendiente (requieren datos/ingesta nuevos, son "proyectos"):** Buy Box / precio de
+  competencia por ASIN + detector de hijacking · placement (ToS vs resto) · match type ·
+  Sponsored Brands + Display · Search Query Performance · comparativa interanual ·
+  ejecución directa vía Ads API (negativizar/pausar con confirmación) · ranking orgánico
+  por keyword (limitación de Amazon; a nivel producto ya cubierto con la dependencia PPC).
+
+## Pendientes generales (no bloquean)
 - Fase 2 fiscal por SKU / avisos automáticos · ACoS y sobrecostes por cliente cuando Ads y
-  settlement sean multi-tenant · alerta de 'producto en pérdidas' · Buy Box / hijacking ·
-  ranking orgánico para veredictos VIP · validación del gestor (David).
+  settlement sean multi-tenant · validación del gestor (David).
