@@ -2963,7 +2963,8 @@ function ppcAccionCampana(x){
   if(!esAdmin || !x.campania_id) return '<span style="color:var(--mu);font-size:10px">—</span>';
   var nm=encodeURIComponent(x.nombre||'');
   return '<button class="acc-cp" title="Pausar esta campaña en Amazon" onclick="cambiarEstadoCampana(\''+x.campania_id+'\',\''+x.pais+'\',\'PAUSED\',\''+nm+'\')">⏸</button> '+
-    '<button class="acc-cp" style="background:rgba(46,204,113,.12);border-color:rgba(46,204,113,.35);color:#7fe0a8" title="Reactivar esta campaña en Amazon" onclick="cambiarEstadoCampana(\''+x.campania_id+'\',\''+x.pais+'\',\'ENABLED\',\''+nm+'\')">▶</button>';
+    '<button class="acc-cp" style="background:rgba(46,204,113,.12);border-color:rgba(46,204,113,.35);color:#7fe0a8" title="Reactivar esta campaña en Amazon" onclick="cambiarEstadoCampana(\''+x.campania_id+'\',\''+x.pais+'\',\'ENABLED\',\''+nm+'\')">▶</button> '+
+    '<button class="acc-cp" style="background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.35);color:var(--am)" title="Cambiar presupuesto diario en Amazon" onclick="cambiarPresupuesto(\''+x.campania_id+'\',\''+x.pais+'\',\''+nm+'\')">💰</button>';
 }
 function cambiarEstadoCampana(cid,pais,estado,nmEnc){
   var nombre=decodeURIComponent(nmEnc||'');
@@ -2993,6 +2994,24 @@ function negativizarTermino(termEnc,pais){
   document.getElementById('neg-tipo').value='EXACT';
   document.getElementById('neg-msg').textContent='';
   document.getElementById('neg-modal').style.display='block';
+}
+// Cambiar el presupuesto diario de una campaña en Amazon (con confirmación).
+function cambiarPresupuesto(cid,pais,nmEnc){
+  var nombre=decodeURIComponent(nmEnc||'');
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Necesitas la clave admin (🔌 Conexión) para ejecutar cambios en Amazon.'); return; }
+  var v=prompt('Nuevo presupuesto DIARIO (€) para la campaña:\n\n«'+nombre+'» ('+pais+')\n\nEsto cambia tu campaña REAL en Amazon Ads.','');
+  if(v===null) return;
+  var p=parseFloat(String(v).replace(',','.'));
+  if(!(p>0)){ alert('Introduce un importe válido (mayor que 0).'); return; }
+  fetch(SB_CONFIG.apiBase+'/v1/ads/presupuesto',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:pais,campania_id:cid,presupuesto:p})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.aplicado){ alert('✅ Presupuesto de «'+nombre+'» cambiado a '+p.toFixed(2)+'€/día en Amazon.'); if(PPC_DATA) _ppcRerender(); }
+      else if(d && d.error==='ads_write_off'){ alert('⚠️ La ejecución está desactivada. Pon ADS_WRITE=1 en Cloudflare (Worker → Variables).'); }
+      else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
+    })
+    .catch(function(e){ alert('Error: '+e.message); });
 }
 function cerrarNeg(){ document.getElementById('neg-modal').style.display='none'; NEG_CTX=null; }
 function confirmarNegativo(){

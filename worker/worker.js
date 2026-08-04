@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v81-ads-negativo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v82-ads-presupuesto'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -773,6 +773,33 @@ export default {
         let d = null; try { d = await r.json(); } catch (_) {}
         const aplicado = !!(d && d.campaignNegativeKeywords && d.campaignNegativeKeywords.success && d.campaignNegativeKeywords.success.length);
         return json({ ok: r.ok, status: r.status, aplicado, detalle: d }, cors);
+      }
+
+      // --- EJECUCIÓN vía Ads API: cambiar el PRESUPUESTO diario de una campaña
+      //     (SP campaigns v3). Misma doble seguridad. body: { pais, campania_id, presupuesto } ---
+      if (url.pathname === '/v1/ads/presupuesto' && request.method === 'POST') {
+        if (String(env.ADS_WRITE || '') !== '1') return json({ error: 'ads_write_off', nota: 'Escritura desactivada. Pon ADS_WRITE=1 en Cloudflare.' }, cors, 403);
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const pais = (b.pais || '').toUpperCase(), cid = String(b.campania_id || ''), presupuesto = +b.presupuesto;
+        const profileId = ADS_PROFILES[pais];
+        if (!profileId) return json({ error: 'pais_sin_perfil', pais }, cors, 400);
+        if (!cid) return json({ error: 'falta_campania_id' }, cors, 400);
+        if (!(presupuesto > 0)) return json({ error: 'presupuesto_invalido' }, cors, 400);
+        const token = await lwaToken(env, 'ads');
+        const r = await fetch(ADS_HOST + '/sp/campaigns', {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+            'Amazon-Advertising-API-Scope': profileId,
+            'Content-Type': 'application/vnd.spCampaign.v3+json',
+            'Accept': 'application/vnd.spCampaign.v3+json'
+          },
+          body: JSON.stringify({ campaigns: [{ campaignId: cid, budget: { budget: presupuesto, budgetType: 'DAILY' } }] })
+        });
+        let d = null; try { d = await r.json(); } catch (_) {}
+        const aplicado = !!(d && d.campaigns && d.campaigns.success && d.campaigns.success.length);
+        return json({ ok: r.ok, status: r.status, aplicado, presupuesto, detalle: d }, cors);
       }
 
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
