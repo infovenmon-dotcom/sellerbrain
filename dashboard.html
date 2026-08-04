@@ -173,6 +173,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <div class="sep">Auditoría</div>
     <a id="nav-sobre" onclick="cambiarVista('sobre')"><span class="ic">🔍</span> Detector sobrecobros FBA</a>
     <a id="nav-buybox" onclick="cambiarVista('buybox')"><span class="ic">🏆</span> Buy Box y competencia</a>
+    <a id="nav-fichas" onclick="cambiarVista('fichas')"><span class="ic">🛡️</span> Vigilancia de ficha</a>
     <a id="nav-fba" onclick="cambiarVista('fba')"><span class="ic">📐</span> Dimensiones y categoría</a>
     <a id="nav-dev" onclick="cambiarVista('dev')"><span class="ic">↩️</span> Devoluciones</a>
     <div class="sep">Planificación</div>
@@ -277,6 +278,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <button class="chip" id="btn-buybox" onclick="cargarBuyBoxAdmin()">🏆 Cargar Buy Box (lote de ASIN)</button>
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae el estado de la Buy Box por ASIN (SP-API Pricing). Va limitado; púlsalo varias veces para cubrir todo el catálogo. ~30s por lote.</span>
         <div id="cx-buybox-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <button class="chip" id="btn-fichas" onclick="cargarFichasAdmin()">🛡️ Cargar fichas (vigilancia hijacking)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Guarda el título de cada ASIN para detectar cambios. Va por lotes; púlsalo varias veces. ~15s por lote.</span>
+        <div id="cx-fichas-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
 
       <div style="margin-top:12px">
@@ -785,6 +792,18 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
   <div class="card">
     <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Para cada producto (por ASIN, marketplace <b>ES</b>): si tienes la <b>Buy Box</b>, tu precio frente al de la Buy Box y al del <b>competidor más barato</b>, y cuántas ofertas hay. Primero se muestran los que <b>NO</b> tienes ganados. Datos de la SP-API de Amazon (Pricing), refrescados a diario.</div>
     <div id="buybox-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+  </div>
+</div>
+
+<!-- ===== VISTA VIGILANCIA DE FICHA (HIJACKING) ===== -->
+<div id="vista-fichas" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+    <h2 style="font-family:'Satoshi',sans-serif;font-size:17px;font-weight:800">🛡️ Vigilancia de ficha</h2>
+    <span id="fichas-act" style="font-size:11px;color:var(--mu)"></span>
+  </div>
+  <div class="card">
+    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Vigilamos el <b>título</b> de cada producto (por ASIN). Si cambia entre comprobaciones, te avisamos: puede ser un <b>hijack</b> o una edición no autorizada de tu ficha. También ves si has <b>perdido la Buy Box</b>. Primero, lo que requiere tu atención.</div>
+    <div id="fichas-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
   </div>
 </div>
 
@@ -1321,6 +1340,44 @@ function renderSQP(){
   h+='</tbody></table></div>';
   h+='<div style="font-size:10.5px;color:var(--mu);margin-top:6px">Beta: los nombres de campo del informe de Amazon pueden variar; si ves columnas vacías, avísame y ajusto el parser.</div>';
   el.innerHTML=h;
+}
+
+// ---- Vigilancia de ficha (hijacking) ----
+function cargarFichas(){
+  var body=document.getElementById('fichas-body'); if(!body) return;
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ body.innerHTML='<div style="color:var(--am);font-size:13px">Conecta tu cuenta (Ajustes → Conexión) para vigilar tus fichas.</div>'; return; }
+  body.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/fichas',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ renderFichas(d); })
+    .catch(function(){ body.innerHTML='<div style="color:var(--am);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
+}
+function renderFichas(d){
+  var body=document.getElementById('fichas-body'), act=document.getElementById('fichas-act');
+  var datos=(d&&d.datos)||[];
+  if(act) act.textContent=(d&&d.actualizado)?('comprobado '+fechaHora(d.actualizado)):'';
+  if(!datos.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún no hay fichas vigiladas. Se comprueban a diario (o desde 🔌 Conexión → «🛡️ Cargar fichas»).</div>'; return; }
+  var ahora=Date.now();
+  function reciente(fx){ if(!fx)return false; var t=new Date(fx).getTime(); return isFinite(t)&&(ahora-t)<=14*86400000; }
+  // riesgo primero: cambio reciente o buy box perdida
+  datos.sort(function(a,b){ var ra=(reciente(a.cambio_fecha)?2:0)+((a.tengo_buybox===false)?1:0); var rb=(reciente(b.cambio_fecha)?2:0)+((b.tengo_buybox===false)?1:0); return rb-ra; });
+  var alertas=datos.filter(function(x){return reciente(x.cambio_fecha)||x.tengo_buybox===false;}).length;
+  var h='<div style="font-size:13px;margin-bottom:10px">'+(alertas?('<b style="color:#ff8a8a">'+alertas+'</b> producto(s) requieren atención (cambio de ficha o Buy Box perdida).'):'👍 Sin cambios de ficha ni Buy Box perdidas.')+'</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">Producto (título actual)</th><th style="padding:6px 8px">Ficha</th><th style="padding:6px 8px">Buy Box</th></tr></thead><tbody>';
+  datos.forEach(function(x){
+    var cambio=reciente(x.cambio_fecha);
+    var fichaCell=cambio
+      ? '<span style="color:#ff8a8a;font-weight:700">⚠️ cambió</span><div style="font-size:10.5px;color:var(--mu);white-space:normal;max-width:280px;margin-top:2px">antes: «'+String(x.titulo_prev||'').replace(/</g,'&lt;').slice(0,90)+'»</div>'
+      : '<span style="color:var(--gn)">✓ igual</span>';
+    var bb=x.tengo_buybox===true?'<span style="color:var(--gn)">✓ tuya</span>':(x.tengo_buybox===false?'<span style="color:#ff8a8a;font-weight:700">✕ perdida</span>':'<span style="color:var(--mu)">—</span>');
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(cambio||x.tengo_buybox===false?';background:rgba(232,64,64,.04)':'')+'">'+
+      '<td style="padding:7px 8px;max-width:340px;overflow:hidden;text-overflow:ellipsis" title="'+String(x.asin||'')+'"><b>'+String(x.titulo||x.nombre||x.asin||'').replace(/</g,'&lt;').slice(0,110)+'</b></td>'+
+      '<td style="padding:7px 8px;white-space:nowrap">'+fichaCell+'</td>'+
+      '<td style="padding:7px 8px;white-space:nowrap">'+bb+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  body.innerHTML=h;
 }
 
 // ---- Buy Box y competencia por ASIN ----
@@ -2993,6 +3050,24 @@ async function cargarPlacementAdmin(){
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
+// Lanza la ingesta de fichas (un lote de ASIN por pulsación).
+async function cargarFichasAdmin(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-fichas-res'), btn=document.getElementById('btn-fichas');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Comprobando fichas (un lote)… no cierres.</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/fichas-ingest?n=15&key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.error){ box.innerHTML='<span style="color:var(--rd)">'+d.error+'</span>'; }
+    else{
+      box.innerHTML='<div style="color:var(--gn)">✅ Lote hecho: '+(d.ok||0)+' fichas'+(d.cambios?(' · <b style="color:#ff8a8a">'+d.cambios+' cambio(s) detectado(s)</b>'):'')+'. Total: '+(d.total_asins||'?')+'.</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Pulsa otra vez para cubrir el resto. Míralo en «🛡️ Vigilancia de ficha».</div>';
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
 // Lanza la ingesta de Buy Box (un lote de ASIN por pulsación).
 async function cargarBuyBoxAdmin(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3478,9 +3553,11 @@ function cambiarVista(v){
   document.getElementById('vista-ajustes').style.display = v==='ajustes'?'block':'none';
   document.getElementById('vista-alertas').style.display = v==='alertas'?'block':'none';
   document.getElementById('vista-buybox').style.display = v==='buybox'?'block':'none';
+  document.getElementById('vista-fichas').style.display = v==='fichas'?'block':'none';
   if(v==='ajustes'){ try{ pintarAjustes(); }catch(e){} }
   if(v==='alertas'){ try{ cargarAlertasPrefs(); }catch(e){} }
   if(v==='buybox'){ try{ cargarBuyBox(); }catch(e){} }
+  if(v==='fichas'){ try{ cargarFichas(); }catch(e){} }
   document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v85-sqp'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v86-hijacking'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -170,7 +170,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -716,6 +716,23 @@ export default {
         const n = Math.max(1, Math.min(60, +(url.searchParams.get('n') || 15)));
         const r = await ingestaBuyBox(env, undefined, n);
         return json({ ok: true, ...r, nota: 'getItemOffers va limitado; repite para cubrir el resto de ASIN.' }, cors);
+      }
+
+      // --- VIGILANCIA DE FICHA (hijacking): título por ASIN + cambios + Buy Box. Lectura. ---
+      if (url.pathname === '/v1/fichas') {
+        const fichas = await selSafe(env, 'fichas?order=cambio_fecha.desc.nullslast', []);
+        const bb = {}; try { for (const r of (await selSafe(env, 'buybox?select=asin,nombre,tengo_buybox,n_ofertas', []))) bb[r.asin] = r; } catch (_) {}
+        const datos = (fichas || []).map(f => ({ ...f, nombre: (bb[f.asin] && bb[f.asin].nombre) || f.titulo || f.sku || f.asin, tengo_buybox: bb[f.asin] ? bb[f.asin].tengo_buybox : null, n_ofertas: bb[f.asin] ? bb[f.asin].n_ofertas : null }));
+        let actualizado = null; for (const f of datos) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
+        const cambios = datos.filter(f => f.cambio_fecha).length;
+        return json({ datos, actualizado, cambios }, cors);
+      }
+
+      // --- Ingesta de fichas (admin). ?n=15 procesa un lote. ---
+      if (url.pathname === '/v1/fichas-ingest') {
+        const n = Math.max(1, Math.min(60, +(url.searchParams.get('n') || 15)));
+        const r = await ingestaFichas(env, undefined, n);
+        return json({ ok: true, ...r, nota: 'Catalog API limitado; repite para cubrir el resto.' }, cors);
       }
 
       // --- EJECUCIÓN vía Ads API: pausar / reactivar una campaña (SP v3).
@@ -1430,6 +1447,8 @@ export default {
         try { await corregirCierrePPCHora(env); } catch (_) {}
         try { await traerPresupuestosAds(env); } catch (_) {}
       }
+      // A las 02:00 UTC: vigilancia de ficha (título/imagen por ASIN → hijacking).
+      if (hora === 2) { try { await ingestaFichasTodas(env); } catch (_) {} }
       // A las 05:00 UTC: Buy Box / competencia por ASIN (SP-API Pricing).
       if (hora === 5) { try { await ingestaBuyBoxTodas(env); } catch (_) {} }
       // A las 06:00 UTC: placement (ACoS por ubicación del anuncio, Ads API).
@@ -2519,6 +2538,51 @@ async function ingestaBuyBoxTodas(env) {
 }
 
 /* =====================================================================
+ * VIGILANCIA DE FICHA / HIJACKING — snapshot del TÍTULO (e imagen) de cada ASIN
+ * vía Catalog Items API. Si el título cambia entre ejecuciones, se marca la
+ * fecha del cambio (posible edición no autorizada / hijack). Combinado con la
+ * pérdida de Buy Box (tabla buybox) da la señal de David. Se guarda en `fichas`.
+ * =================================================================== */
+async function ingestaFichas(env, ctx, limite) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const mkt = MARKETPLACES.ES;
+  let cat = [];
+  try { cat = await selSafe(env, 'productos_catalogo?select=sku,asin&limit=3000', []); } catch (_) {}
+  const seen = {}, asins = [];
+  for (const c of (cat || [])) { const a = (c.asin || '').trim(); if (!a || seen[a]) continue; seen[a] = 1; asins.push({ asin: a, sku: c.sku }); }
+  const prev = {};
+  try { for (const r of (await selSafe(env, 'fichas?select=asin,titulo,titulo_prev,cambio_fecha,fecha', []))) prev[r.asin] = r; } catch (_) {}
+  asins.sort((a, b) => ((prev[a.asin] && prev[a.asin].fecha) || '') < ((prev[b.asin] && prev[b.asin].fecha) || '') ? -1 : 1);
+  const lote = limite ? asins.slice(0, limite) : asins;
+  const rows = []; let ok = 0, err = 0, cambios = 0; const ahora = new Date().toISOString();
+  for (const it of lote) {
+    try {
+      const item = await getCatalogoItem(env, it.asin, mkt);
+      const titulo = (item && item.summaries && item.summaries[0] && item.summaries[0].itemName) || '';
+      const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
+      const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
+      const imagen = (main && main.link) || null;
+      const pr = prev[it.asin] || {};
+      let titulo_prev = pr.titulo_prev || null, cambio_fecha = pr.cambio_fecha || null;
+      if (pr.titulo && titulo && pr.titulo !== titulo) { titulo_prev = pr.titulo; cambio_fecha = ahora; cambios++; }
+      rows.push({ seller, asin: it.asin, sku: it.sku || null, titulo: titulo || null, imagen, titulo_prev, cambio_fecha, fecha: ahora });
+      ok++;
+    } catch (_) { err++; }
+    await sleep(700);   // rate limit Catalog Items API
+  }
+  if (rows.length) await upsertSupabase(env, 'fichas', rows);
+  return { seller, procesados: lote.length, ok, err, cambios, total_asins: asins.length };
+}
+async function ingestaFichasTodas(env) {
+  const res = [];
+  try { res.push(await ingestaFichas(env)); } catch (e) { res.push({ seller: 'venmon', error: e.message }); }
+  for (const c of await cuentasSpapiActivas(env)) {
+    try { res.push(await ingestaFichas(env, c)); } catch (e) { res.push({ seller: c.seller, error: e.message }); }
+  }
+  return res;
+}
+
+/* =====================================================================
  * INGESTA PPC (Ads API) — invocación separada para respetar el límite de
  * 50 subpeticiones del plan gratis. Trae ppc_dia + ppc_campanas (+ términos).
  * Uso: POST /v1/ingest-ppc  (opcional ?terminos=1 para forzar los términos).
@@ -3577,6 +3641,31 @@ async function calcularAlertas(env, seller, opts) {
         titulo: 'Producto en pérdidas: ' + it.nom,
         detalle: 'Pierde ' + Math.abs(it.net).toFixed(2) + '€ en 30 días (margen ' + it.mg + '%' + (it.ppc ? ', ' + it.ppc.toFixed(2) + '€ de PPC' : '') + '). Sube precio, baja coste o revisa la publicidad.'
       });
+    }
+  } catch (_) {}
+
+  // 5) HIJACKING: cambio de ficha reciente + Buy Box perdida.
+  try {
+    const hace7 = Date.now() - 7 * 86400000;
+    const fichas = await selSafe(env, 'fichas?select=asin,sku,titulo,cambio_fecha', []);
+    let nCambio = 0;
+    for (const f of (fichas || [])) {
+      if (f.cambio_fecha && new Date(f.cambio_fecha).getTime() >= hace7 && nCambio < 10) {
+        nCambio++;
+        A.push({ nivel: 'critico', cat: 'ficha', ic: '🛡️',
+          titulo: 'Posible cambio de ficha: ' + (f.titulo || f.sku || f.asin),
+          detalle: 'El título de este producto ha cambiado esta semana. Comprueba que no sea un hijack o una edición no autorizada.' });
+      }
+    }
+    const bb = await selSafe(env, 'buybox?select=asin,nombre,tengo_buybox,n_ofertas', []);
+    let nBB = 0;
+    for (const b of (bb || [])) {
+      if (b.tengo_buybox === false && (+b.n_ofertas || 0) > 1 && nBB < 10) {
+        nBB++;
+        A.push({ nivel: 'aviso', cat: 'buybox', ic: '🏆',
+          titulo: 'Buy Box perdida: ' + (b.nombre || b.asin),
+          detalle: 'Otro vendedor tiene la Buy Box (' + (b.n_ofertas || 0) + ' ofertas). Revisa tu precio y el estado del producto.' });
+      }
     }
   } catch (_) {}
 
