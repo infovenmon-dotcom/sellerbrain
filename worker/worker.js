@@ -52,7 +52,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v78-dependencia-ppc'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v79-buybox'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -165,7 +165,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -694,6 +694,23 @@ export default {
         const total = +(datos.reduce((a, x) => a + (+x.importe_pendiente || 0), 0)).toFixed(2);
         const uds = datos.reduce((a, x) => a + (+x.uds_pendientes || 0), 0);
         return json({ datos, total, uds }, cors);
+      }
+
+      // --- BUY BOX / competencia por ASIN (lectura). Muestra primero lo problemático. ---
+      if (url.pathname === '/v1/buybox') {
+        const filas = await selSafe(env, 'buybox?order=tengo_buybox.asc,fecha.desc', []);
+        // snapshot: fecha más reciente
+        let actualizado = null;
+        for (const f of (filas || [])) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
+        const conBB = (filas || []).filter(f => f.tengo_buybox).length;
+        return json({ datos: filas || [], actualizado, con_buybox: conBB, total: (filas || []).length }, cors);
+      }
+
+      // --- Ingesta de Buy Box (admin). ?n=15 procesa un lote (los más desactualizados). ---
+      if (url.pathname === '/v1/buybox-ingest') {
+        const n = Math.max(1, Math.min(60, +(url.searchParams.get('n') || 15)));
+        const r = await ingestaBuyBox(env, undefined, n);
+        return json({ ok: true, ...r, nota: 'getItemOffers va limitado; repite para cubrir el resto de ASIN.' }, cors);
       }
 
       // --- Utilidad de configuración: listar perfiles de anunciante (para elegir ADS_PROFILE_ID) ---
@@ -1251,6 +1268,8 @@ export default {
         try { await corregirCierrePPCHora(env); } catch (_) {}
         try { await traerPresupuestosAds(env); } catch (_) {}
       }
+      // A las 05:00 UTC: Buy Box / competencia por ASIN (SP-API Pricing).
+      if (hora === 5) { try { await ingestaBuyBoxTodas(env); } catch (_) {} }
       // A las 07:00 UTC (~09:00 España): alertas proactivas por email (stock bajo,
       // ACoS alto, sobrecostes recuperables). Solo si ALERTAS_EMAIL=1. Digest diario.
       if (hora === 7) { try { await procesarAlertas(env); } catch (_) {} }
@@ -2116,6 +2135,63 @@ async function ingestaVentasTodas(env) {
   try { res.push(await ingestaVentasHoy(env)); } catch (e) { res.push({ seller: 'venmon', error: e.message }); }
   for (const c of await cuentasSpapiActivas(env)) {
     try { res.push(await ingestaVentasHoy(env, c)); } catch (e) { res.push({ seller: c.seller, error: e.message }); }
+  }
+  return res;
+}
+
+/* =====================================================================
+ * BUY BOX / COMPETENCIA por ASIN (SP-API Product Pricing, rol "Pricing").
+ * getItemOffers por ASIN → ¿tengo yo la Buy Box?, precio Buy Box, mi precio,
+ * competidor más barato y nº de ofertas. Se guarda en la tabla `buybox`.
+ * getItemOffers va MUY limitado (~0.5 req/s), por eso se pausa entre llamadas
+ * y las llamadas manuales procesan un lote (los ASIN más desactualizados).
+ * =================================================================== */
+async function ingestaBuyBox(env, ctx, limite) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const mkt = MARKETPLACES.ES;                     // Buy Box del marketplace principal (ES)
+  let cat = [];
+  try { cat = await selSafe(env, 'productos_catalogo?select=sku,asin,nombre&limit=3000', []); } catch (_) {}
+  const seen = {}, asins = [];
+  for (const c of (cat || [])) { const a = (c.asin || '').trim(); if (!a || seen[a]) continue; seen[a] = 1; asins.push({ asin: a, sku: c.sku, nombre: c.nombre }); }
+  // Rota: procesa primero los ASIN que llevan más tiempo sin refrescar.
+  const prev = {};
+  try { for (const r of (await selSafe(env, 'buybox?select=asin,fecha', []))) prev[r.asin] = r.fecha || ''; } catch (_) {}
+  asins.sort((a, b) => (prev[a.asin] || '') < (prev[b.asin] || '') ? -1 : 1);
+  const lote = limite ? asins.slice(0, limite) : asins;
+  const rows = []; let ok = 0, err = 0;
+  for (const it of lote) {
+    try {
+      const j = await spapiCall(env, '/products/pricing/v0/items/' + encodeURIComponent(it.asin) + '/offers?MarketplaceId=' + mkt + '&ItemCondition=New', {}, ctx);
+      const p = (j && j.payload) || {};
+      const sum = p.Summary || {}, offers = p.Offers || [];
+      const bb = (sum.BuyBoxPrices && sum.BuyBoxPrices[0] && sum.BuyBoxPrices[0].LandedPrice) || null;
+      const bbPrecio = bb ? +bb.Amount : null;
+      const moneda = (bb && bb.CurrencyCode) || 'EUR';
+      let miPrecio = null, tengoBB = false, minComp = null;
+      for (const o of offers) {
+        const precio = ((o.ListingPrice && +o.ListingPrice.Amount) || 0) + ((o.Shipping && +o.Shipping.Amount) || 0);
+        if (o.MyOffer) { miPrecio = precio; if (o.IsBuyBoxWinner) tengoBB = true; }
+        else if (precio > 0) { if (minComp == null || precio < minComp) minComp = precio; }
+      }
+      rows.push({
+        seller, asin: it.asin, sku: it.sku || null, nombre: it.nombre || null,
+        tengo_buybox: tengoBB, buybox_precio: bbPrecio, mi_precio: miPrecio,
+        min_competidor: minComp, n_ofertas: sum.TotalOfferCount || offers.length || 0,
+        moneda, fecha: new Date().toISOString()
+      });
+      ok++;
+    } catch (_) { err++; }
+    await sleep(2100);   // rate limit de getItemOffers (~0.5 req/s)
+  }
+  if (rows.length) await upsertSupabase(env, 'buybox', rows);
+  return { seller, procesados: lote.length, ok, err, total_asins: asins.length };
+}
+
+async function ingestaBuyBoxTodas(env) {
+  const res = [];
+  try { res.push(await ingestaBuyBox(env)); } catch (e) { res.push({ seller: 'venmon', error: e.message }); }
+  for (const c of await cuentasSpapiActivas(env)) {
+    try { res.push(await ingestaBuyBox(env, c)); } catch (e) { res.push({ seller: c.seller, error: e.message }); }
   }
   return res;
 }
