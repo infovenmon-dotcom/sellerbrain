@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v93-pedir-resena'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v94-login-admin'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -171,7 +171,17 @@ export default {
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
         const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas';
-        if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
+        if (!ok) {
+          // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
+          // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
+          // un miembro normal, solo los endpoints de lectura (MIEMBRO_OK).
+          const payload = await verificarJWT(env, auth);
+          if (payload) {
+            const admins = String(env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+            if (admins.length && admins.includes(String(payload.email || '').toLowerCase())) ok = true;   // dueño = admin
+            else if (MIEMBRO_OK) ok = true;                                                                 // miembro = solo lectura
+          }
+        }
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
 
@@ -202,7 +212,9 @@ export default {
           await upsertSupabase(env, 'miembros', [{ codigo: m.codigo, email: email }]);
         }
         const token = await firmarJWT(env, { email, plan: m.plan || 'beta' });
-        return json({ ok: true, token, plan: m.plan || 'beta', expira: m.expira || null }, cors);
+        const admins = String(env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+        const esAdmin = admins.length > 0 && admins.includes(email);
+        return json({ ok: true, token, plan: m.plan || 'beta', expira: m.expira || null, admin: esAdmin }, cors);
       }
 
       // --- WEBHOOK de Stripe: al pagar, crea el miembro solo (y le manda el acceso
