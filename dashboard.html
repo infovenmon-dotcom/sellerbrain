@@ -961,9 +961,11 @@ var SB_PROVIDERS = {
           .catch(function(){});
       }
     }catch(e){}
+    window._sesionCaducada=false;
     return fetch(SB_CONFIG.apiBase + '/v1/dashboard', {
       headers: SB_CONFIG.apiKey ? {'Authorization':'Bearer '+SB_CONFIG.apiKey} : {}
     }).then(function(r){
+      if(r.status===401){ window._sesionCaducada=true; throw new Error('API 401'); }
       if(!r.ok) throw new Error('API '+r.status);
       return r.json(); // debe cumplir el mismo contrato que SB_DEMO
     }).catch(function(e){
@@ -2237,18 +2239,26 @@ function aplicarDatos(d){
 }
 // Banner honesto: distingue "conectado sin ventas aún" de "demo" de "falló la API".
 function avisoDatos(){
-  var id='banner-datos', b=document.getElementById(id), msg='';
-  if(window._apiFallo){
+  var id='banner-datos', b=document.getElementById(id), msg='', html='';
+  if(window._sesionCaducada){
+    // La sesión de login caducó: los datos están, solo hay que reautenticar.
+    var portal=(function(){try{return new URL(SB_CONFIG.apiBase).origin;}catch(e){return '';}})();
+    html='🔒 <b>Tu sesión ha caducado.</b> Tus datos están cargados; solo hay que volver a entrar. '+
+      '<a href="portal.html?login=1" style="color:var(--or2);font-weight:700;text-decoration:underline">Volver a entrar</a>'+
+      ' &nbsp;·&nbsp; <span style="color:var(--mu)">o si eres admin, pega tu clave en 🔌 Conexión → «Probar conexión» → «Usar datos en vivo».</span>';
+  } else if(window._apiFallo){
     msg='⚠️ No pude leer tus datos de la cuenta (muestro demo). Revisa tu sesión, o sube tus informes (CSV).';
   } else if(SB_CONFIG.mode==='api' && (!PRODUCTOS||!PRODUCTOS.length)){
     msg='🔌 Conectado a tu cuenta — aún sin ventas cargadas. Se llenará cuando la conexión con Amazon (SP-API) empiece a traer datos. Mientras, sube tus informes (CSV) para verlo ya.';
   }
-  if(!msg){ if(b)b.remove(); return; }
+  if(!msg && !html){ if(b)b.remove(); return; }
   if(!b){ b=document.createElement('div'); b.id=id;
-    b.style.cssText='margin:0 0 12px;padding:10px 14px;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);border-radius:10px;font-size:12px;color:var(--am);line-height:1.5';
     var host=document.getElementById('vista-dash'); if(host)host.insertBefore(b, host.firstChild);
   }
-  b.textContent=msg;
+  // La sesión caducada se pinta en rojo (acción requerida); el resto en ámbar.
+  b.style.cssText='margin:0 0 12px;padding:11px 14px;border-radius:10px;font-size:12.5px;line-height:1.6;'+
+    (html?'background:rgba(232,64,64,.1);border:1px solid rgba(232,64,64,.35);color:#ffb3b3':'background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.3);color:var(--am)');
+  if(html) b.innerHTML=html; else b.textContent=msg;
 }
 cargarDatos().then(aplicarDatos);
 

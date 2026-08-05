@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v87-placement-bg'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v88-sesion-30d'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -3422,7 +3422,7 @@ async function firmarJWT(env, payload) {
   if (!env.SB_JWT_SECRET) return null;
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'HS256', typ: 'JWT' };
-  const body = { ...payload, iat: now, exp: now + 60 * 60 * 24 * 7 }; // 7 días
+  const body = { ...payload, iat: now, exp: now + 60 * 60 * 24 * 30 }; // 30 días
   const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
   const data = enc(header) + '.' + enc(body);
   const key = await crypto.subtle.importKey('raw',
