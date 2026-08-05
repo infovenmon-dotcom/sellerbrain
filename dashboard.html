@@ -156,8 +156,8 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 </head>
 <body>
 <script>
-  // Panel protegido: sin código de acceso válido, al login.
-  if (sessionStorage.getItem('fba_acceso') !== 'ok') { location.replace('portal.html'); }
+  // Panel protegido: sin código de acceso válido, a la entrada (landing).
+  if (sessionStorage.getItem('fba_acceso') !== 'ok') { location.replace('landing.html'); }
 </script>
 <div class="app">
 
@@ -965,7 +965,25 @@ var SB_PROVIDERS = {
     return fetch(SB_CONFIG.apiBase + '/v1/dashboard', {
       headers: SB_CONFIG.apiKey ? {'Authorization':'Bearer '+SB_CONFIG.apiKey} : {}
     }).then(function(r){
-      if(r.status===401){ window._sesionCaducada=true; throw new Error('API 401'); }
+      if(r.status===401){
+        window._sesionCaducada=true;
+        // Como Amazon: si tu sesión de miembro caducó, te llevamos directo a
+        // entrar (email + código). No aplica a admin (usa su clave, no caduca).
+        // Guarda anti-bucle: si acabamos de reintentar, no redirige (muestra aviso).
+        try{
+          var tokM=sessionStorage.getItem('fba_token');
+          var esAdmin=!!localStorage.getItem('sb_api_key');
+          var ultimo=+(sessionStorage.getItem('sb_reauth_ts')||0);
+          var reciente=(Date.now()-ultimo)<90000;
+          if(tokM && !esAdmin && !reciente){
+            sessionStorage.setItem('sb_reauth_ts', Date.now());
+            sessionStorage.removeItem('fba_token');
+            sessionStorage.removeItem('fba_acceso');
+            location.replace('landing.html');
+          }
+        }catch(e){}
+        throw new Error('API 401');
+      }
       if(!r.ok) throw new Error('API '+r.status);
       return r.json(); // debe cumplir el mismo contrato que SB_DEMO
     }).catch(function(e){
@@ -2244,7 +2262,7 @@ function avisoDatos(){
     // La sesión de login caducó: los datos están, solo hay que reautenticar.
     var portal=(function(){try{return new URL(SB_CONFIG.apiBase).origin;}catch(e){return '';}})();
     html='🔒 <b>Tu sesión ha caducado.</b> Tus datos están cargados; solo hay que volver a entrar. '+
-      '<a href="portal.html?login=1" style="color:var(--or2);font-weight:700;text-decoration:underline">Volver a entrar</a>'+
+      '<a href="landing.html" style="color:var(--or2);font-weight:700;text-decoration:underline">Volver a entrar</a>'+
       ' &nbsp;·&nbsp; <span style="color:var(--mu)">o si eres admin, pega tu clave en 🔌 Conexión → «Probar conexión» → «Usar datos en vivo».</span>';
   } else if(window._apiFallo){
     msg='⚠️ No pude leer tus datos de la cuenta (muestro demo). Revisa tu sesión, o sube tus informes (CSV).';
