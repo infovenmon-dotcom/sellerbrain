@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v88-sesion-30d'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v89-buybox-sku'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -703,7 +703,7 @@ export default {
 
       // --- BUY BOX / competencia por ASIN (lectura). Muestra primero lo problemático. ---
       if (url.pathname === '/v1/buybox') {
-        const filas = await selSafe(env, 'buybox?order=tengo_buybox.asc,fecha.desc', []);
+        const filas = await selSafe(env, 'buybox?order=tengo_buybox.asc.nullslast,fecha.desc', []);
         // snapshot: fecha más reciente
         let actualizado = null;
         for (const f of (filas || [])) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
@@ -715,7 +715,7 @@ export default {
       if (url.pathname === '/v1/buybox-ingest') {
         const n = Math.max(1, Math.min(60, +(url.searchParams.get('n') || 15)));
         const r = await ingestaBuyBox(env, undefined, n);
-        return json({ ok: true, ...r, nota: 'getItemOffers va limitado; repite para cubrir el resto de ASIN.' }, cors);
+        return json({ ok: true, ...r, nota: 'getListingOffers va limitado; repite para cubrir el resto de SKU.' }, cors);
       }
 
       // --- VIGILANCIA DE FICHA (hijacking): título por ASIN + cambios + Buy Box. Lectura. ---
@@ -2487,51 +2487,83 @@ async function ingestaVentasTodas(env) {
 }
 
 /* =====================================================================
- * BUY BOX / COMPETENCIA por ASIN (SP-API Product Pricing, rol "Pricing").
- * getItemOffers por ASIN → ¿tengo yo la Buy Box?, precio Buy Box, mi precio,
- * competidor más barato y nº de ofertas. Se guarda en la tabla `buybox`.
- * getItemOffers va MUY limitado (~0.5 req/s), por eso se pausa entre llamadas
- * y las llamadas manuales procesan un lote (los ASIN más desactualizados).
+ * BUY BOX / COMPETENCIA por SKU (SP-API Product Pricing, rol "Pricing").
+ * IMPORTANTE: usamos getListingOffers (por TU SKU), NO getItemOffers (por ASIN).
+ * getItemOffers anonimiza las ofertas y NO marca de forma fiable cuál es la tuya
+ * (MyOffer), lo que hacía que TODO saliera "no tengo la Buy Box" y que tu propio
+ * precio se contara como "competidor". Consultando por TU SKU, Amazon sí marca tu
+ * oferta como propia (MyOffer=true) y sabemos si la Buy Box es tuya. Además, si
+ * eres el único vendedor del listing, la Buy Box es tuya y NO hay competidor.
+ * getListingOffers va limitado, por eso se pausa entre llamadas y las manuales
+ * procesan un lote (los SKU más desactualizados). Se guarda en la tabla `buybox`.
  * =================================================================== */
 async function ingestaBuyBox(env, ctx, limite) {
   const seller = (ctx && ctx.seller) || 'venmon';
   const mkt = MARKETPLACES.ES;                     // Buy Box del marketplace principal (ES)
   let cat = [];
   try { cat = await selSafe(env, 'productos_catalogo?select=sku,asin,nombre&limit=3000', []); } catch (_) {}
-  const seen = {}, asins = [];
-  for (const c of (cat || [])) { const a = (c.asin || '').trim(); if (!a || seen[a]) continue; seen[a] = 1; asins.push({ asin: a, sku: c.sku, nombre: c.nombre }); }
-  // Rota: procesa primero los ASIN que llevan más tiempo sin refrescar.
+  const seen = {}, items = [];
+  // Necesitamos SKU para consultar por listing. Si un ASIN no tiene SKU, se omite.
+  for (const c of (cat || [])) {
+    const a = (c.asin || '').trim(), s = (c.sku || '').trim();
+    if (!s || seen[s]) continue; seen[s] = 1;
+    items.push({ asin: a, sku: s, nombre: c.nombre });
+  }
+  // Rota: procesa primero los SKU que llevan más tiempo sin refrescar.
   const prev = {};
-  try { for (const r of (await selSafe(env, 'buybox?select=asin,fecha', []))) prev[r.asin] = r.fecha || ''; } catch (_) {}
-  asins.sort((a, b) => (prev[a.asin] || '') < (prev[b.asin] || '') ? -1 : 1);
-  const lote = limite ? asins.slice(0, limite) : asins;
+  try { for (const r of (await selSafe(env, 'buybox?select=sku,fecha', []))) prev[r.sku] = r.fecha || ''; } catch (_) {}
+  items.sort((a, b) => (prev[a.sku] || '') < (prev[b.sku] || '') ? -1 : 1);
+  const lote = limite ? items.slice(0, limite) : items;
   const rows = []; let ok = 0, err = 0;
   for (const it of lote) {
     try {
-      const j = await spapiCall(env, '/products/pricing/v0/items/' + encodeURIComponent(it.asin) + '/offers?MarketplaceId=' + mkt + '&ItemCondition=New', {}, ctx);
+      const j = await spapiCall(env, '/products/pricing/v0/listings/' + encodeURIComponent(it.sku) + '/offers?MarketplaceId=' + mkt + '&ItemCondition=New', {}, ctx);
       const p = (j && j.payload) || {};
       const sum = p.Summary || {}, offers = p.Offers || [];
       const bb = (sum.BuyBoxPrices && sum.BuyBoxPrices[0] && sum.BuyBoxPrices[0].LandedPrice) || null;
       const bbPrecio = bb ? +bb.Amount : null;
       const moneda = (bb && bb.CurrencyCode) || 'EUR';
-      let miPrecio = null, tengoBB = false, minComp = null;
+      const totalOfertas = sum.TotalOfferCount || offers.length || 0;
+
+      let miPrecio = null, minComp = null, tengoBB = null, vistaMia = false, gananBB = false;
       for (const o of offers) {
         const precio = ((o.ListingPrice && +o.ListingPrice.Amount) || 0) + ((o.Shipping && +o.Shipping.Amount) || 0);
-        if (o.MyOffer) { miPrecio = precio; if (o.IsBuyBoxWinner) tengoBB = true; }
-        else if (precio > 0) { if (minComp == null || precio < minComp) minComp = precio; }
+        if (o.MyOffer) {                             // esta oferta es MÍA (fiable por consultar por SKU)
+          vistaMia = true; miPrecio = precio;
+          if (o.IsBuyBoxWinner) gananBB = true;
+        } else if (precio > 0) {                     // oferta de otro vendedor
+          if (minComp == null || precio < minComp) minComp = precio;
+        }
       }
+
+      // ¿Tengo yo la Buy Box?
+      if (gananBB) {
+        tengoBB = true;                              // mi oferta es la ganadora → sí
+      } else if (totalOfertas <= 1) {
+        tengoBB = true;                              // soy el único vendedor → la Buy Box es mía
+      } else if (vistaMia) {
+        tengoBB = false;                             // estoy en el listing pero no gano la Buy Box → la he perdido
+      } else {
+        tengoBB = null;                              // no pude identificar mi oferta → sin dato (no marcar "perdida")
+      }
+
+      // Si soy el único vendedor no hay "competidor": mi propio precio NO cuenta.
+      if (totalOfertas <= 1) minComp = null;
+      // Si no reconocí mi oferta pero solo hay 1, ese precio es el mío.
+      if (miPrecio == null && totalOfertas <= 1 && bbPrecio != null) miPrecio = bbPrecio;
+
       rows.push({
-        seller, asin: it.asin, sku: it.sku || null, nombre: it.nombre || null,
+        seller, asin: it.asin || null, sku: it.sku, nombre: it.nombre || null,
         tengo_buybox: tengoBB, buybox_precio: bbPrecio, mi_precio: miPrecio,
-        min_competidor: minComp, n_ofertas: sum.TotalOfferCount || offers.length || 0,
+        min_competidor: minComp, n_ofertas: totalOfertas,
         moneda, fecha: new Date().toISOString()
       });
       ok++;
     } catch (_) { err++; }
-    await sleep(2100);   // rate limit de getItemOffers (~0.5 req/s)
+    await sleep(2100);   // rate limit de getListingOffers
   }
   if (rows.length) await upsertSupabase(env, 'buybox', rows);
-  return { seller, procesados: lote.length, ok, err, total_asins: asins.length };
+  return { seller, procesados: lote.length, ok, err, total_skus: items.length };
 }
 
 async function ingestaBuyBoxTodas(env) {

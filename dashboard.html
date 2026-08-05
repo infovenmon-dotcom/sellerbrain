@@ -1417,15 +1417,22 @@ function renderBuyBox(d){
   if(act) act.textContent = (d&&d.actualizado) ? ('actualizado '+fechaHora(d.actualizado)) : '';
   if(!datos.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún no hay datos de Buy Box. Se cargan solos a diario (o desde Conexión → «🏆 Cargar Buy Box»).</div>'; return; }
   var conBB=d.con_buybox||0, tot=d.total||datos.length;
-  var h='<div style="font-size:13px;margin-bottom:10px">Tienes la Buy Box en <b style="color:var(--gn)">'+conBB+'</b> de <b>'+tot+'</b> productos.'+(conBB<tot?(' <b style="color:#ff8a8a">'+(tot-conBB)+'</b> por recuperar.'):' 🎉')+'</div>';
+  var perdidas=datos.filter(function(x){return x.tengo_buybox===false;}).length;
+  var solo=datos.filter(function(x){return (x.n_ofertas||0)<=1;}).length;
+  var h='<div style="font-size:13px;margin-bottom:6px">Tienes la Buy Box en <b style="color:var(--gn)">'+conBB+'</b> de <b>'+tot+'</b> productos.'+(perdidas>0?(' <b style="color:#ff8a8a">'+perdidas+'</b> perdida'+(perdidas>1?'s':'')+' (otro vendedor te la quita).'):' 🎉')+'</div>'+
+     '<div style="font-size:11.5px;color:var(--mu);margin-bottom:10px">'+(solo>0?('En <b>'+solo+'</b> eres el único vendedor: la Buy Box es tuya y no hay competidor.'):'')+'</div>';
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
      '<thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">Producto</th><th style="padding:6px 8px">Buy Box</th><th style="padding:6px 8px">Tu precio</th><th style="padding:6px 8px">Buy Box €</th><th style="padding:6px 8px">Competidor +barato</th><th style="padding:6px 8px">Ofertas</th></tr></thead><tbody>';
   datos.forEach(function(x){
-    var m=moneda2(x.moneda||'EUR'), tengo=x.tengo_buybox;
-    var badge=tengo?'<span style="color:var(--gn);font-weight:700">✓ Tuya</span>':'<span style="color:#ff8a8a;font-weight:700">✕ No</span>';
+    var m=moneda2(x.moneda||'EUR'), tengo=x.tengo_buybox, soloYo=(x.n_ofertas||0)<=1;
+    var badge = tengo===true
+        ? '<span style="color:var(--gn);font-weight:700">✓ Tuya</span>'+(soloYo?'<span style="color:var(--mu);font-size:10px"> · único vendedor</span>':'')
+        : (tengo===false
+            ? '<span style="color:#ff8a8a;font-weight:700">✕ Perdida</span>'
+            : '<span style="color:var(--mu)" title="No se pudo identificar tu oferta en este listing">—</span>');
     var alerta='';
-    if(!tengo && x.min_competidor!=null && x.mi_precio!=null && x.min_competidor < x.mi_precio) alerta=' <span style="color:var(--am);font-size:10px">· te ganan por '+f(x.mi_precio-x.min_competidor,2)+m+'</span>';
-    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(tengo?'':';background:rgba(232,64,64,.04)')+'">'+
+    if(tengo===false && x.min_competidor!=null && x.mi_precio!=null && x.min_competidor < x.mi_precio) alerta=' <span style="color:var(--am);font-size:10px">· te ganan por '+f(x.mi_precio-x.min_competidor,2)+m+'</span>';
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(tengo===false?';background:rgba(232,64,64,.04)':'')+'">'+
        '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis" title="'+(x.asin||'')+'"><span style="font-weight:600">'+(x.nombre||x.sku||x.asin)+'</span></td>'+
        '<td style="padding:7px 8px;white-space:nowrap">'+badge+alerta+'</td>'+
        '<td style="padding:7px 8px;white-space:nowrap">'+(x.mi_precio!=null?f(x.mi_precio,2)+m:'—')+'</td>'+
