@@ -3424,6 +3424,7 @@ function ppcAccionCampana(x){
 // Traduce la respuesta de un cambio en Ads a un mensaje claro según la causa.
 function msgErrAds(d){
   if(!d) return '⚠️ Amazon no respondió. Reintenta en unos segundos.';
+  if(d.error==='no_autorizado') return '🔑 Falta la CLAVE ADMIN.\n\nPausar/encender/ajustar campañas es una acción de administrador. Ve a 🔌 Conexión → «Clave privada (SB_API_KEY)», pega tu clave maestra y pulsa Probar conexión. Con tu login normal (miembro) solo puedes VER, no cambiar campañas en Amazon.';
   if(d.error==='ads_write_off') return '⚠️ La ejecución de cambios está DESACTIVADA por seguridad.\n\nPara activarla: Cloudflare → tu Worker → Settings → Variables → añade ADS_WRITE = 1 y guarda. Luego reintenta.';
   if(d.status===401||d.status===403) return '⛔ Amazon rechazó el cambio por PERMISOS (código '+d.status+').\n\nTu conexión de Amazon Ads no tiene permiso de ESCRITURA (gestión de campañas), solo de lectura. Hay que volver a conectar Amazon Ads concediendo «gestión de campañas», o usar un perfil con rol de administrador.\n\nDetalle de Amazon:\n'+JSON.stringify(d.detalle||{}).slice(0,300);
   return 'No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400);
@@ -3487,7 +3488,7 @@ function confirmarNegativo(){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d && d.aplicado){ msg.style.color='var(--gn)'; msg.textContent='✅ Negativizado en Amazon.'; setTimeout(cerrarNeg,1400); }
-      else { msg.style.color='var(--am)'; msg.textContent=(d&&d.error==='ads_write_off')?'⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.':((d&&(d.status===401||d.status===403))?'⛔ Amazon: sin permiso de escritura en Ads. Reconecta Ads con «gestión de campañas».':'No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300)); }
+      else { msg.style.color='var(--am)'; msg.textContent=(d&&d.error==='no_autorizado')?'🔑 Falta la clave admin (🔌 Conexión → SB_API_KEY).':((d&&d.error==='ads_write_off')?'⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.':((d&&(d.status===401||d.status===403))?'⛔ Amazon: sin permiso de escritura en Ads. Reconecta Ads con «gestión de campañas».':'No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300))); }
       btn.disabled=false; btn.style.opacity=1;
     })
     .catch(function(e){ msg.style.color='var(--am)'; msg.textContent='Error: '+e.message; btn.disabled=false; btn.style.opacity=1; });
