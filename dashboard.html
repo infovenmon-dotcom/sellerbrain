@@ -3326,6 +3326,7 @@ async function cargarFichasAdmin(){
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 // Lanza la comprobación de listings por país (en segundo plano).
 async function comprobarListingsAdmin(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3339,10 +3340,16 @@ async function comprobarListingsAdmin(){
     if(d.falta_sellerid){
       box.innerHTML='<div style="color:var(--am)">⚠️ Falta el <b>Merchant Token</b>.</div>'+
         '<div style="color:var(--mu);margin-top:4px">Ponlo en Cloudflare como <b>SPAPI_SELLER_ID</b> (Seller Central → Ajustes → Información de la cuenta → Merchant Token).</div>';
+    } else if(d.sin_catalogo){
+      box.innerHTML='<div style="color:var(--am)">⚠️ No hay productos en el catálogo aún.</div><div style="color:var(--mu);margin-top:4px">Lanza primero «🚀 Lanzar ingesta» para tener SKUs, y reintenta.</div>';
+    } else if(d.rol_falta){
+      box.innerHTML='<div style="color:var(--am)">⛔ Amazon rechaza por <b>permisos</b> (rol de listings).</div><div style="color:var(--mu);margin-top:4px">Tu app necesita el rol de gestión de inventario/listings, o revisa que el <b>Merchant Token</b> sea el correcto.<br><span style="opacity:.7">'+esc(String(d.detalle||'').slice(0,160))+'</span></div>';
+    } else if(d.sin_tabla){
+      box.innerHTML='<div style="color:var(--am)">⚠️ Falta la tabla en la base de datos.</div><div style="color:var(--mu);margin-top:4px">Ejecuta <b>sql/listings-pais.sql</b> en Supabase y reintenta.</div>';
     } else if(d.lanzado){
-      box.innerHTML='<div style="color:var(--gn)">✅ Comprobando en segundo plano. Ábrelo en «🌍 Listings por país» en ~1 min. Pulsa otra vez para cubrir más productos.</div>';
+      box.innerHTML='<div style="color:var(--gn)">✅ Prueba OK ('+esc(d.sku||'')+' → '+esc(d.estado_ejemplo||'')+'). Comprobando el resto en segundo plano. Ábrelo en «🌍 Listings por país» en ~1 min y pulsa de nuevo para cubrir más.</div>';
     } else {
-      box.innerHTML='<span style="color:var(--rd)">'+(d.error||'No se pudo lanzar')+'</span>';
+      box.innerHTML='<div style="color:var(--rd)">'+esc(d.error||'No se pudo lanzar')+'</div>'+(d.nota?'<div style="color:var(--mu);margin-top:4px">'+esc(d.nota)+'</div>':'');
     }
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v97-puja-sugerida'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v98-listings-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -735,13 +735,29 @@ export default {
         return json({ datos, resumen: Object.values(resumen), paises: LISTINGS_MKTS, actualizado, problemas }, cors);
       }
 
-      // --- Ingesta de listings por país (admin). En segundo plano (tarda). ?lote=N ---
+      // --- Ingesta de listings por país (admin). Hace una PRUEBA en directo (1 SKU)
+      //     para diagnosticar, y si va bien lanza el resto en segundo plano. ?lote=N ---
       if (url.pathname === '/v1/listings-ingest') {
         if (!(env.SPAPI_SELLER_ID)) return json({ ok: false, falta_sellerid: true,
           nota: 'Falta el Merchant Token. Ponlo en Cloudflare como SPAPI_SELLER_ID (Seller Central → Ajustes → Información de la cuenta → Merchant Token).' }, cors);
+        // 1) ¿Hay catálogo?
+        let cat = []; try { cat = await selSafe(env, 'productos_catalogo?select=sku,asin&limit=1', []); } catch (_) {}
+        const sku0 = (cat[0] && cat[0].sku) || '';
+        if (!sku0) return json({ ok: false, sin_catalogo: true, nota: 'No hay productos en el catálogo todavía. Lanza primero la ingesta de ventas/inventario (🚀 Lanzar ingesta) para tener SKUs.' }, cors);
+        // 2) Prueba en directo contra Amazon (1 SKU en ES) para ver si hay permiso.
+        let probe; try { probe = await getListingEstado(env, env.SPAPI_SELLER_ID, sku0, MARKETPLACES.ES, undefined); } catch (e) { probe = { _err: (e.message || '').slice(0, 200) }; }
+        if (probe && probe._rol) return json({ ok: false, rol_falta: true, sku: sku0, detalle: probe._err,
+          nota: 'Amazon rechaza por PERMISOS: tu app necesita el rol de gestión de inventario/listings. Solicítalo en Seller Central → tu app (o revisa que el Merchant Token sea el correcto).' }, cors);
+        if (probe && probe._err) return json({ ok: false, error: probe._err, sku: sku0,
+          nota: 'La Listings API devolvió un error. Suele ser el Merchant Token mal puesto (SPAPI_SELLER_ID) o un SKU que no existe en ES.' }, cors);
+        // 3) ¿Se puede ESCRIBIR en la tabla? (si falla → falta el SQL)
+        try { await upsertSupabase(env, 'listings_pais', [{ seller: 'venmon', sku: sku0, asin: probe.asin || (cat[0] && cat[0].asin) || null, pais: 'ES', estado: probe.estado, motivo: probe.motivo || '', fecha: new Date().toISOString() }]); }
+        catch (e) { return json({ ok: false, sin_tabla: true, error: (e.message || '').slice(0, 200), nota: 'No se pudo guardar. Ejecuta sql/listings-pais.sql en Supabase (la tabla no existe todavía).' }, cors); }
+        // 4) Todo OK → lanza el resto en segundo plano.
         const lote = Math.max(1, Math.min(300, +(url.searchParams.get('lote') || 40)));
         ctx.waitUntil(ingestaListingsPais(env, undefined, { lote }).catch(() => {}));
-        return json({ ok: true, lanzado: true, nota: 'Comprobando listings por país en segundo plano (~1 min por lote). Abre «Listings por país» en un momento.' }, cors);
+        return json({ ok: true, lanzado: true, prueba_ok: true, sku: sku0, estado_ejemplo: probe.estado,
+          nota: 'Prueba correcta. Comprobando el resto en segundo plano (~1 min por lote). Abre «Listings por país» en un momento y pulsa de nuevo para cubrir más.' }, cors);
       }
 
       // --- CERRAR listing en un país (admin + LISTINGS_WRITE + confirmación). DELETE. ---
