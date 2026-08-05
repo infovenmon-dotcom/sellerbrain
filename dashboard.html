@@ -979,7 +979,7 @@ var SB_PROVIDERS = {
             sessionStorage.setItem('sb_reauth_ts', Date.now());
             sessionStorage.removeItem('fba_token');
             sessionStorage.removeItem('fba_acceso');
-            location.replace('landing.html');
+            location.replace('portal.html?login=1');   // directo al formulario de email + código
           }
         }catch(e){}
         throw new Error('API 401');
@@ -2262,7 +2262,7 @@ function avisoDatos(){
     // La sesión de login caducó: los datos están, solo hay que reautenticar.
     var portal=(function(){try{return new URL(SB_CONFIG.apiBase).origin;}catch(e){return '';}})();
     html='🔒 <b>Tu sesión ha caducado.</b> Tus datos están cargados; solo hay que volver a entrar. '+
-      '<a href="landing.html" style="color:var(--or2);font-weight:700;text-decoration:underline">Volver a entrar</a>'+
+      '<a href="portal.html?login=1" style="color:var(--or2);font-weight:700;text-decoration:underline">Volver a entrar</a>'+
       ' &nbsp;·&nbsp; <span style="color:var(--mu)">o si eres admin, pega tu clave en 🔌 Conexión → «Probar conexión» → «Usar datos en vivo».</span>';
   } else if(window._apiFallo){
     msg='⚠️ No pude leer tus datos de la cuenta (muestro demo). Revisa tu sesión, o sube tus informes (CSV).';
