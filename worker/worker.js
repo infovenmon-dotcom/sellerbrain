@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v95-listings-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v96-listings-write'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -742,6 +742,42 @@ export default {
         const lote = Math.max(1, Math.min(300, +(url.searchParams.get('lote') || 40)));
         ctx.waitUntil(ingestaListingsPais(env, undefined, { lote }).catch(() => {}));
         return json({ ok: true, lanzado: true, nota: 'Comprobando listings por país en segundo plano (~1 min por lote). Abre «Listings por país» en un momento.' }, cors);
+      }
+
+      // --- CERRAR listing en un país (admin + LISTINGS_WRITE + confirmación). DELETE. ---
+      if (url.pathname === '/v1/listings/cerrar' && request.method === 'POST') {
+        if (String(env.LISTINGS_WRITE || '') !== '1') return json({ error: 'listings_write_off', nota: 'Escritura de listings desactivada. Pon LISTINGS_WRITE=1 en Cloudflare para permitir cerrar/reabrir.' }, cors, 403);
+        if (!env.SPAPI_SELLER_ID) return json({ error: 'falta_sellerid', nota: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors, 400);
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const sku = String(b.sku || ''), pais = (b.pais || '').toUpperCase();
+        const mkt = MARKETPLACES[pais];
+        if (!sku || !mkt) return json({ error: 'faltan_datos' }, cors, 400);
+        let r; try { r = await listingWrite(env, 'DELETE', env.SPAPI_SELLER_ID, sku, mkt, null, undefined); } catch (e) { r = { ok: false, status: 0, d: { error: e.message } }; }
+        const okAcc = r.ok || r.status === 200 || (r.d && r.d.status === 'ACCEPTED');
+        try { await upsertSupabase(env, 'listings_acciones', [{ seller: 'venmon', sku, pais, accion: 'cerrar', estado: okAcc ? 'ok' : 'error', detalle: JSON.stringify(r.d || {}).slice(0, 400), fecha: new Date().toISOString() }]); } catch (_) {}
+        if (okAcc) { try { await upsertSupabase(env, 'listings_pais', [{ seller: 'venmon', sku, pais, estado: 'inactivo', motivo: 'Cerrado desde SellerBrain', fecha: new Date().toISOString() }]); } catch (_) {} }
+        return json({ ok: okAcc, status: r.status, detalle: r.d }, cors);
+      }
+
+      // --- REABRIR listing en un país (best-effort PATCH). Si Amazon lo rechaza,
+      //     el front ofrece el enlace a Seller Central para reactivarlo a mano. ---
+      if (url.pathname === '/v1/listings/reabrir' && request.method === 'POST') {
+        if (String(env.LISTINGS_WRITE || '') !== '1') return json({ error: 'listings_write_off', nota: 'Escritura de listings desactivada. Pon LISTINGS_WRITE=1 en Cloudflare.' }, cors, 403);
+        if (!env.SPAPI_SELLER_ID) return json({ error: 'falta_sellerid' }, cors, 400);
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const sku = String(b.sku || ''), pais = (b.pais || '').toUpperCase(), asin = String(b.asin || '');
+        const mkt = MARKETPLACES[pais];
+        if (!sku || !mkt) return json({ error: 'faltan_datos' }, cors, 400);
+        // Mejor esfuerzo: re-declarar condición + ASIN sugerido (recrea la oferta en catálogos existentes).
+        const patch = { productType: 'PRODUCT', patches: [
+          { op: 'replace', path: '/attributes/condition_type', value: [{ value: 'new_new', marketplace_id: mkt }] }
+        ] };
+        if (asin) patch.patches.push({ op: 'replace', path: '/attributes/merchant_suggested_asin', value: [{ value: asin, marketplace_id: mkt }] });
+        let r; try { r = await listingWrite(env, 'PATCH', env.SPAPI_SELLER_ID, sku, mkt, patch, undefined); } catch (e) { r = { ok: false, status: 0, d: { error: e.message } }; }
+        const okAcc = r.ok || (r.d && r.d.status === 'ACCEPTED');
+        try { await upsertSupabase(env, 'listings_acciones', [{ seller: 'venmon', sku, pais, accion: 'reabrir', estado: okAcc ? 'ok' : 'error', detalle: JSON.stringify(r.d || {}).slice(0, 400), fecha: new Date().toISOString() }]); } catch (_) {}
+        return json({ ok: okAcc, status: r.status, detalle: r.d,
+          seller_central: 'https://sellercentral.amazon.es/inventory' }, cors);
       }
 
       // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
@@ -2048,6 +2084,21 @@ async function ingestaListingsPais(env, ctx, opts) {
   if (rows.length) await upsertSupabase(env, 'listings_pais', rows);
   if (rolFalta) return { ok: false, rol_falta: true, guardados: rows.length };
   return { ok: true, skus: lote.length, guardados: rows.length, ok_calls: ok, err };
+}
+
+// Escritura sobre un listing (Listings Items API). method DELETE = cerrar; PATCH = reabrir.
+// Requiere el rol de gestión de listings en la app; si falta, Amazon responde 403.
+async function listingWrite(env, method, sellerId, sku, mkt, body, ctx) {
+  const token = await lwaToken(env, 'spapi', ctx);
+  const path = '/listings/2021-08-01/items/' + encodeURIComponent(sellerId) + '/' + encodeURIComponent(sku) +
+    '?marketplaceIds=' + encodeURIComponent(mkt);
+  const r = await fetch(SPAPI_HOST + path, {
+    method,
+    headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  let d = null; try { d = await r.json(); } catch (_) {}
+  return { status: r.status, ok: r.ok, d };
 }
 
 async function traerInventarioFBA(env, marketplaceId, ctx) {

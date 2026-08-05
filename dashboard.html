@@ -822,7 +822,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <span id="listings-act" style="font-size:11px;color:var(--mu)"></span>
   </div>
   <div class="card">
-    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Estado de cada producto en cada país: <b style="color:var(--gn)">activo</b>, <b style="color:#ff8a8a">inactivo</b> (con el motivo de Amazon) o <b style="color:var(--mu2)">no publicado</b>. Se actualiza a diario (Listings API). Primero se muestran los que tienen algún problema.</div>
+    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Estado de cada producto en cada país: <b style="color:var(--gn)">activo</b>, <b style="color:#ff8a8a">inactivo</b> (con el motivo de Amazon) o <b style="color:var(--mu2)">no publicado</b>. Se actualiza a diario (Listings API). Primero se muestran los que tienen algún problema.<br><span style="color:var(--mu2)">Como admin, pulsa una celda <b style="color:var(--gn)">✓</b> para <b>cerrar</b> ese listing en ese país, o una <b style="color:#ff8a8a">✕</b> para intentar <b>reabrirlo</b> (requiere LISTINGS_WRITE=1 y el rol de listings).</span></div>
     <div id="listings-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
   </div>
 </div>
@@ -1441,15 +1441,52 @@ function cargarListings(){
     .then(function(d){ renderListings(d); })
     .catch(function(){ body.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
-function _estCell(e){
-  if(!e) return '<span style="color:var(--mu)" title="No publicado en este país">—</span>';
-  if(e.estado==='activo') return '<span style="color:var(--gn);font-weight:700">✓</span>';
-  if(e.estado==='inactivo') return '<span style="color:#ff8a8a;font-weight:700" title="'+(String(e.motivo||'Inactivo').replace(/"/g,"&quot;"))+'">✕</span>';
-  return '<span style="color:var(--mu)" title="No publicado en este país">—</span>';
+function _estCell(e,sku,pais,asin,esAdmin){
+  var skuE=encodeURIComponent(sku||''), asinE=encodeURIComponent(asin||'');
+  if(!e || e.estado==='no_publicado') return '<span style="color:var(--mu)" title="No publicado en este país">—</span>';
+  if(e.estado==='activo'){
+    if(esAdmin) return '<button class="acc-cp" title="Cerrar este listing en '+pais+'" onclick="cerrarListingAdmin(\''+skuE+'\',\''+pais+'\')" style="color:var(--gn);border-color:rgba(46,204,113,.3)">✓</button>';
+    return '<span style="color:var(--gn);font-weight:700">✓</span>';
+  }
+  if(e.estado==='inactivo'){
+    var mot=String(e.motivo||'Inactivo').replace(/"/g,'&quot;');
+    if(esAdmin) return '<button class="acc-cp" title="'+mot+' · click para reabrir" onclick="reabrirListingAdmin(\''+skuE+'\',\''+pais+'\',\''+asinE+'\')" style="color:#ff8a8a;border-color:rgba(232,64,64,.3)">✕</button>';
+    return '<span style="color:#ff8a8a;font-weight:700" title="'+mot+'">✕</span>';
+  }
+  return '<span style="color:var(--mu)">—</span>';
+}
+function cerrarListingAdmin(skuE,pais){
+  var sku=decodeURIComponent(skuE||'');
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Necesitas admin (🔌 Conexión → clave, o entra con tu login de admin).'); return; }
+  var conf=prompt('CERRAR el listing en '+pais+':\n\n«'+sku+'»\n\nDejará de venderse en ese país. Esto cambia tu cuenta REAL de Amazon.\n\nEscribe '+pais+' para confirmar:');
+  if((conf||'').trim().toUpperCase()!==pais) return;
+  fetch(SB_CONFIG.apiBase+'/v1/listings/cerrar',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({sku:sku,pais:pais})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error==='listings_write_off'){ alert('⚠️ Escritura de listings DESACTIVADA. Pon LISTINGS_WRITE=1 en Cloudflare (Worker → Variables).'); return; }
+      if(d.error==='no_autorizado'){ alert('🔑 Falta la clave admin (o entra con tu login de admin).'); return; }
+      if(d.error==='falta_sellerid'){ alert('⚠️ Falta el Merchant Token (SPAPI_SELLER_ID) en Cloudflare.'); return; }
+      if(d.ok){ alert('✅ Listing cerrado en '+pais+':\n«'+sku+'»'); cargarListings(); }
+      else { alert('⛔ Amazon no pudo cerrarlo'+((d.detalle&&(d.status===401||d.status===403))?' (permiso: tu app necesita el rol de gestión de listings).':'.')+'\n\n'+JSON.stringify(d.detalle||d).slice(0,300)); }
+    }).catch(function(e){ alert('Error: '+e.message); });
+}
+function reabrirListingAdmin(skuE,pais,asinE){
+  var sku=decodeURIComponent(skuE||''), asin=decodeURIComponent(asinE||'');
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Necesitas admin (🔌 Conexión → clave, o entra con tu login de admin).'); return; }
+  if(!confirm('Intentar REABRIR «'+sku+'» en '+pais+'?\n\nSi Amazon no lo permite automáticamente, te doy el enlace a Seller Central para hacerlo a mano.')) return;
+  fetch(SB_CONFIG.apiBase+'/v1/listings/reabrir',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({sku:sku,pais:pais,asin:asin})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.error==='listings_write_off'){ alert('⚠️ Escritura de listings DESACTIVADA. Pon LISTINGS_WRITE=1 en Cloudflare.'); return; }
+      if(d.error==='no_autorizado'){ alert('🔑 Falta la clave admin (o entra con tu login de admin).'); return; }
+      if(d.ok){ alert('✅ Solicitud de reapertura enviada para '+pais+'. Puede tardar unos minutos en reflejarse.'); cargarListings(); }
+      else { if(confirm('Amazon no pudo reabrirlo automáticamente (a veces hace falta hacerlo a mano). ¿Abrir Seller Central para reactivarlo?')) window.open((d&&d.seller_central)||'https://sellercentral.amazon.es/inventory','_blank'); }
+    }).catch(function(e){ alert('Error: '+e.message); });
 }
 function renderListings(d){
   var body=document.getElementById('listings-body'), act=document.getElementById('listings-act');
   var datos=(d&&d.datos)||[], paises=(d&&d.paises)||['ES','FR','IT','DE','BE'];
+  var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
   if(act) act.textContent=(d&&d.actualizado)?('actualizado '+fechaHora(d.actualizado)):'';
   if(!datos.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún no hay datos. Se comprueban a diario (o desde 🔌 Conexión → «🌍 Comprobar listings»). Necesita el Merchant Token puesto en Cloudflare.</div>'; return; }
   // Pivot por SKU
@@ -1471,7 +1508,7 @@ function renderListings(d){
   filas.forEach(function(f){
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(f._prob?';background:rgba(232,64,64,.04)':'')+'">'+
        '<td style="padding:7px 8px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+String(f.nombre||f.sku).replace(/"/g,"&quot;")+'"><b>'+String(f.nombre||f.sku).replace(/</g,'&lt;').slice(0,70)+'</b></td>';
-    paises.forEach(function(p){ h+='<td style="padding:7px 8px;text-align:center">'+_estCell(f.p[p])+'</td>'; });
+    paises.forEach(function(p){ h+='<td style="padding:7px 8px;text-align:center">'+_estCell(f.p[p],f.sku,p,f.asin,esAdmin)+'</td>'; });
     h+='</tr>';
   });
   h+='</tbody></table></div>';
