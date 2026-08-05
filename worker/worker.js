@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v91-reembolsos-cliente'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v92-buybox-horario'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1533,8 +1533,11 @@ export default {
       }
       // A las 02:00 UTC: vigilancia de ficha (título/imagen por ASIN → hijacking).
       if (hora === 2) { try { await ingestaFichasTodas(env); } catch (_) {} }
-      // A las 05:00 UTC: Buy Box / competencia por ASIN (SP-API Pricing).
-      if (hora === 5) { try { await ingestaBuyBoxTodas(env); } catch (_) {} }
+      // Buy Box / competencia por SKU (SP-API Pricing): AUTOMÁTICO CADA HORA, por
+      // lotes rotando por antigüedad (los más desactualizados primero). getListingOffers
+      // va limitado (~1 cada 2s), así que se hace por tandas: el catálogo entero se
+      // refresca solo en unas pocas horas, sin pulsar ningún botón. Como el PPC por horas.
+      try { await ingestaBuyBoxLoteTodas(env, 40); } catch (_) {}
       // A las 06:00 UTC: placement (ACoS por ubicación del anuncio, Ads API).
       if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} try { await ingestaKeywords(env); } catch (_) {} }
       // Lunes 06:00 UTC: Search Query Performance (Brand Analytics, semanal).
@@ -2715,6 +2718,17 @@ async function ingestaBuyBoxTodas(env) {
     try { res.push(await ingestaBuyBox(env, c)); } catch (e) { res.push({ seller: c.seller, error: e.message }); }
   }
   return res;
+}
+
+// Igual que ingestaBuyBoxTodas pero por LOTE (los más desactualizados primero),
+// para el cron horario: refresca un trozo cada hora sin bloquear ni gastar el
+// rate limit de golpe. Rotando por antigüedad, el catálogo entero se cubre solo
+// en unas pocas horas — automático, sin pulsar ningún botón.
+async function ingestaBuyBoxLoteTodas(env, lote) {
+  try { await ingestaBuyBox(env, undefined, lote); } catch (_) {}
+  for (const c of await cuentasSpapiActivas(env)) {
+    try { await ingestaBuyBox(env, c, lote); } catch (_) {}
+  }
 }
 
 /* =====================================================================

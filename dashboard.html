@@ -276,7 +276,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 
       <div style="margin-top:12px">
         <button class="chip" id="btn-buybox" onclick="cargarBuyBoxAdmin()">🏆 Cargar Buy Box (lote de ASIN)</button>
-        <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae el estado de la Buy Box por ASIN (SP-API Pricing). Va limitado; púlsalo varias veces para cubrir todo el catálogo. ~30s por lote.</span>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Se actualiza <b>sola cada hora</b> (por tandas). Este botón es <b>opcional</b>: solo para forzar un refresco ahora mismo. ~30s por lote.</span>
         <div id="cx-buybox-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
 
@@ -1421,7 +1421,7 @@ function renderBuyBox(d){
   var body=document.getElementById('buybox-body'), act=document.getElementById('buybox-act');
   var datos=(d&&d.datos)||[];
   if(act) act.textContent = (d&&d.actualizado) ? ('actualizado '+fechaHora(d.actualizado)) : '';
-  if(!datos.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún no hay datos de Buy Box. Se cargan solos a diario (o desde Conexión → «🏆 Cargar Buy Box»).</div>'; return; }
+  if(!datos.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún no hay datos de Buy Box. Se cargan <b>solos cada hora</b> — si acabas de conectar, dales un rato para completarse.</div>'; return; }
   var conBB=d.con_buybox||0, tot=d.total||datos.length;
   var perdidas=datos.filter(function(x){return x.tengo_buybox===false;}).length;
   var solo=datos.filter(function(x){return (x.n_ofertas||0)<=1;}).length;
