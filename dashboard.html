@@ -455,11 +455,16 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       </div>
 
       <div class="card">
-        <div class="ch" style="justify-content:space-between;align-items:center">
+        <div class="ch" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <h2><span class="ci">🎯</span> Keywords y pujas</h2>
-          <input id="kw-buscar" placeholder="Buscar keyword…" oninput="renderKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 9px;width:170px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:11px;color:var(--mu)">ACoS objetivo</label>
+            <input id="kw-acos" type="number" min="1" max="100" step="1" oninput="guardarAcosObj(this.value)" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 7px;width:56px">
+            <span style="font-size:11px;color:var(--mu)">%</span>
+            <input id="kw-buscar" placeholder="Buscar keyword…" oninput="renderKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 9px;width:150px">
+          </div>
         </div>
-        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Tus palabras clave con su <b>puja actual</b>. Con clave admin puedes <b>cambiar la puja</b> directamente en Amazon (✏️). La decisión de subir/bajar sale del análisis de términos y del ACoS objetivo de arriba.</div>
+        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Tus palabras clave con su rendimiento (30 días) y una <b>puja sugerida</b> para alcanzar tu <b>ACoS objetivo</b>. Con admin, pulsa <b>✏️</b> para poner un valor a mano o <b>«usar»</b> para aplicar la sugerida directamente en Amazon.</div>
         <div id="ppc-keywords"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
       </div>
 
@@ -1309,33 +1314,78 @@ function cargarKeywords(){
     .catch(function(){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">No se pudo cargar ahora mismo.</div>'; });
 }
 function _campNombre(cid){ var c=((PPC_DATA&&PPC_DATA.campanas)||[]).filter(function(x){return String(x.campania_id)===String(cid);})[0]; return c?c.nombre:''; }
+function acosObj(){ var v=parseFloat(localStorage.getItem('sb_kw_acos_obj')); return (v>0&&v<=100)?v:30; }
+function guardarAcosObj(v){ var n=parseFloat(v); if(n>0&&n<=100){ localStorage.setItem('sb_kw_acos_obj',n); renderKeywords(); } }
+// Puja sugerida para alcanzar el ACoS objetivo, a partir del rendimiento (30 días).
+// Devuelve {val, txt, color, motivo} o null si no hay datos suficientes.
+function pujaSugerida(k){
+  var T=acosObj()/100, clics=+k.clics||0, ventas=+k.ventas||0, puja=+k.puja||0;
+  if(k.clics==null) return null;                          // sin datos de rendimiento aún
+  if(clics<5) return {val:null,txt:'pocos datos',color:'var(--mu)',motivo:'Menos de 5 clics: aún no hay señal fiable.'};
+  var sug;
+  if(ventas>0){
+    sug=(ventas/clics)*T;                                 // CPC objetivo = valor por clic × ACoS objetivo
+  } else {
+    sug=Math.max(0.10,(puja||0.30)*0.5);                  // gasta y no vende → bajar fuerte
+  }
+  // Límites de seguridad: suelo 0,10€, y no más de 2× la puja actual de golpe.
+  if(sug<0.10) sug=0.10;
+  if(puja>0 && sug>puja*2) sug=puja*2;
+  sug=Math.round(sug*100)/100;
+  var acosReal=ventas>0?(k.gasto/ventas*100):null;
+  var motivo=ventas>0?('ACoS real '+(acosReal!=null?f(acosReal,0)+'%':'—')+' · objetivo '+acosObj()+'% ('+clics+' clics, '+f(ventas,2)+'€ ventas).'):(clics+' clics y 0 ventas → conviene bajar o negativizar.');
+  var color= puja&&sug>puja*1.05?'var(--gn)':(puja&&sug<puja*0.95?'#ff8a8a':'var(--mu2)');
+  return {val:sug,txt:f(sug,2)+'€',color:color,motivo:motivo};
+}
 function renderKeywords(){
   var el=document.getElementById('ppc-keywords'); if(!el) return;
+  var ai=document.getElementById('kw-acos'); if(ai && !ai.value) ai.value=acosObj();
   var datos=(KW_DATA||[]).slice();
   if(PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
   var q=((document.getElementById('kw-buscar')||{}).value||'').toLowerCase().trim();
   if(q) datos=datos.filter(function(x){return (x.keyword||'').toLowerCase().indexOf(q)>-1;});
   if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">'+(KW_DATA&&KW_DATA.length?'Ningún resultado con ese filtro.':'Aún no hay keywords. Se cargan a diario (o desde 🔌 Conexión → «Cargar keywords»).')+'</div>'; return; }
-  datos.sort(function(a,b){return (+b.puja||0)-(+a.puja||0);});
+  // Orden: primero las que más gastan (donde más importa ajustar la puja).
+  datos.sort(function(a,b){return (+b.gasto||0)-(+a.gasto||0) || (+b.puja||0)-(+a.puja||0);});
   var total=datos.length, tope=200; datos=datos.slice(0,tope);
   var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
-  var h='<div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
-    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D"><th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Concord.</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
+  var h='<div style="overflow-x:auto;max-height:460px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D">'+
+    '<th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Clics</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Sugerida</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
   datos.forEach(function(k){
-    var mt=mtBadge(k.concordancia);
     var nm=encodeURIComponent(k.keyword||'');
-    var edit=esAdmin?('<button class="acc-cp" title="Cambiar la puja en Amazon" onclick="editarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+(+k.puja||0)+')">✏️</button>'):'';
+    var s=pujaSugerida(k);
+    var acosReal=(+k.ventas>0)?(k.gasto/k.ventas*100):null;
+    var acosCol=acosReal==null?'var(--mu)':(acosReal<=acosObj()?'var(--gn)':(acosReal<=acosObj()*1.5?'var(--am)':'#ff8a8a'));
+    var sugCell = s ? (s.val!=null?'<span title="'+String(s.motivo).replace(/"/g,'&quot;')+'" style="font-weight:700;color:'+s.color+'">'+s.txt+'</span>':'<span style="color:var(--mu)" title="'+String(s.motivo).replace(/"/g,'&quot;')+'">'+s.txt+'</span>') : '<span style="color:var(--mu)">—</span>';
+    var edit=esAdmin?('<button class="acc-cp" title="Poner una puja a mano en Amazon" onclick="editarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+(+k.puja||0)+')">✏️</button>'):'';
+    var usar=(esAdmin && s && s.val!=null && Math.abs((s.val)-(+k.puja||0))>=0.01)?(' <button class="acc-cp" style="border-color:rgba(46,230,160,.4);color:var(--or2)" title="Aplicar la puja sugerida ('+s.txt+') en Amazon" onclick="aplicarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+s.val+')">usar</button>'):'';
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
-      '<td style="padding:7px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis"><b>'+(k.keyword||'')+'</b></td>'+
-      '<td style="padding:7px 8px;max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(_campNombre(k.campania_id)||'')+'</td>'+
-      '<td style="padding:7px 8px">'+mt+'</td>'+
+      '<td style="padding:7px 8px;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="'+(k.keyword||'').replace(/"/g,'&quot;')+'"><b>'+(k.keyword||'')+'</b> '+mtBadge(k.concordancia)+'</td>'+
+      '<td style="padding:7px 8px">'+(k.clics!=null?k.clics:'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(k.gasto!=null?f(k.gasto,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(k.ventas!=null?f(k.ventas,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px;color:'+acosCol+'">'+(acosReal!=null?f(acosReal,0)+'%':(k.clics>0?'∞':'—'))+'</td>'+
       '<td style="padding:7px 8px;font-weight:700;color:var(--or2)">'+(k.puja!=null?f(k.puja,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+sugCell+'</td>'+
       '<td style="padding:7px 8px">'+((k.estado||'').toLowerCase()==='enabled'?'<span style="color:var(--gn)">activa</span>':'<span style="color:var(--mu)">'+(k.estado||'').toLowerCase()+'</span>')+'</td>'+
-      (esAdmin?('<td style="padding:7px 8px">'+edit+'</td>'):'')+'</tr>';
+      (esAdmin?('<td style="padding:7px 8px;white-space:nowrap">'+edit+usar+'</td>'):'')+'</tr>';
   });
   h+='</tbody></table></div>';
-  if(total>tope) h+='<div style="font-size:11px;color:var(--mu);margin-top:6px">Mostrando 200 de '+total+' keywords. Usa el buscador para acotar.</div>';
+  if(total>tope) h+='<div style="font-size:11px;color:var(--mu);margin-top:6px">Mostrando 200 de '+total+' keywords (las de más gasto). Usa el buscador para acotar.</div>';
   el.innerHTML=h;
+}
+// Aplica una puja concreta (la sugerida) en Amazon, con confirmación.
+function aplicarPuja(kid,pais,nmEnc,valor){
+  var nombre=decodeURIComponent(nmEnc||'');
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Necesitas admin (🔌 Conexión → clave, o entra con tu login de admin).'); return; }
+  if(!confirm('Aplicar puja '+f(valor,2)+'€ a «'+nombre+'» ('+pais+') en Amazon?\n\nEsto cambia tu campaña REAL.')) return;
+  fetch(SB_CONFIG.apiBase+'/v1/ads/puja',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:pais,keyword_id:kid,puja:valor})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d && d.aplicado){ alert('✅ Puja de «'+nombre+'» cambiada a '+f(valor,2)+'€ en Amazon.'); if(KW_DATA){ for(var i=0;i<KW_DATA.length;i++) if(KW_DATA[i].keyword_id===kid) KW_DATA[i].puja=valor; } renderKeywords(); }
+      else { alert(msgErrAds(d)); }
+    }).catch(function(e){ alert('Error: '+e.message); });
 }
 function editarPuja(kid,pais,nmEnc,pujaAct){
   var nombre=decodeURIComponent(nmEnc||'');

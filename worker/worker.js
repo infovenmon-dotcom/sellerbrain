@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v96-listings-write'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v97-puja-sugerida'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1023,11 +1023,12 @@ export default {
         return json({ datos: filas || [], actualizado }, cors);
       }
 
-      // --- Ingesta de keywords (admin). ?pais=ES opcional. ---
+      // --- Ingesta de keywords + rendimiento (admin). En segundo plano (el informe
+      //     de rendimiento tarda). ?pais=ES opcional. ---
       if (url.pathname === '/v1/ads/keywords-ingest') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
-        const r = await ingestaKeywords(env, { pais });
-        return json({ ok: true, ...r }, cors);
+        ctx.waitUntil(ingestaKeywords(env, { pais }).catch(() => {}));
+        return json({ ok: true, lanzado: true, nota: 'Trayendo keywords y su rendimiento en segundo plano (1-3 min). Ábrelo en «PPC → Keywords» en un momento.' }, cors);
       }
 
       // --- EJECUCIÓN vía Ads API: cambiar la PUJA de una keyword (SP keywords v3).
@@ -2319,6 +2320,51 @@ async function adsInformeTerminos(env, profileId, desde, hasta) {
   throw new Error('timeout · reportId=' + reportId);
 }
 
+// Rendimiento por KEYWORD (clics, gasto, ventas, pedidos) — informe spKeywords,
+// groupBy keyword. Para la puja sugerida. Devuelve mapa keywordId -> métricas.
+async function adsInformeKeywordPerf(env, profileId, desde, hasta) {
+  const token = await lwaToken(env, 'ads');
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+    'Amazon-Advertising-API-Scope': profileId,
+    'Content-Type': 'application/vnd.createasyncreportrequest.v3+json'
+  };
+  const body = {
+    name: 'sb-kwperf-' + desde + '-' + hasta,
+    startDate: desde, endDate: hasta,
+    configuration: {
+      adProduct: 'SPONSORED_PRODUCTS',
+      groupBy: ['keyword'],
+      columns: ['keywordId', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      reportTypeId: 'spKeywords',
+      timeUnit: 'SUMMARY',
+      format: 'GZIP_JSON'
+    }
+  };
+  const reportId = await crearReporteAds(headers, body);
+  for (let i = 0; i < 16; i++) {
+    await sleep(15000);
+    const st = await fetch(ADS_HOST + '/reporting/reports/' + reportId, { headers });
+    const j = await st.json();
+    if (j.status === 'COMPLETED') {
+      const gz = await fetch(j.url);
+      const ds = new DecompressionStream('gzip');
+      const txt = await new Response(new Response(await gz.arrayBuffer()).body.pipeThrough(ds)).text();
+      const arr = JSON.parse(txt);
+      const map = {};
+      for (const r of (arr || [])) {
+        const id = String(r.keywordId || '');
+        if (!id) continue;
+        map[id] = { clics: +r.clicks || 0, gasto: +r.cost || 0, ventas: +r.sales14d || 0, pedidos: +r.purchases14d || 0, impresiones: +r.impressions || 0 };
+      }
+      return map;
+    }
+    if (j.status === 'FAILURE') throw new Error('Ads spKeywords FAILURE');
+  }
+  throw new Error('timeout kwperf · reportId=' + reportId);
+}
+
 /* =====================================================================
  * PLACEMENT (Top of Search vs resto vs páginas de producto) — informe de Ads
  * spCampaigns agrupado por campaignPlacement (David #8). Con esto sabemos dónde
@@ -2420,19 +2466,36 @@ async function ingestaKeywords(env, opts) {
   for (const [pais, profileId] of Object.entries(perfiles)) {
     try {
       const ks = await spKeywordsList(env, profileId);
-      const rows = ks.map(k => ({
-        seller: 'venmon', pais,
-        keyword_id: String(k.keywordId || ''),
-        campania_id: String(k.campaignId || ''),
-        adgroup_id: String(k.adGroupId || ''),
-        keyword: k.keywordText || '',
-        concordancia: k.matchType || '',
-        puja: (k.bid != null ? +k.bid : null),
-        estado: k.state || '',
-        fecha: new Date().toISOString()
-      })).filter(r => r.keyword_id);
+      // Rendimiento por keyword (últimos 30 días) para la puja sugerida. Si el
+      // informe falla o tarda, seguimos igual con la lista de pujas (sin métricas).
+      let perf = {};
+      try {
+        const hoy = new Date(), fin = new Date(hoy.getTime() - 86400000);
+        const ini = new Date(fin.getTime() - 29 * 86400000);
+        perf = await adsInformeKeywordPerf(env, profileId, ini.toISOString().slice(0, 10), fin.toISOString().slice(0, 10));
+      } catch (e) { res.pasos.push({ pais, perf_error: (e.message || '').slice(0, 120) }); }
+      const rows = ks.map(k => {
+        const id = String(k.keywordId || '');
+        const m = perf[id] || {};
+        return {
+          seller: 'venmon', pais,
+          keyword_id: id,
+          campania_id: String(k.campaignId || ''),
+          adgroup_id: String(k.adGroupId || ''),
+          keyword: k.keywordText || '',
+          concordancia: k.matchType || '',
+          puja: (k.bid != null ? +k.bid : null),
+          estado: k.state || '',
+          clics: m.clics != null ? m.clics : null,
+          gasto: m.gasto != null ? +(+m.gasto).toFixed(2) : null,
+          ventas: m.ventas != null ? +(+m.ventas).toFixed(2) : null,
+          pedidos: m.pedidos != null ? m.pedidos : null,
+          impresiones: m.impresiones != null ? m.impresiones : null,
+          fecha: new Date().toISOString()
+        };
+      }).filter(r => r.keyword_id);
       if (rows.length) await upsertSupabase(env, 'ppc_keywords', rows);
-      res.pasos.push({ pais, filas: rows.length });
+      res.pasos.push({ pais, filas: rows.length, con_rendimiento: Object.keys(perf).length });
     } catch (e) { res.pasos.push({ pais, error: e.message }); }
   }
   return res;
