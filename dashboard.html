@@ -174,6 +174,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <a id="nav-sobre" onclick="cambiarVista('sobre')"><span class="ic">🔍</span> Detector sobrecobros FBA</a>
     <a id="nav-buybox" onclick="cambiarVista('buybox')"><span class="ic">🏆</span> Buy Box y competencia</a>
     <a id="nav-fichas" onclick="cambiarVista('fichas')"><span class="ic">🛡️</span> Vigilancia de ficha</a>
+    <a id="nav-listings" onclick="cambiarVista('listings')"><span class="ic">🌍</span> Listings por país</a>
     <a id="nav-fba" onclick="cambiarVista('fba')"><span class="ic">📐</span> Dimensiones y categoría</a>
     <a id="nav-dev" onclick="cambiarVista('dev')"><span class="ic">↩️</span> Devoluciones</a>
     <a id="nav-resenas" onclick="cambiarVista('resenas')"><span class="ic">⭐</span> Pedir reseña</a>
@@ -297,6 +298,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <button class="chip" id="btn-resenas" onclick="pedirResenasAdmin()">⭐ Pedir reseñas (elegibles)</button>
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Solicita la reseña oficial de Amazon a los pedidos que están en ventana. Lo ideal es dejarlo <b>automático</b> (RESENAS_AUTO=1 en Cloudflare); este botón es para lanzarlo a mano.</span>
         <div id="cx-resenas-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <button class="chip" id="btn-listings" onclick="comprobarListingsAdmin()">🌍 Comprobar listings (por país)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Estado de cada producto en cada país (activo/inactivo + motivo). Va por lotes en segundo plano. Requiere el Merchant Token como SPAPI_SELLER_ID en Cloudflare.</span>
+        <div id="cx-listings-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
 
       <div style="margin-top:12px">
@@ -805,6 +812,18 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
   <div class="card">
     <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Para cada producto (por ASIN, marketplace <b>ES</b>): si tienes la <b>Buy Box</b>, tu precio frente al de la Buy Box y al del <b>competidor más barato</b>, y cuántas ofertas hay. Primero se muestran los que <b>NO</b> tienes ganados. Datos de la SP-API de Amazon (Pricing), refrescados a diario.</div>
     <div id="buybox-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+  </div>
+</div>
+
+<!-- ===== VISTA LISTINGS POR PAÍS ===== -->
+<div id="vista-listings" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+    <h2 style="font-family:'Satoshi',sans-serif;font-size:17px;font-weight:800">🌍 Listings por país</h2>
+    <span id="listings-act" style="font-size:11px;color:var(--mu)"></span>
+  </div>
+  <div class="card">
+    <div class="inf" style="font-size:12px;color:var(--mu);margin-bottom:10px;line-height:1.6">Estado de cada producto en cada país: <b style="color:var(--gn)">activo</b>, <b style="color:#ff8a8a">inactivo</b> (con el motivo de Amazon) o <b style="color:var(--mu2)">no publicado</b>. Se actualiza a diario (Listings API). Primero se muestran los que tienen algún problema.</div>
+    <div id="listings-body"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
   </div>
 </div>
 
@@ -1409,6 +1428,62 @@ function renderFichas(d){
       '<td style="padding:7px 8px;white-space:nowrap">'+bb+'</td></tr>';
   });
   h+='</tbody></table></div>';
+  body.innerHTML=h;
+}
+
+// ---- Listings por país ----
+function cargarListings(){
+  var body=document.getElementById('listings-body'); if(!body) return;
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ body.innerHTML='<div style="color:var(--am);font-size:13px">Conecta tu cuenta (🔌 Conexión) para ver el estado de tus listings por país.</div>'; return; }
+  body.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/listings',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ renderListings(d); })
+    .catch(function(){ body.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
+}
+function _estCell(e){
+  if(!e) return '<span style="color:var(--mu)" title="No publicado en este país">—</span>';
+  if(e.estado==='activo') return '<span style="color:var(--gn);font-weight:700">✓</span>';
+  if(e.estado==='inactivo') return '<span style="color:#ff8a8a;font-weight:700" title="'+(String(e.motivo||'Inactivo').replace(/"/g,"&quot;"))+'">✕</span>';
+  return '<span style="color:var(--mu)" title="No publicado en este país">—</span>';
+}
+function renderListings(d){
+  var body=document.getElementById('listings-body'), act=document.getElementById('listings-act');
+  var datos=(d&&d.datos)||[], paises=(d&&d.paises)||['ES','FR','IT','DE','BE'];
+  if(act) act.textContent=(d&&d.actualizado)?('actualizado '+fechaHora(d.actualizado)):'';
+  if(!datos.length){ body.innerHTML='<div style="color:var(--mu);font-size:13px">Aún no hay datos. Se comprueban a diario (o desde 🔌 Conexión → «🌍 Comprobar listings»). Necesita el Merchant Token puesto en Cloudflare.</div>'; return; }
+  // Pivot por SKU
+  var bySku={};
+  datos.forEach(function(x){ if(!bySku[x.sku]) bySku[x.sku]={sku:x.sku,nombre:x.nombre,imagen:x.imagen,asin:x.asin,p:{}}; bySku[x.sku].p[x.pais]={estado:x.estado,motivo:x.motivo}; });
+  var filas=Object.keys(bySku).map(function(k){return bySku[k];});
+  filas.forEach(function(f){ f._prob=paises.filter(function(p){return f.p[p]&&f.p[p].estado==='inactivo';}).length; });
+  filas.sort(function(a,b){ return b._prob-a._prob; });
+  // Resumen por país
+  var res=(d&&d.resumen)||[];
+  var chips=res.map(function(r){ return '<span style="display:inline-flex;gap:6px;align-items:center;background:#141414;border:1px solid var(--bd2);border-radius:10px;padding:5px 9px;font-size:12px;margin:0 6px 6px 0">'+(BANDERA[r.pais]||'🏳️')+' <b>'+r.pais+'</b> <span style="color:var(--gn)">'+r.activo+'✓</span>'+(r.inactivo?' <span style="color:#ff8a8a">'+r.inactivo+'✕</span>':'')+(r.no_publicado?' <span style="color:var(--mu)">'+r.no_publicado+'—</span>':'')+'</span>'; }).join('');
+  var totProb=filas.reduce(function(a,f){return a+f._prob;},0);
+  var h='<div style="font-size:13px;margin-bottom:8px">'+(totProb?('<b style="color:#ff8a8a">'+totProb+'</b> listing(s) inactivos que revisar.'):'👍 Todos tus listings publicados están activos.')+'</div>'+
+        '<div style="display:flex;flex-wrap:wrap;margin-bottom:12px">'+chips+'</div>';
+  // Tabla matriz producto × país
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">Producto</th>';
+  paises.forEach(function(p){ h+='<th style="padding:6px 8px;text-align:center">'+(BANDERA[p]||p)+' '+p+'</th>'; });
+  h+='</tr></thead><tbody>';
+  filas.forEach(function(f){
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(f._prob?';background:rgba(232,64,64,.04)':'')+'">'+
+       '<td style="padding:7px 8px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+String(f.nombre||f.sku).replace(/"/g,"&quot;")+'"><b>'+String(f.nombre||f.sku).replace(/</g,'&lt;').slice(0,70)+'</b></td>';
+    paises.forEach(function(p){ h+='<td style="padding:7px 8px;text-align:center">'+_estCell(f.p[p])+'</td>'; });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  // Detalle de inactivos con motivo
+  var inact=[];
+  filas.forEach(function(f){ paises.forEach(function(p){ if(f.p[p]&&f.p[p].estado==='inactivo') inact.push({nombre:f.nombre||f.sku,pais:p,motivo:f.p[p].motivo}); }); });
+  if(inact.length){
+    h+='<div style="margin-top:14px;font-size:12.5px;font-weight:700;color:#ff8a8a">Inactivos y su motivo</div>';
+    h+='<div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:12px"><tbody>';
+    inact.forEach(function(x){ h+='<tr style="border-top:1px solid rgba(255,255,255,.06)"><td style="padding:6px 8px">'+(BANDERA[x.pais]||'🏳️')+' <b>'+x.pais+'</b></td><td style="padding:6px 8px">'+String(x.nombre).replace(/</g,'&lt;').slice(0,60)+'</td><td style="padding:6px 8px;color:var(--mu2)">'+String(x.motivo||'—').replace(/</g,'&lt;').slice(0,140)+'</td></tr>'; });
+    h+='</tbody></table></div>';
+  }
   body.innerHTML=h;
 }
 
@@ -3164,6 +3239,27 @@ async function cargarFichasAdmin(){
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
+// Lanza la comprobación de listings por país (en segundo plano).
+async function comprobarListingsAdmin(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-listings-res'), btn=document.getElementById('btn-listings');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba, o entra con tu login de admin.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Lanzando comprobación en segundo plano…</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/listings-ingest?lote=40&key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.falta_sellerid){
+      box.innerHTML='<div style="color:var(--am)">⚠️ Falta el <b>Merchant Token</b>.</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Ponlo en Cloudflare como <b>SPAPI_SELLER_ID</b> (Seller Central → Ajustes → Información de la cuenta → Merchant Token).</div>';
+    } else if(d.lanzado){
+      box.innerHTML='<div style="color:var(--gn)">✅ Comprobando en segundo plano. Ábrelo en «🌍 Listings por país» en ~1 min. Pulsa otra vez para cubrir más productos.</div>';
+    } else {
+      box.innerHTML='<span style="color:var(--rd)">'+(d.error||'No se pudo lanzar')+'</span>';
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
 // Lanza la ingesta de reembolsos a clientes (Finances API).
 async function cargarReembCliente(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3702,10 +3798,12 @@ function cambiarVista(v){
   document.getElementById('vista-alertas').style.display = v==='alertas'?'block':'none';
   document.getElementById('vista-buybox').style.display = v==='buybox'?'block':'none';
   document.getElementById('vista-fichas').style.display = v==='fichas'?'block':'none';
+  document.getElementById('vista-listings').style.display = v==='listings'?'block':'none';
   if(v==='ajustes'){ try{ pintarAjustes(); }catch(e){} }
   if(v==='alertas'){ try{ cargarAlertasPrefs(); }catch(e){} }
   if(v==='buybox'){ try{ cargarBuyBox(); }catch(e){} }
   if(v==='fichas'){ try{ cargarFichas(); }catch(e){} }
+  if(v==='listings'){ try{ cargarListings(); }catch(e){} }
   document.querySelectorAll('.nav a').forEach(function(a){ a.classList.remove('on'); });
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v94-login-admin'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v95-listings-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -170,7 +170,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -717,6 +717,31 @@ export default {
         if (r && r.rol_falta) return json({ ok: false, rol_falta: true,
           nota: 'La app de Amazon no tiene el rol para solicitar reseñas (Orders/Solicitations). Solicítalo en Seller Central → tu app; hasta entonces este botón no puede enviar.' }, cors);
         return json({ ok: !!(r && r.ok), ...r }, cors);
+      }
+
+      // --- LISTINGS POR PAÍS: estado + motivo por producto y marketplace (lectura). ---
+      if (url.pathname === '/v1/listings') {
+        const filas = await selSafe(env, 'listings_pais?order=sku.asc', []);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        let actualizado = null;
+        const resumen = {};   // pais -> {activo, inactivo, no_publicado}
+        for (const f of (filas || [])) {
+          if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
+          const p = f.pais; if (!resumen[p]) resumen[p] = { pais: p, activo: 0, inactivo: 0, no_publicado: 0 };
+          if (resumen[p][f.estado] != null) resumen[p][f.estado]++;
+        }
+        const datos = (filas || []).map(f => ({ ...f, nombre: (cat[f.sku] && cat[f.sku].nombre) || f.sku, imagen: (cat[f.sku] && cat[f.sku].imagen) || '' }));
+        const problemas = datos.filter(f => f.estado === 'inactivo').length;
+        return json({ datos, resumen: Object.values(resumen), paises: LISTINGS_MKTS, actualizado, problemas }, cors);
+      }
+
+      // --- Ingesta de listings por país (admin). En segundo plano (tarda). ?lote=N ---
+      if (url.pathname === '/v1/listings-ingest') {
+        if (!(env.SPAPI_SELLER_ID)) return json({ ok: false, falta_sellerid: true,
+          nota: 'Falta el Merchant Token. Ponlo en Cloudflare como SPAPI_SELLER_ID (Seller Central → Ajustes → Información de la cuenta → Merchant Token).' }, cors);
+        const lote = Math.max(1, Math.min(300, +(url.searchParams.get('lote') || 40)));
+        ctx.waitUntil(ingestaListingsPais(env, undefined, { lote }).catch(() => {}));
+        return json({ ok: true, lanzado: true, nota: 'Comprobando listings por país en segundo plano (~1 min por lote). Abre «Listings por país» en un momento.' }, cors);
       }
 
       // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
@@ -1583,6 +1608,8 @@ export default {
       try { await ingestaBuyBoxLoteTodas(env, 40); } catch (_) {}
       // A las 06:00 UTC: placement (ACoS por ubicación del anuncio, Ads API).
       if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} try { await ingestaKeywords(env); } catch (_) {} }
+      // A las 10:00 UTC: listings por país (estado + motivo). Solo si hay Merchant Token.
+      if (hora === 10 && env.SPAPI_SELLER_ID) { try { await ingestaListingsPais(env, undefined, {}); } catch (_) {} }
       // Lunes 06:00 UTC: Search Query Performance (Brand Analytics, semanal).
       if (hora === 6 && new Date().getUTCDay() === 1) { try { await ingestaSQP(env); } catch (_) {} }
       // A las 09:00 UTC: pedir reseña (Solicitations API) de los pedidos que hoy
@@ -1960,6 +1987,67 @@ async function procesarResenas(env, ctx) {
   }
   if (filas.length) await upsertSupabase(env, 'resenas_pedidas', filas);
   return res;
+}
+
+/* =====================================================================
+ * LISTINGS POR PAÍS — Listings Items API (getListingsItem). Por cada SKU y
+ * marketplace, saca el estado (activo/inactivo/no publicado) y el MOTIVO (issues
+ * de Amazon). Requiere el Merchant Token en env.SPAPI_SELLER_ID. Solo lectura.
+ * =================================================================== */
+const LISTINGS_MKTS = ['ES', 'FR', 'IT', 'DE', 'BE'];   // marketplaces a comprobar
+
+// Un SKU en un marketplace: estado + motivo. 404 = no publicado en ese país.
+async function getListingEstado(env, sellerId, sku, mkt, ctx) {
+  const path = '/listings/2021-08-01/items/' + encodeURIComponent(sellerId) + '/' + encodeURIComponent(sku) +
+    '?marketplaceIds=' + encodeURIComponent(mkt) + '&includedData=summaries,issues';
+  const token = await lwaToken(env, 'spapi', ctx);
+  const r = await fetch(SPAPI_HOST + path, { headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' } });
+  if (r.status === 404) return { estado: 'no_publicado', motivo: '', asin: '' };
+  if (r.status === 403 || r.status === 401) { const t = await r.text(); return { _rol: true, _err: t.slice(0, 160) }; }
+  if (!r.ok) return { _err: 'HTTP ' + r.status };
+  const j = await r.json();
+  const sum = (j.summaries && j.summaries[0]) || {};
+  const asin = sum.asin || '';
+  const status = sum.status || [];                       // p.ej. ["BUYABLE"], ["DISCOVERABLE"]
+  const buyable = Array.isArray(status) ? status.indexOf('BUYABLE') > -1 : false;
+  // Motivo: errores primero (los que tumban el listing), luego avisos.
+  const issues = j.issues || [];
+  const errs = issues.filter(i => (i.severity || '').toUpperCase() === 'ERROR').map(i => i.message);
+  const warns = issues.filter(i => (i.severity || '').toUpperCase() === 'WARNING').map(i => i.message);
+  const motivo = (errs.length ? errs : warns).slice(0, 2).join(' · ').slice(0, 300);
+  return { estado: buyable ? 'activo' : 'inactivo', motivo, asin };
+}
+
+async function ingestaListingsPais(env, ctx, opts) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const sellerId = (ctx && ctx.sellerId) || env.SPAPI_SELLER_ID || '';
+  if (!sellerId) return { ok: false, falta_sellerid: true };
+  let cat = [];
+  try { cat = await selSafe(env, 'productos_catalogo?select=sku,asin&limit=3000', []); } catch (_) {}
+  const seen = {}, skus = [];
+  for (const c of (cat || [])) { const s = (c.sku || '').trim(); if (!s || seen[s]) continue; seen[s] = 1; skus.push({ sku: s, asin: c.asin || '' }); }
+  // Rota: los menos frescos primero (para el modo por lotes).
+  const prev = {};
+  try { for (const r of (await selSafe(env, 'listings_pais?select=sku,fecha', []))) { const f = r.fecha || ''; if (!prev[r.sku] || f < prev[r.sku]) prev[r.sku] = f; } } catch (_) {}
+  skus.sort((a, b) => (prev[a.sku] || '') < (prev[b.sku] || '') ? -1 : 1);
+  const lote = (opts && opts.lote) ? skus.slice(0, opts.lote) : skus;
+  const rows = []; let ok = 0, err = 0, rolFalta = false;
+  for (const it of lote) {
+    for (const p of LISTINGS_MKTS) {
+      try {
+        const e = await getListingEstado(env, sellerId, it.sku, MARKETPLACES[p], ctx);
+        if (e._rol) { rolFalta = true; break; }
+        if (e._err) { err++; continue; }
+        rows.push({ seller, sku: it.sku, asin: e.asin || it.asin || null, pais: p, estado: e.estado, motivo: e.motivo || '', fecha: new Date().toISOString() });
+        ok++;
+      } catch (_) { err++; }
+      await sleep(280);   // rate limit getListingsItem (~5/s)
+    }
+    if (rolFalta) break;
+  }
+  if (rows.length) await upsertSupabase(env, 'listings_pais', rows);
+  if (rolFalta) return { ok: false, rol_falta: true, guardados: rows.length };
+  return { ok: true, skus: lote.length, guardados: rows.length, ok_calls: ok, err };
 }
 
 async function traerInventarioFBA(env, marketplaceId, ctx) {
