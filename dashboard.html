@@ -2088,6 +2088,26 @@ function tablaFugas(rows, hecho){
   rows.forEach(function(x){ h+=filaFuga(x,hecho); });
   return h+'</tbody></table></div>';
 }
+// Resumen del sobrecoste por país de DESTINO (lo accionable: a qué mercado le
+// pierdes dinero → dónde mandar stock). Viene ya repartido del backend (por_destino).
+var _fugasPorDestino=[];
+function resumenDestinoFugas(){
+  var arr=(_fugasPorDestino||[]).filter(function(p){ return (+p.sobrecoste_mes||0)>0; });
+  if(!arr.length) return '';
+  var totMes=arr.reduce(function(a,p){return a+(+p.sobrecoste_mes||0);},0);
+  var chips=arr.map(function(p){
+    var det=(p.pais==='?');
+    var band=det?'🏳️':(BANDERA[p.pais]||'🏳️');
+    var nom=det?'sin determinar':p.pais;
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:#141414;border:1px solid var(--bd2);border-radius:10px;padding:6px 10px;font-size:12.5px">'+
+      band+' <b>'+nom+'</b> · <b style="color:#ff8a8a">'+f(p.sobrecoste_mes,2)+'€/mes</b>'+
+      '<span style="color:var(--mu);font-size:11px">('+(p.uds||0)+' uds · '+(p.skus||0)+' SKU)</span></span>';
+  }).join('');
+  return '<div style="margin:2px 0 12px;padding:10px 12px;background:rgba(255,255,255,.02);border:1px solid var(--bd);border-radius:11px">'+
+    '<div style="font-size:11px;color:var(--mu);margin-bottom:7px">📍 Sobrecoste por <b>país de destino</b> — a qué mercado le pierdes dinero (ahí te falta stock local):</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px">'+chips+'</div>'+
+    '<div style="font-size:12.5px;border-top:1px solid var(--bd);padding-top:8px">Total: <b style="color:#ff5c5c">'+f(totMes,2)+'€/mes</b></div></div>';
+}
 // Resumen del sobrecoste AGRUPADO por país de envío (salida) + total. Cada fila de
 // FUGAS ya trae su país y su €/mes, así que se suma aquí sin pedir nada al backend.
 function resumenPaisFugas(rows){
@@ -2120,7 +2140,8 @@ function pintarFugas(){
   var total=activos.reduce(function(a,x){ return a+(+x.sobrecoste_mes||0); },0);
   var h='';
   if(activos.length){
-    h+='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+resumenPaisFugas(activos)+tablaFugas(activos,false);
+    var resumen = resumenDestinoFugas() || resumenPaisFugas(activos);   // destino (backend) o, si aún no está, salida (front)
+    h+='<div style="font-size:13px;margin-bottom:10px">Pierdes <b style="color:#ff5c5c">≈ '+f(total,2)+'€/mes</b> por servir cross-border. Con stock local (o PAN-EU activo) lo recuperas.</div>'+resumen+tablaFugas(activos,false);
   } else {
     h+='<div style="color:var(--gn);font-size:13px;margin-bottom:8px">👍 Sin sobrecostes pendientes. Todo revisado o servido en local.</div>';
   }
@@ -2147,7 +2168,7 @@ function cargarFugas(){
   }
   fetch(SB_CONFIG.apiBase+'/v1/fugas',{headers:authHdr()})
     .then(function(r){return r.json();})
-    .then(function(d){ FUGAS=(d&&d.datos)||[]; pintarFugas(); })
+    .then(function(d){ FUGAS=(d&&d.datos)||[]; _fugasPorDestino=(d&&d.por_destino)||[]; pintarFugas(); })
     .catch(function(){ if(card)card.style.display='none'; if(full)full.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
 

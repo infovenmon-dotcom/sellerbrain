@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v89-buybox-sku'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v90-fugas-destino'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -682,7 +682,39 @@ export default {
           };
         });
         const total_mes = +(datos.reduce((a, x) => a + (+x.sobrecoste_mes || 0), 0)).toFixed(2);
-        return json({ datos, total_mes }, cors);
+
+        // Reparto del sobrecoste de cada SKU entre sus países de DESTINO, en
+        // proporción a las unidades cross-border a cada destino (v_cross_destino_sku).
+        // El total no cambia: solo se redistribuye. Lo que no tiene destino conocido
+        // cae en "?" (sin determinar). Es la vista accionable: dónde mandar stock.
+        const crossDest = {};   // sku -> { destino -> uds }
+        try {
+          for (const r of (await selSafe(env, 'v_cross_destino_sku?select=sku,destino,uds_cross', []))) {
+            const s = r.sku || ''; if (!s) continue;
+            (crossDest[s] = crossDest[s] || {})[r.destino || '?'] = (+r.uds_cross || 0);
+          }
+        } catch (_) {}
+        const porDestAgg = {};   // pais -> { pais, sobrecoste_mes, uds, skus:Set }
+        const addDest = (pais, mes, uds, sku) => {
+          const p = pais || '?';
+          if (!porDestAgg[p]) porDestAgg[p] = { pais: p, sobrecoste_mes: 0, uds: 0, skus: new Set() };
+          porDestAgg[p].sobrecoste_mes += mes; porDestAgg[p].uds += uds; if (sku) porDestAgg[p].skus.add(sku);
+        };
+        for (const x of datos) {
+          const mes = +x.sobrecoste_mes || 0;
+          const dests = crossDest[x.sku] || null;
+          const totUds = dests ? Object.values(dests).reduce((a, b) => a + b, 0) : 0;
+          if (dests && totUds > 0) {
+            for (const dp in dests) addDest(dp, mes * (dests[dp] / totUds), dests[dp], x.sku);
+          } else {
+            addDest('?', mes, +x.uds || 0, x.sku);   // sin ruta conocida → sin determinar
+          }
+        }
+        const por_destino = Object.values(porDestAgg)
+          .map(d => ({ pais: d.pais, sobrecoste_mes: +d.sobrecoste_mes.toFixed(2), uds: d.uds, skus: d.skus.size }))
+          .sort((a, b) => b.sobrecoste_mes - a.sobrecoste_mes);
+
+        return json({ datos, total_mes, por_destino }, cors);
       }
 
       // --- Reembolsos FBA pendientes (Amazon te debe): perdido/dañado − ya reembolsado,
