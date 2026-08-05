@@ -287,6 +287,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       </div>
 
       <div style="margin-top:12px">
+        <button class="chip" id="btn-reemb" onclick="cargarReembCliente()">💸 Cargar reembolsos (Finanzas)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae los reembolsos a clientes casi al momento (Finances API). Requiere el rol «Finance and Accounting» en tu app de Amazon; si no lo tienes, te lo dice.</span>
+        <div id="cx-reemb-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <div style="margin-top:12px">
         <button class="chip" id="btn-placement" onclick="cargarPlacementAdmin()">📍 Cargar placement (Top of Search)</button>
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae el ACoS por ubicación del anuncio (Ads API, 30 días, por país). Puede tardar 1-3 min.</span>
         <div id="cx-placement-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
@@ -3152,6 +3158,28 @@ async function cargarFichasAdmin(){
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
+// Lanza la ingesta de reembolsos a clientes (Finances API).
+async function cargarReembCliente(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-reemb-res'), btn=document.getElementById('btn-reemb');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Trayendo reembolsos (Finances API)… no cierres.</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/reembolsos-cliente-ingest?key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.rol_falta){
+      box.innerHTML='<div style="color:var(--am)">⚠️ Tu app de Amazon aún no tiene el rol <b>«Finance and Accounting»</b>, así que Amazon no deja leer los reembolsos al momento.</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Mientras tanto, los reembolsos del <b>settlement</b> sí se ven en «Devoluciones» (con retraso de quincena). Cuando concedas ese rol, este botón ya funcionará.</div>';
+    } else if(d.ok){
+      box.innerHTML='<div style="color:var(--gn)">✅ Reembolsos cargados: '+(d.reembolsos||0)+'.</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Míralo en «Devoluciones → Reembolsos a clientes».</div>';
+    } else {
+      box.innerHTML='<span style="color:var(--rd)">'+(d.error||'No se pudo cargar')+'</span>';
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
 // Lanza la ingesta de Buy Box (un lote de ASIN por pulsación).
 async function cargarBuyBoxAdmin(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3164,7 +3192,7 @@ async function cargarBuyBoxAdmin(){
     var d=await r.json();
     if(d.error){ box.innerHTML='<span style="color:var(--rd)">'+d.error+'</span>'; }
     else{
-      box.innerHTML='<div style="color:var(--gn)">✅ Lote hecho: '+(d.ok||0)+' ASIN actualizados'+(d.err?(' · '+d.err+' con error'):'')+'. Total catálogo: '+(d.total_asins||'?')+'.</div>'+
+      box.innerHTML='<div style="color:var(--gn)">✅ Lote hecho: '+(d.ok||0)+' SKU actualizados'+(d.err?(' · '+d.err+' con error'):'')+'. Total catálogo: '+(d.total_skus||d.total_asins||'?')+'.</div>'+
         '<div style="color:var(--mu);margin-top:4px">Pulsa otra vez para cubrir el resto. Míralo en «🏆 Buy Box y competencia».</div>';
     }
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }

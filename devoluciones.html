@@ -102,6 +102,24 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
   <div style="margin-top:9px;font-size:11px;color:var(--mu)">¿Prefieres analizar un informe descargado? Usa los pasos de abajo para subir tu CSV.</div>
 </div>
 
+<!-- CONECTADO: reembolsos a clientes (no solo devoluciones físicas) -->
+<div class="card" id="card-reemb-real" style="display:none;border:1.5px solid rgba(245,178,62,.4)">
+  <div class="ct"><span class="ci">💸</span> Reembolsos a clientes — más que devoluciones</div>
+  <div class="inf">No todo lo que te devuelven es una <b>devolución física</b>. Cuando Amazon reembolsa a un cliente por <b>entrega fallida</b>, garantía, A-to-z o precio, te llega un correo pero <b>no</b> aparece en el informe de devoluciones. Aquí ves ese dinero, en el mismo rango de fechas de arriba.</div>
+  <div id="reemb-status" style="font-size:12px;color:var(--mu);margin-bottom:8px"></div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="text-align:left;color:var(--mu);font-size:11px">
+      <th style="padding:6px 8px">Fecha</th>
+      <th style="padding:6px 8px">Producto</th>
+      <th style="padding:6px 8px">Pedido</th>
+      <th style="padding:6px 8px" title="Lo que se le devolvió al cliente">Reembolsado</th>
+      <th style="padding:6px 8px" title="Motivo (si Amazon lo da) y de dónde sale el dato">Motivo / fuente</th>
+    </tr></thead>
+    <tbody id="reemb-tabla"></tbody>
+  </table></div>
+  <div id="reemb-nota" style="margin-top:9px;font-size:11px;color:var(--mu)"></div>
+</div>
+
 <!-- PASO 1 -->
 <div class="card">
   <div class="ct"><span class="ci">1️⃣</span> Sube tu informe de devoluciones FBA</div>
@@ -476,6 +494,7 @@ function devRango(id){
   else { desde=document.getElementById('dev-d1').value; hasta=document.getElementById('dev-d2').value; if(!desde||!hasta){ alert('Elige las dos fechas.'); return; } }
   document.getElementById('dev-d1').value=desde; document.getElementById('dev-d2').value=hasta;
   devCargar(desde,hasta);
+  reembCargar(desde,hasta);
 }
 function devCargar(desde,hasta){
   if(!DEVB.base) return;
@@ -502,10 +521,41 @@ function devCargar(desde,hasta){
     })
     .catch(function(){ st.innerHTML='<span style="color:#f5b23e">No pude cargar tus datos. ¿Has iniciado sesión?</span>'; });
 }
+// ===== Conectado: reembolsos a clientes (settlement + Finanzas) =====
+function reembCargar(desde,hasta){
+  if(!DEVB.base) return;
+  var st=document.getElementById('reemb-status'), tb=document.getElementById('reemb-tabla'), nota=document.getElementById('reemb-nota');
+  st.textContent='🔄 Cargando…'; tb.innerHTML=''; nota.innerHTML='';
+  fetch(DEVB.base+'/v1/reembolsos-cliente?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:{'Authorization':'Bearer '+DEVB.tok}})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var datos=(d&&d.datos)||[];
+      st.innerHTML='Periodo '+desde+' → '+hasta+' · <b>'+(d.n||0)+'</b> reembolsos · devuelto a clientes <b style="color:#f5b23e">'+f(d.total_cliente||0,2)+'€</b>';
+      if(!datos.length){ tb.innerHTML='<tr><td colspan="5" style="padding:10px;color:var(--mu)">Sin reembolsos en ese periodo.</td></tr>'; }
+      else {
+        tb.innerHTML=datos.map(function(x){
+          var img=x.imagen?'<img src="'+x.imagen+'" style="width:22px;height:22px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:7px" onerror="this.style.display=\'none\'">':'';
+          var fuente=x.fuente==='finanzas'?'<span style="color:var(--gn)">Finanzas</span>':'<span style="color:var(--mu2)">Settlement</span>';
+          var mot=x.motivo?esc(titulo(x.motivo)):'—';
+          return '<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+            '<td style="padding:7px 8px;white-space:nowrap;color:var(--mu2)">'+(x.fecha?String(x.fecha).slice(0,10):'—')+'</td>'+
+            '<td style="padding:7px 8px">'+img+'<span style="font-weight:600">'+esc(x.nombre||x.sku)+'</span></td>'+
+            '<td style="padding:7px 8px;color:var(--mu2);font-size:11.5px">'+esc(x.pedido||'—')+'</td>'+
+            '<td style="padding:7px 8px;font-weight:700;color:#f5b23e">'+f(x.importe_cliente||0,2)+'€</td>'+
+            '<td style="padding:7px 8px;color:var(--mu2);font-size:11.5px">'+mot+' · '+fuente+'</td></tr>';
+        }).join('');
+      }
+      nota.innerHTML = d.hay_finanzas
+        ? 'Los marcados <b style="color:var(--gn)">Finanzas</b> llegan casi al momento; los de <b>Settlement</b> pueden tardar hasta una quincena.'
+        : '⏳ De momento solo se ven los reembolsos del <b>settlement</b> (retraso de quincena). Para verlos casi al momento hace falta el rol <b>«Finance and Accounting»</b> en tu app de Amazon.';
+    })
+    .catch(function(){ st.innerHTML='<span style="color:#f5b23e">No pude cargar los reembolsos.</span>'; });
+}
 (function devInit(){
   if(!devBase()) return;
-  var card=document.getElementById('card-dev-real');
-  if(card){ card.style.display='block'; devRango('mes'); }
+  var c1=document.getElementById('card-dev-real'); if(c1) c1.style.display='block';
+  var c2=document.getElementById('card-reemb-real'); if(c2) c2.style.display='block';
+  devRango('mes');
 })();
 </script>
 </body>

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v90-fugas-destino'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v91-reembolsos-cliente'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -170,7 +170,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -638,6 +638,52 @@ export default {
           };
         }).sort((a, b) => (b.pct || 0) - (a.pct || 0) || b.devoluciones - a.devoluciones);
         return json({ desde, hasta, datos }, cors);
+      }
+
+      // --- REEMBOLSOS A CLIENTES (no solo devoluciones físicas): dinero devuelto por
+      //     cualquier motivo. Fusiona la Finances API (reembolsos_cliente, casi al
+      //     momento) con el settlement (v_reembolsos_cliente, por quincenas). Dedup
+      //     por pedido+sku preferiendo Finanzas. Lectura (miembro o admin). ---
+      if (url.pathname === '/v1/reembolsos-cliente') {
+        const desde = url.searchParams.get('desde'), hasta = url.searchParams.get('hasta');
+        if (!desde || !hasta) return json({ error: 'faltan desde/hasta' }, cors, 400);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        const hastaFin = hasta + 'T23:59:59Z';
+        const fin = await selSafe(env, 'reembolsos_cliente?fecha=gte.' + desde + '&fecha=lte.' + hastaFin + '&select=pedido,sku,asin,fecha,importe_cliente,moneda,uds,motivo', []);
+        const set = await selSafe(env, 'v_reembolsos_cliente?fecha=gte.' + desde + '&fecha=lte.' + hastaFin + '&select=pedido,sku,pais,fecha,importe_cliente,impacto_neto', []);
+        const byKey = {};
+        for (const r of (set || [])) {                 // primero settlement
+          byKey[(r.pedido || '') + '|' + (r.sku || '')] = {
+            pedido: r.pedido, sku: r.sku, fecha: r.fecha, pais: r.pais || '',
+            importe_cliente: +r.importe_cliente || 0, impacto_neto: +r.impacto_neto || 0,
+            motivo: '', uds: null, fuente: 'settlement'
+          };
+        }
+        for (const r of (fin || [])) {                 // Finanzas pisa (más fresca + motivo)
+          byKey[(r.pedido || '') + '|' + (r.sku || '')] = {
+            pedido: r.pedido, sku: r.sku, fecha: r.fecha, pais: '',
+            importe_cliente: +r.importe_cliente || 0, impacto_neto: null,
+            motivo: r.motivo || '', uds: r.uds != null ? +r.uds : null, fuente: 'finanzas'
+          };
+        }
+        const datos = Object.values(byKey).map(x => ({
+          ...x,
+          nombre: (cat[x.sku] && cat[x.sku].nombre) || x.sku,
+          asin: (cat[x.sku] && cat[x.sku].asin) || '',
+          imagen: (cat[x.sku] && cat[x.sku].imagen) || ''
+        })).sort((a, b) => (b.fecha || '') < (a.fecha || '') ? -1 : 1);
+        const total_cliente = +(datos.reduce((a, x) => a + (+x.importe_cliente || 0), 0)).toFixed(2);
+        const hay_finanzas = (fin || []).length > 0;
+        return json({ desde, hasta, datos, total_cliente, hay_finanzas, n: datos.length }, cors);
+      }
+
+      // --- Ingesta de reembolsos vía Finances API (admin). Requiere rol "Finance
+      //     and Accounting" en la app de Amazon; si no está, devuelve rol_falta. ---
+      if (url.pathname === '/v1/reembolsos-cliente-ingest') {
+        const r = await ingestaReembolsosCliente(env, undefined);
+        if (r && r.rol_falta) return json({ ok: false, rol_falta: true, error: r.error,
+          nota: 'La cuenta no tiene concedido el rol "Finance and Accounting" en la app de Amazon. Mientras tanto, los reembolsos del settlement sí se ven (con retraso de quincena).' }, cors);
+        return json({ ok: !!(r && r.ok), ...r }, cors);
       }
 
       // --- STOCK: TODOS los productos con stock real, en camino, salida media
@@ -1719,6 +1765,62 @@ async function ingestaReembolsos(env, ctx) {
   return { reembolsos: rows.length };
 }
 
+/* =====================================================================
+ * REEMBOLSOS A CLIENTES vía Finances API (listFinancialEvents → RefundEventList).
+ * Capta dinero devuelto al cliente por CUALQUIER motivo (entrega fallida, A-to-z,
+ * garantía…), no solo devoluciones físicas. Es casi al momento (horas), a
+ * diferencia del settlement (quincenas). REQUIERE el rol "Finance and Accounting"
+ * en la app de Amazon: si no está concedido, Amazon responde 403 y devolvemos
+ * { rol_falta:true } SIN romper el resto de la ingesta. Guarda en reembolsos_cliente.
+ * =================================================================== */
+async function ingestaReembolsosCliente(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const planCompleto = ctx ? !!ctx.spapiToken : !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+  if (!planCompleto) return { ok: false, saltado: 'sin SP-API' };
+  const desde = new Date(Date.now() - 30 * 86400000).toISOString();
+  const CHARGES_CLIENTE = { Principal: 1, Shipping: 1, Tax: 1, ShippingTax: 1, GiftWrap: 1, GiftWrapTax: 1 };
+  const acc = {};   // pedido|sku -> fila
+  let next = null, paginas = 0;
+  try {
+    do {
+      const path = next
+        ? '/finances/v0/financialEvents?NextToken=' + encodeURIComponent(next)
+        : '/finances/v0/financialEvents?PostedAfter=' + encodeURIComponent(desde) + '&MaxResultsPerPage=100';
+      const j = await spapiCall(env, path, {}, ctx);
+      const ev = (j && j.payload && j.payload.FinancialEvents) || {};
+      for (const r of (ev.RefundEventList || [])) {
+        const pedido = r.AmazonOrderId || '';
+        const fecha = r.PostedDate || null;
+        for (const it of (r.ShipmentItemAdjustmentList || r.ShipmentItemList || [])) {
+          const sku = it.SellerSKU || '';
+          if (!pedido || !sku) continue;
+          let imp = 0, moneda = 'EUR';
+          for (const c of (it.ItemChargeAdjustmentList || it.ItemChargeList || [])) {
+            if (CHARGES_CLIENTE[c.ChargeType] && c.ChargeAmount) { imp += (+c.ChargeAmount.CurrencyAmount || 0); moneda = c.ChargeAmount.CurrencyCode || moneda; }
+          }
+          const uds = Math.abs(+it.QuantityShipped || 0) || 1;
+          const k = pedido + '|' + sku;
+          if (!acc[k]) acc[k] = { seller, pedido, sku, asin: '', fecha, importe_cliente: 0, moneda, uds: 0, motivo: '', fuente: 'finanzas' };
+          acc[k].importe_cliente += -imp;   // los reembolsos vienen en negativo → lo pasamos a positivo
+          acc[k].uds += uds;
+        }
+      }
+      next = (j && j.payload && j.payload.NextToken) || null;
+      paginas++;
+      if (next) await sleep(2100);   // rate limit de Finances API
+    } while (next && paginas < 20);
+  } catch (e) {
+    const msg = e.message || '';
+    const rolFalta = /\s40[13]\s|Unauthorized|Forbidden|Access to requested resource is denied/i.test(msg);
+    return { ok: false, error: msg, rol_falta: rolFalta };
+  }
+  const rows = Object.values(acc)
+    .map(r => ({ ...r, importe_cliente: +r.importe_cliente.toFixed(2) }))
+    .filter(r => r.importe_cliente > 0);
+  if (rows.length) await upsertSupabase(env, 'reembolsos_cliente', rows);
+  return { ok: true, reembolsos: rows.length, paginas };
+}
+
 async function traerInventarioFBA(env, marketplaceId, ctx) {
   const inv = {}, cat = {};
   let nextToken = null, pag = 0;
@@ -2426,6 +2528,14 @@ async function ingestaDiaria(env, origen, ctx) {
     const r = await ingestaReembolsos(env, ctx);
     resultado.pasos.push({ reembolsos: r.reembolsos || 0 });
   } catch (e) { resultado.pasos.push({ reembolsos_error: e.message }); }
+
+  // 3e-bis. Reembolsos A CLIENTES (Finances API) — dinero devuelto por cualquier
+  //     motivo, no solo devoluciones físicas. Si falta el rol "Finance and
+  //     Accounting", NO rompe la ingesta (se marca rol_falta y seguimos).
+  if (planCompleto) try {
+    const r = await ingestaReembolsosCliente(env, ctx);
+    resultado.pasos.push({ reembolsos_cliente: r.rol_falta ? 'rol_finanzas_no_concedido' : (r.reembolsos || 0) });
+  } catch (e) { resultado.pasos.push({ reembolsos_cliente_error: e.message }); }
 
   // 3f. País de SALIDA por pedido (informe de envíos) → base del sobrecoste por país.
   //     Ventana corta (7 días): envios_fc persiste, el histórico ya está guardado.
