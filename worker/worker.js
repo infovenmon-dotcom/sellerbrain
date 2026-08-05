@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v98-listings-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v99-listings-flush'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2084,23 +2084,27 @@ async function ingestaListingsPais(env, ctx, opts) {
   try { for (const r of (await selSafe(env, 'listings_pais?select=sku,fecha', []))) { const f = r.fecha || ''; if (!prev[r.sku] || f < prev[r.sku]) prev[r.sku] = f; } } catch (_) {}
   skus.sort((a, b) => (prev[a.sku] || '') < (prev[b.sku] || '') ? -1 : 1);
   const lote = (opts && opts.lote) ? skus.slice(0, opts.lote) : skus;
-  const rows = []; let ok = 0, err = 0, rolFalta = false;
+  let ok = 0, err = 0, rolFalta = false, guardados = 0;
+  // IMPORTANTE: guardamos PRODUCTO A PRODUCTO (no todo al final). Así, si Cloudflare
+  // corta la tarea en segundo plano, el progreso ya guardado se conserva y la
+  // rotación (más antiguos primero) avanza en la siguiente pulsación.
   for (const it of lote) {
+    const skuRows = [];
     for (const p of LISTINGS_MKTS) {
       try {
         const e = await getListingEstado(env, sellerId, it.sku, MARKETPLACES[p], ctx);
         if (e._rol) { rolFalta = true; break; }
         if (e._err) { err++; continue; }
-        rows.push({ seller, sku: it.sku, asin: e.asin || it.asin || null, pais: p, estado: e.estado, motivo: e.motivo || '', fecha: new Date().toISOString() });
+        skuRows.push({ seller, sku: it.sku, asin: e.asin || it.asin || null, pais: p, estado: e.estado, motivo: e.motivo || '', fecha: new Date().toISOString() });
         ok++;
       } catch (_) { err++; }
-      await sleep(280);   // rate limit getListingsItem (~5/s)
+      await sleep(220);   // rate limit getListingsItem (~5/s)
     }
+    if (skuRows.length) { try { await upsertSupabase(env, 'listings_pais', skuRows); guardados += skuRows.length; } catch (_) {} }
     if (rolFalta) break;
   }
-  if (rows.length) await upsertSupabase(env, 'listings_pais', rows);
-  if (rolFalta) return { ok: false, rol_falta: true, guardados: rows.length };
-  return { ok: true, skus: lote.length, guardados: rows.length, ok_calls: ok, err };
+  if (rolFalta) return { ok: false, rol_falta: true, guardados };
+  return { ok: true, skus: lote.length, guardados, ok_calls: ok, err };
 }
 
 // Escritura sobre un listing (Listings Items API). method DELETE = cerrar; PATCH = reabrir.
