@@ -1330,8 +1330,7 @@ function editarPuja(kid,pais,nmEnc,pujaAct){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d && d.aplicado){ alert('✅ Puja de «'+nombre+'» cambiada a '+p.toFixed(2)+'€ en Amazon.'); if(KW_DATA){ for(var i=0;i<KW_DATA.length;i++) if(KW_DATA[i].keyword_id===kid) KW_DATA[i].puja=p; } renderKeywords(); }
-      else if(d && d.error==='ads_write_off'){ alert('⚠️ La ejecución está desactivada. Pon ADS_WRITE=1 en Cloudflare (Worker → Variables).'); }
-      else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
+      else { alert(msgErrAds(d)); }
     })
     .catch(function(e){ alert('Error: '+e.message); });
 }
@@ -3422,6 +3421,13 @@ function ppcAccionCampana(x){
     '<button class="acc-cp" style="background:rgba(46,204,113,.12);border-color:rgba(46,204,113,.35);color:#7fe0a8" title="Reactivar esta campaña en Amazon" onclick="cambiarEstadoCampana(\''+x.campania_id+'\',\''+x.pais+'\',\'ENABLED\',\''+nm+'\')">▶</button> '+
     '<button class="acc-cp" style="background:rgba(245,166,35,.12);border-color:rgba(245,166,35,.35);color:var(--am)" title="Cambiar presupuesto diario en Amazon" onclick="cambiarPresupuesto(\''+x.campania_id+'\',\''+x.pais+'\',\''+nm+'\')">💰</button>';
 }
+// Traduce la respuesta de un cambio en Ads a un mensaje claro según la causa.
+function msgErrAds(d){
+  if(!d) return '⚠️ Amazon no respondió. Reintenta en unos segundos.';
+  if(d.error==='ads_write_off') return '⚠️ La ejecución de cambios está DESACTIVADA por seguridad.\n\nPara activarla: Cloudflare → tu Worker → Settings → Variables → añade ADS_WRITE = 1 y guarda. Luego reintenta.';
+  if(d.status===401||d.status===403) return '⛔ Amazon rechazó el cambio por PERMISOS (código '+d.status+').\n\nTu conexión de Amazon Ads no tiene permiso de ESCRITURA (gestión de campañas), solo de lectura. Hay que volver a conectar Amazon Ads concediendo «gestión de campañas», o usar un perfil con rol de administrador.\n\nDetalle de Amazon:\n'+JSON.stringify(d.detalle||{}).slice(0,300);
+  return 'No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400);
+}
 function cambiarEstadoCampana(cid,pais,estado,nmEnc){
   var nombre=decodeURIComponent(nmEnc||'');
   var accion=estado==='PAUSED'?'PAUSAR':'REACTIVAR';
@@ -3432,8 +3438,7 @@ function cambiarEstadoCampana(cid,pais,estado,nmEnc){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d && d.aplicado){ alert('✅ Hecho: «'+nombre+'» ahora está '+(estado==='PAUSED'?'PAUSADA':'ACTIVA')+' en Amazon.'); if(PPC_DATA) _ppcRerender(); }
-      else if(d && d.error==='ads_write_off'){ alert('⚠️ La ejecución está desactivada por seguridad. Para activarla, pon ADS_WRITE=1 en Cloudflare (Worker → Variables) y vuelve a intentarlo.'); }
-      else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
+      else { alert(msgErrAds(d)); }
     })
     .catch(function(e){ alert('Error: '+e.message); });
 }
@@ -3464,8 +3469,7 @@ function cambiarPresupuesto(cid,pais,nmEnc){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d && d.aplicado){ alert('✅ Presupuesto de «'+nombre+'» cambiado a '+p.toFixed(2)+'€/día en Amazon.'); if(PPC_DATA) _ppcRerender(); }
-      else if(d && d.error==='ads_write_off'){ alert('⚠️ La ejecución está desactivada. Pon ADS_WRITE=1 en Cloudflare (Worker → Variables).'); }
-      else { alert('No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400)); }
+      else { alert(msgErrAds(d)); }
     })
     .catch(function(e){ alert('Error: '+e.message); });
 }
@@ -3483,8 +3487,7 @@ function confirmarNegativo(){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d && d.aplicado){ msg.style.color='var(--gn)'; msg.textContent='✅ Negativizado en Amazon.'; setTimeout(cerrarNeg,1400); }
-      else if(d && d.error==='ads_write_off'){ msg.style.color='var(--am)'; msg.textContent='⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.'; }
-      else { msg.style.color='var(--am)'; msg.textContent='No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300); }
+      else { msg.style.color='var(--am)'; msg.textContent=(d&&d.error==='ads_write_off')?'⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.':((d&&(d.status===401||d.status===403))?'⛔ Amazon: sin permiso de escritura en Ads. Reconecta Ads con «gestión de campañas».':'No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300)); }
       btn.disabled=false; btn.style.opacity=1;
     })
     .catch(function(e){ msg.style.color='var(--am)'; msg.textContent='Error: '+e.message; btn.disabled=false; btn.style.opacity=1; });
