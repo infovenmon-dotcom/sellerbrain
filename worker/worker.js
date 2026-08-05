@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v92-buybox-horario'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v93-pedir-resena'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -170,7 +170,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas';
         if (!ok && MIEMBRO_OK) ok = !!(await verificarJWT(env, auth));
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
       }
@@ -684,6 +684,37 @@ export default {
         if (r && r.rol_falta) return json({ ok: false, rol_falta: true, error: r.error,
           nota: 'La cuenta no tiene concedido el rol "Finance and Accounting" en la app de Amazon. Mientras tanto, los reembolsos del settlement sí se ven (con retraso de quincena).' }, cors);
         return json({ ok: !!(r && r.ok), ...r }, cors);
+      }
+
+      // --- RESEÑAS: registro de solicitudes + resumen (lectura: miembro o admin). ---
+      if (url.pathname === '/v1/resenas') {
+        const filas = await selSafe(env, 'resenas_pedidas?order=fecha_solicitud.desc&limit=200', []);
+        const resumen = { enviadas: 0, ya_enviadas: 0, pendientes: 0, errores: 0 };
+        for (const f of (filas || [])) {
+          if (f.estado === 'enviada') resumen.enviadas++;
+          else if (f.estado === 'ya_enviada') resumen.ya_enviadas++;
+          else if (f.estado === 'pendiente') resumen.pendientes++;
+          else resumen.errores++;
+        }
+        return json({ datos: filas || [], resumen, auto_on: env.RESENAS_AUTO === '1' }, cors);
+      }
+
+      // --- Pedir reseñas de los pedidos elegibles AHORA (admin). ---
+      if (url.pathname === '/v1/resenas-run') {
+        const r = await procesarResenas(env, undefined);
+        if (r && r.rol_falta) return json({ ok: false, rol_falta: true,
+          nota: 'La app de Amazon no tiene el rol para solicitar reseñas (Orders/Solicitations). Solicítalo en Seller Central → tu app; hasta entonces este botón no puede enviar.' }, cors);
+        return json({ ok: !!(r && r.ok), ...r }, cors);
+      }
+
+      // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
+      if (url.pathname === '/v1/resena-pedir') {
+        const pedido = url.searchParams.get('pedido') || '';
+        const mkt = url.searchParams.get('mkt') || MARKETPLACES.ES;
+        if (!pedido) return json({ error: 'falta pedido' }, cors, 400);
+        let r; try { r = await solicitarResena(env, pedido, mkt, undefined); } catch (e) { r = { ok: false, estado: 'error', detalle: e.message }; }
+        try { await upsertSupabase(env, 'resenas_pedidas', [{ seller: 'venmon', pedido, fecha_solicitud: new Date().toISOString(), estado: r.estado, detalle: r.detalle || '' }]); } catch (_) {}
+        return json({ ok: !!r.ok, ...r }, cors);
       }
 
       // --- STOCK: TODOS los productos con stock real, en camino, salida media
@@ -1542,6 +1573,10 @@ export default {
       if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} try { await ingestaKeywords(env); } catch (_) {} }
       // Lunes 06:00 UTC: Search Query Performance (Brand Analytics, semanal).
       if (hora === 6 && new Date().getUTCDay() === 1) { try { await ingestaSQP(env); } catch (_) {} }
+      // A las 09:00 UTC: pedir reseña (Solicitations API) de los pedidos que hoy
+      // entran en ventana. SOLO si RESENAS_AUTO=1 (opt-in). Amazon filtra la
+      // elegibilidad real; si falta el rol, no hace nada (no rompe).
+      if (hora === 9 && env.RESENAS_AUTO === '1') { try { await procesarResenas(env, undefined); } catch (_) {} }
       // A las 07:00 UTC (~09:00 España): alertas proactivas por email (stock bajo,
       // ACoS alto, sobrecostes recuperables). Solo si ALERTAS_EMAIL=1. Digest diario.
       if (hora === 7) { try { await procesarAlertas(env); } catch (_) {} }
@@ -1822,6 +1857,97 @@ async function ingestaReembolsosCliente(env, ctx) {
     .filter(r => r.importe_cliente > 0);
   if (rows.length) await upsertSupabase(env, 'reembolsos_cliente', rows);
   return { ok: true, reembolsos: rows.length, paginas };
+}
+
+/* =====================================================================
+ * PEDIR RESEÑA (permitido) — Orders API + Solicitations API de Amazon.
+ * Amazon tiene una API oficial para solicitar reseña: envía SU mensaje estándar
+ * (el mismo que el botón "Solicitar una reseña" de Seller Central), una vez por
+ * pedido y dentro de la ventana que fija Amazon (≈4-30 días tras la entrega). NO
+ * toca datos del cliente ni manda correos propios → 100% dentro de política.
+ * =================================================================== */
+
+// Lista pedidos recientes (Orders API) candidatos a pedir reseña: enviados/entregados
+// dentro de la ventana. Solo IDs + fecha + estado (sin datos personales del comprador).
+async function listarPedidosResena(env, ctx, dias) {
+  const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.BE].join(',');
+  const desde = new Date(Date.now() - (dias || 30) * 86400000).toISOString();
+  const out = [];
+  let next = null, pag = 0;
+  do {
+    const path = next
+      ? '/orders/v0/orders?NextToken=' + encodeURIComponent(next) + '&MarketplaceIds=' + encodeURIComponent(mkts)
+      : '/orders/v0/orders?MarketplaceIds=' + encodeURIComponent(mkts) + '&CreatedAfter=' + encodeURIComponent(desde) +
+        '&OrderStatuses=Shipped&MaxResultsPerPage=100';
+    const j = await spapiCall(env, path, {}, ctx);
+    const p = (j && j.payload) || {};
+    for (const o of (p.Orders || [])) {
+      if (!o.AmazonOrderId) continue;
+      out.push({ pedido: o.AmazonOrderId, fecha: o.PurchaseDate || null, estado: o.OrderStatus || '', mkt: o.MarketplaceId || MARKETPLACES.ES });
+    }
+    next = p.NextToken || null;
+    pag++;
+    if (next) await sleep(2500);   // Orders API va muy limitado
+  } while (next && pag < 10);
+  return out;
+}
+
+// Envía la solicitud de reseña oficial para UN pedido. Amazon decide si es elegible
+// (ventana/ya enviada): 201 = enviada; 400 = no elegible/ya pedida; 403 = falta rol.
+async function solicitarResena(env, pedido, mkt, ctx) {
+  const token = await lwaToken(env, 'spapi', ctx);
+  const path = '/solicitations/v1/orders/' + encodeURIComponent(pedido) +
+    '/solicitations/productReviewAndSellerFeedback?marketplaceIds=' + encodeURIComponent(mkt || MARKETPLACES.ES);
+  const r = await fetch(SPAPI_HOST + path, { method: 'POST', headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' } });
+  if (r.status === 201 || r.ok) return { ok: true, estado: 'enviada' };
+  const txt = await r.text();
+  if (r.status === 403) return { ok: false, rol_falta: true, estado: 'error', detalle: txt.slice(0, 200) };
+  // 400 típico: fuera de ventana, ya solicitada, o el comprador optó por no recibir.
+  const yaEnviada = /already|previously|no.*eligible|not.*eligible/i.test(txt);
+  return { ok: false, estado: yaEnviada ? 'ya_enviada' : 'pendiente', detalle: txt.slice(0, 200) };
+}
+
+// Recorre los pedidos elegibles y pide reseña de los que aún no hemos cerrado.
+// Amazon es el que filtra la elegibilidad real; nosotros no repetimos los ya
+// 'enviada'/'ya_enviada'. Tope por ejecución para respetar el rate limit.
+async function procesarResenas(env, ctx) {
+  const seller = (ctx && ctx.seller) || 'venmon';
+  const planCompleto = ctx ? !!ctx.spapiToken : !!(env.LWA_CLIENT_ID && env.SPAPI_REFRESH_TOKEN);
+  if (!planCompleto) return { ok: false, saltado: 'sin SP-API' };
+  let pedidos;
+  try { pedidos = await listarPedidosResena(env, ctx, 30); }
+  catch (e) {
+    const rol = /\s40[13]\s|Unauthorized|Forbidden|denied/i.test(e.message || '');
+    return { ok: false, rol_falta: rol, error: (e.message || '').slice(0, 200) };
+  }
+  // Ya cerrados (no repetir).
+  const cerrado = {};
+  try { for (const r of (await selSafe(env, 'resenas_pedidas?seller=eq.' + encodeURIComponent(seller) + '&select=pedido,estado', []))) { if (r.estado === 'enviada' || r.estado === 'ya_enviada') cerrado[r.pedido] = 1; } } catch (_) {}
+  // Ventana aproximada: 4-30 días desde la compra (Amazon afina la real).
+  const ahora = Date.now();
+  const elegibles = pedidos.filter(p => {
+    if (cerrado[p.pedido]) return false;
+    if (!p.fecha) return true;
+    const d = (ahora - new Date(p.fecha).getTime()) / 86400000;
+    return d >= 4 && d <= 30;
+  });
+  const res = { ok: true, revisados: pedidos.length, elegibles: elegibles.length, enviadas: 0, ya_enviadas: 0, pendientes: 0, errores: 0 };
+  const filas = [];
+  const TOPE = 80;
+  for (const p of elegibles.slice(0, TOPE)) {
+    let r;
+    try { r = await solicitarResena(env, p.pedido, p.mkt, ctx); }
+    catch (e) { r = { ok: false, estado: 'error', detalle: (e.message || '').slice(0, 200) }; }
+    if (r.rol_falta) return { ...res, ok: false, rol_falta: true };
+    if (r.estado === 'enviada') res.enviadas++;
+    else if (r.estado === 'ya_enviada') res.ya_enviadas++;
+    else if (r.estado === 'pendiente') res.pendientes++;
+    else res.errores++;
+    filas.push({ seller, pedido: p.pedido, fecha_pedido: p.fecha, fecha_solicitud: new Date().toISOString(), estado: r.estado, detalle: r.detalle || '' });
+    await sleep(1100);   // Solicitations API ~1 req/s
+  }
+  if (filas.length) await upsertSupabase(env, 'resenas_pedidas', filas);
+  return res;
 }
 
 async function traerInventarioFBA(env, marketplaceId, ctx) {

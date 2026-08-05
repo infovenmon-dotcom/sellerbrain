@@ -176,6 +176,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <a id="nav-fichas" onclick="cambiarVista('fichas')"><span class="ic">🛡️</span> Vigilancia de ficha</a>
     <a id="nav-fba" onclick="cambiarVista('fba')"><span class="ic">📐</span> Dimensiones y categoría</a>
     <a id="nav-dev" onclick="cambiarVista('dev')"><span class="ic">↩️</span> Devoluciones</a>
+    <a id="nav-resenas" onclick="cambiarVista('resenas')"><span class="ic">⭐</span> Pedir reseña</a>
     <div class="sep">Planificación</div>
     <a id="nav-stock" onclick="cambiarVista('stock')"><span class="ic">📦</span> Stock y reposición</a>
     <a id="nav-kw" onclick="cambiarVista('kw')"><span class="ic">🔑</span> Keywords</a>
@@ -290,6 +291,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <button class="chip" id="btn-reemb" onclick="cargarReembCliente()">💸 Cargar reembolsos (Finanzas)</button>
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae los reembolsos a clientes casi al momento (Finances API). Requiere el rol «Finance and Accounting» en tu app de Amazon; si no lo tienes, te lo dice.</span>
         <div id="cx-reemb-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <div style="margin-top:12px">
+        <button class="chip" id="btn-resenas" onclick="pedirResenasAdmin()">⭐ Pedir reseñas (elegibles)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Solicita la reseña oficial de Amazon a los pedidos que están en ventana. Lo ideal es dejarlo <b>automático</b> (RESENAS_AUTO=1 en Cloudflare); este botón es para lanzarlo a mano.</span>
+        <div id="cx-resenas-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
       </div>
 
       <div style="margin-top:12px">
@@ -3180,6 +3187,30 @@ async function cargarReembCliente(){
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
+// Pide reseña (Solicitations API) a los pedidos elegibles.
+async function pedirResenasAdmin(){
+  var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
+  var box=document.getElementById('cx-resenas-res'), btn=document.getElementById('btn-resenas');
+  if(!key){box.innerHTML='<span style="color:var(--am)">Pega tu SB_API_KEY (admin) arriba.</span>';return;}
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Pidiendo reseñas a los pedidos en ventana… puede tardar 1-2 min, no cierres.</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/resenas-run?key='+encodeURIComponent(key));
+    var d=await r.json();
+    if(d.rol_falta){
+      box.innerHTML='<div style="color:var(--am)">⚠️ Tu app de Amazon no tiene el rol para pedir reseñas (Orders / Solicitations).</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Solicítalo en Seller Central → tu app. Hasta entonces este botón no puede enviar.</div>';
+    } else if(d.ok){
+      box.innerHTML='<div style="color:var(--gn)">✅ Hecho: <b>'+(d.enviadas||0)+'</b> reseñas solicitadas'+
+        (d.ya_enviadas?(' · '+d.ya_enviadas+' ya pedidas antes'):'')+
+        (d.pendientes?(' · '+d.pendientes+' aún no en ventana'):'')+'.</div>'+
+        '<div style="color:var(--mu);margin-top:4px">Revisados '+(d.revisados||0)+' pedidos. Míralo en «⭐ Pedir reseña».</div>';
+    } else {
+      box.innerHTML='<span style="color:var(--rd)">'+(d.error||'No se pudo ejecutar')+'</span>';
+    }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
 // Lanza la ingesta de Buy Box (un lote de ASIN por pulsación).
 async function cargarBuyBoxAdmin(){
   var key=(document.getElementById('cx-key').value||SB_CONFIG.apiKey||'').trim();
@@ -3635,6 +3666,7 @@ var TOOL_SRC = {
   compras: { src:'compras.html',                    title:'Compras de mercancía · Coste real y 309/349' },
   guia:    { src:'guia.html',                        title:'Guía de inicio · Cómo empezar con SellerBrain' },
   dev:     { src:'devoluciones.html',              title:'Devoluciones · Motivos y control' },
+  resenas: { src:'resenas.html',                   title:'Pedir reseña · Solicitud oficial de Amazon (permitido)' },
   stock:   { src:'stock.html',                     title:'Stock y reposición' }
 };
 // Secciones aún no construidas → aviso "en desarrollo":

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Pedir reseña (permitido por Amazon)</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:34px 0 20px;text-align:center}
+.hero h1{font-family:'Syne',sans-serif;font-size:25px;font-weight:800;line-height:1.25}
+.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:680px;margin:10px auto 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}
+.inf b{color:rgba(255,255,255,.75)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:6px}
+.kpi{background:var(--card2);border:1px solid var(--bd);border-radius:14px;padding:15px 16px}
+.kpi .n{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;line-height:1}
+.kpi .l{font-size:11px;color:var(--mu);margin-top:6px;line-height:1.35}
+.kpi.good .n{color:var(--gn)}.kpi.warn .n{color:var(--am)}.kpi.or .n{color:var(--or2)}
+.pill{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}
+.pill.on{background:rgba(46,204,113,.15);color:var(--gn)}
+.pill.off{background:rgba(255,255,255,.07);color:var(--mu)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:6px 8px;color:var(--mu);font-weight:500;font-size:11px}
+td{padding:8px;border-top:1px solid rgba(255,255,255,.06)}
+.ok{color:var(--gn)}.warn{color:var(--am)}.mut{color:var(--mu2)}
+.steps{font-size:12px;color:var(--mu2);line-height:1.7}
+.steps b{color:rgba(255,255,255,.8)}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:760px;margin-left:auto;margin-right:auto}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Seller<b>Brain</b></div>
+  <div class="badge">⭐ Pedir reseña</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>Consigue más reseñas, <span>sin saltarte las reglas</span></h1>
+  <p>SellerBrain usa la <b>API oficial de Amazon</b> para pedir la reseña: envía la <b>misma solicitud estándar</b> que el botón «Solicitar una reseña» de Seller Central. Una por pedido, dentro de la ventana que fija Amazon (≈4-30 días tras la entrega), sin tocar los datos del cliente ni mandar correos por tu cuenta. 100% dentro de política.</p>
+</div>
+
+<!-- Estado -->
+<div class="card">
+  <div class="ct"><span class="ci">📊</span> Estado de las solicitudes</div>
+  <div id="res-status" style="font-size:12px;color:var(--mu);margin-bottom:10px">🔄 Cargando…</div>
+  <div class="kpis">
+    <div class="kpi good"><div class="n" id="k-env">—</div><div class="l">Reseñas solicitadas (enviadas a Amazon)</div></div>
+    <div class="kpi warn"><div class="n" id="k-pend">—</div><div class="l">Pendientes (aún no en ventana o reintentando)</div></div>
+    <div class="kpi or"><div class="n" id="k-auto">—</div><div class="l">Automático diario</div></div>
+  </div>
+</div>
+
+<!-- Cómo funciona -->
+<div class="card">
+  <div class="ct"><span class="ci">⚙️</span> Cómo funciona</div>
+  <div class="steps">
+    · <b>Automático:</b> cada día, SellerBrain revisa tus pedidos recientes y pide la reseña de los que entran en ventana. Tú no haces nada.<br>
+    · <b>Amazon decide:</b> si un pedido es muy reciente, ya se pidió, o el comprador no quiere, Amazon lo rechaza y no se envía. No hay riesgo de duplicar ni de spam.<br>
+    · <b>Una vez por pedido:</b> no se vuelve a molestar al cliente.<br>
+    · <b>Sin datos personales:</b> es Amazon quien envía el mensaje; tú nunca ves ni usas el correo del cliente.
+  </div>
+  <div id="res-auto-nota" style="margin-top:10px;font-size:11.5px;color:var(--mu)"></div>
+</div>
+
+<!-- Registro -->
+<div class="card">
+  <div class="ct"><span class="ci">🗒️</span> Últimas solicitudes</div>
+  <div style="overflow-x:auto"><table>
+    <thead><tr>
+      <th style="width:88px">Fecha</th>
+      <th>Pedido</th>
+      <th>Estado</th>
+      <th>Detalle</th>
+    </tr></thead>
+    <tbody id="res-tabla"></tbody>
+  </table></div>
+</div>
+
+<div class="disclaimer">SellerBrain solo usa la Solicitations API oficial de Amazon (mensaje «Solicitud de reseña del producto y valoración del vendedor»). No se envían correos propios ni se accede a los datos de contacto del comprador. Cumple las políticas de Amazon y el RGPD.</div>
+
+</div>
+
+<script>
+var RB={base:'',tok:''};
+function rbInit(){ try{ RB.base=(localStorage.getItem('sb_api_base')||'').replace(/\/$/,''); RB.tok=sessionStorage.getItem('fba_token')||''; }catch(e){ RB.base=''; RB.tok=''; } return !!(RB.base&&RB.tok); }
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function pedidoLink(p){ if(!p) return '—';
+  return '<a href="https://sellercentral.amazon.es/orders-v3/order/'+encodeURIComponent(p)+'" target="_blank" rel="noopener" title="Abrir el pedido en Seller Central: '+esc(p)+'" style="color:#4a9ede;text-decoration:none;white-space:nowrap">Ver ↗</a>';
+}
+function estadoPill(e){
+  if(e==='enviada') return '<span class="ok">✓ Enviada</span>';
+  if(e==='ya_enviada') return '<span class="mut">Ya solicitada antes</span>';
+  if(e==='pendiente') return '<span class="warn">⏳ Pendiente</span>';
+  return '<span class="mut">'+esc(e||'—')+'</span>';
+}
+function cargarResenas(){
+  if(!rbInit()){ document.getElementById('res-status').innerHTML='<span class="warn">Inicia sesión para ver tus solicitudes.</span>'; return; }
+  fetch(RB.base+'/v1/resenas',{headers:{'Authorization':'Bearer '+RB.tok}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var r=(d&&d.resumen)||{enviadas:0,ya_enviadas:0,pendientes:0,errores:0};
+      document.getElementById('k-env').textContent=(r.enviadas||0);
+      document.getElementById('k-pend').textContent=(r.pendientes||0);
+      var auto=!!(d&&d.auto_on);
+      document.getElementById('k-auto').innerHTML=auto?'<span class="pill on">ON</span>':'<span class="pill off">OFF</span>';
+      document.getElementById('res-auto-nota').innerHTML = auto
+        ? '✅ El automático diario está <b style="color:var(--gn)">activado</b>: no tienes que hacer nada.'
+        : '⏸️ El automático está <b>apagado</b>. Para encenderlo, pon <b>RESENAS_AUTO=1</b> en las variables del Worker (Cloudflare). Mientras, puedes lanzarlo a mano desde <b>🔌 Conexión → «⭐ Pedir reseñas»</b>.';
+      var datos=(d&&d.datos)||[];
+      document.getElementById('res-status').innerHTML= datos.length
+        ? ('<b>'+(r.enviadas||0)+'</b> reseñas solicitadas · <b>'+(r.ya_enviadas||0)+'</b> ya pedidas antes · <b>'+(r.pendientes||0)+'</b> pendientes')
+        : 'Aún no se ha solicitado ninguna reseña. En cuanto haya pedidos en ventana (y el automático o el botón se ejecute), aparecerán aquí.';
+      var tb=document.getElementById('res-tabla');
+      tb.innerHTML = datos.length ? datos.map(function(x){
+        return '<tr>'+
+          '<td class="mut" style="font-size:11.5px;white-space:nowrap">'+(x.fecha_solicitud?String(x.fecha_solicitud).slice(0,10):'—')+'</td>'+
+          '<td>'+pedidoLink(x.pedido)+'</td>'+
+          '<td>'+estadoPill(x.estado)+'</td>'+
+          '<td class="mut" style="font-size:11px">'+esc((x.detalle||'').slice(0,80))+'</td></tr>';
+      }).join('') : '<tr><td colspan="4" class="mut" style="padding:12px">Sin solicitudes todavía.</td></tr>';
+    })
+    .catch(function(){ document.getElementById('res-status').innerHTML='<span class="warn">No pude cargar el estado ahora mismo.</span>'; });
+}
+cargarResenas();
+</script>
+</body>
+</html>
