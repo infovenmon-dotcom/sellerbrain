@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v100-listings-paralelo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v101-motivos-es'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2051,8 +2051,12 @@ const LISTINGS_MKTS = ['ES', 'FR', 'IT', 'DE', 'BE'];   // marketplaces a compro
 
 // Un SKU en un marketplace: estado + motivo. 404 = no publicado en ese país.
 async function getListingEstado(env, sellerId, sku, mkt, ctx) {
+  // issueLocale: Amazon devuelve los MOTIVOS ya traducidos a este idioma (el del
+  // vendedor), aunque el país sea DE/IT/FR. Por defecto español. Configurable con
+  // la variable LISTINGS_LOCALE (p.ej. en_GB, fr_FR…).
+  const locale = env.LISTINGS_LOCALE || 'es_ES';
   const path = '/listings/2021-08-01/items/' + encodeURIComponent(sellerId) + '/' + encodeURIComponent(sku) +
-    '?marketplaceIds=' + encodeURIComponent(mkt) + '&includedData=summaries,issues';
+    '?marketplaceIds=' + encodeURIComponent(mkt) + '&includedData=summaries,issues&issueLocale=' + encodeURIComponent(locale);
   const token = await lwaToken(env, 'spapi', ctx);
   let r;
   for (let intento = 0; intento < 3; intento++) {
