@@ -481,7 +481,16 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
             <input id="kw-buscar" placeholder="Buscar keyword…" oninput="renderKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 9px;width:150px">
           </div>
         </div>
-        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Tus palabras clave con su rendimiento (30 días) y una <b>puja sugerida</b> para alcanzar tu <b>ACoS objetivo</b>. Con admin, pulsa <b>✏️</b> para poner un valor a mano o <b>«usar»</b> para aplicar la sugerida directamente en Amazon.</div>
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:2px 0 8px">
+          <span style="font-size:11px;color:var(--mu2)">Rango:</span>
+          <input type="date" id="kw-desde" onchange="aplicarRangoKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:4px 7px">
+          <span style="font-size:11px;color:var(--mu)">→</span>
+          <input type="date" id="kw-hasta" onchange="aplicarRangoKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:4px 7px">
+          <button class="acc-cp" onclick="setRangoKeywords(7)" title="Últimos 7 días">7d</button>
+          <button class="acc-cp" onclick="setRangoKeywords(30)" title="Últimos 30 días">30d</button>
+          <button class="acc-cp" onclick="setRangoKeywords(90)" title="Últimos 90 días">90d</button>
+        </div>
+        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Rendimiento por palabra en el <b>rango elegido</b> — impresiones, CTR, CPC, pedidos, <b>CVR</b> (conversión), ACoS y ROAS — para trabajar conversión y rentabilidad, con una <b>puja sugerida</b> según tu <b>ACoS objetivo</b>. Con admin, pulsa <b>✏️</b> para poner un valor a mano o <b>«usar»</b> para aplicar la sugerida en Amazon.</div>
         <div id="ppc-keywords"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
       </div>
 
@@ -1326,15 +1335,45 @@ function renderPlacement(){
 }
 
 // ---- Keywords y pujas ----
-var KW_DATA=null;
+var KW_DATA=null, KW_RANGO=null;
+function _kwFechasDefault(){
+  var hasta=new Date(Date.now()-86400000);        // ayer (los datos de Ads van a día vencido)
+  var desde=new Date(Date.now()-30*86400000);     // 30 días atrás
+  return {desde:desde.toISOString().slice(0,10), hasta:hasta.toISOString().slice(0,10)};
+}
+function setRangoKeywords(dias){
+  var hasta=new Date(Date.now()-86400000);
+  var desde=new Date(Date.now()-(dias)*86400000);
+  var di=document.getElementById('kw-desde'), hi=document.getElementById('kw-hasta');
+  if(di) di.value=desde.toISOString().slice(0,10);
+  if(hi) hi.value=hasta.toISOString().slice(0,10);
+  aplicarRangoKeywords();
+}
 function cargarKeywords(){
   var el=document.getElementById('ppc-keywords'); if(!el) return;
   if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Disponible con tus datos reales.</div>'; return; }
+  var di=document.getElementById('kw-desde'), hi=document.getElementById('kw-hasta'), def=_kwFechasDefault();
+  if(di && !di.value) di.value=def.desde;
+  if(hi && !hi.value) hi.value=def.hasta;
   if(KW_DATA){ renderKeywords(); return; }
-  el.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando…</div>';
-  fetch(SB_CONFIG.apiBase+'/v1/ads/keywords',{headers:authHdr()})
+  aplicarRangoKeywords();
+}
+// Carga el rendimiento por keyword agregado en el rango elegido (ppc_keywords_dia).
+function aplicarRangoKeywords(){
+  var el=document.getElementById('ppc-keywords'); if(!el) return;
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Disponible con tus datos reales.</div>'; return; }
+  var di=document.getElementById('kw-desde'), hi=document.getElementById('kw-hasta'), def=_kwFechasDefault();
+  var desde=(di&&di.value)||def.desde, hasta=(hi&&hi.value)||def.hasta;
+  KW_RANGO={desde:desde,hasta:hasta};
+  el.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando '+desde+' → '+hasta+'…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/ads/keywords-perf?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:authHdr()})
     .then(function(r){return r.json();})
-    .then(function(d){ KW_DATA=(d&&d.datos)||[]; renderKeywords(); })
+    .then(function(d){
+      // Si aún no hay tabla diaria (falta correr el SQL / re-cargar keywords), cae
+      // a la lista actual con su resumen de 30 días para no dejar el panel vacío.
+      if(d && d.error){ return fetch(SB_CONFIG.apiBase+'/v1/ads/keywords',{headers:authHdr()}).then(function(r){return r.json();}).then(function(d2){ KW_RANGO=null; KW_DATA=(d2&&d2.datos)||[]; renderKeywords(); }); }
+      KW_DATA=(d&&d.datos)||[]; renderKeywords();
+    })
     .catch(function(){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">No se pudo cargar ahora mismo.</div>'; });
 }
 function _campNombre(cid){ var c=((PPC_DATA&&PPC_DATA.campanas)||[]).filter(function(x){return String(x.campania_id)===String(cid);})[0]; return c?c.nombre:''; }
@@ -1489,34 +1528,63 @@ function renderKeywords(){
   if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">'+(KW_DATA&&KW_DATA.length?'Ningún resultado con ese filtro (prueba a desmarcar «solo activas»).':'Aún no hay keywords. Se cargan a diario (o desde 🔌 Conexión → «Cargar keywords»).')+'</div>'; return; }
   // Orden: primero las que más gastan (donde más importa ajustar la puja).
   datos.sort(function(a,b){return (+b.gasto||0)-(+a.gasto||0) || (+b.puja||0)-(+a.puja||0);});
-  var total=datos.length, tope=200; datos=datos.slice(0,tope);
+  var total=datos.length;
+  // Totales del conjunto FILTRADO (todas, no solo las 200 visibles).
+  var tGasto=0,tVentas=0,tClics=0,tImpr=0,tPed=0;
+  datos.forEach(function(x){ tGasto+=+x.gasto||0; tVentas+=+x.ventas||0; tClics+=+x.clics||0; tImpr+=+x.impresiones||0; tPed+=+x.pedidos||0; });
+  var tAcos=tVentas>0?tGasto/tVentas*100:null, tCvr=tClics>0?tPed/tClics*100:null, tRoas=tGasto>0?tVentas/tGasto:null;
+  var tope=200; datos=datos.slice(0,tope);
   var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
+  var roasObj=acosObj()>0?100/acosObj():4;   // ROAS de equilibrio según ACoS objetivo
   var h='<div style="overflow-x:auto;max-height:460px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D">'+
-    '<th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Clics</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Sugerida</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
+    '<th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px" title="Impresiones">Impr.</th><th style="padding:6px 8px">Clics</th><th style="padding:6px 8px" title="Click-through rate = clics ÷ impresiones">CTR</th><th style="padding:6px 8px" title="Coste por clic = gasto ÷ clics">CPC</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px" title="Pedidos atribuidos (conversiones)">Ped.</th><th style="padding:6px 8px" title="Conversión = pedidos ÷ clics">CVR</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px" title="ACoS = gasto ÷ ventas (menor = más rentable)">ACoS</th><th style="padding:6px 8px" title="ROAS = ventas ÷ gasto (mayor = más rentable)">ROAS</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Sugerida</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
   datos.forEach(function(k){
     var nm=encodeURIComponent(k.keyword||'');
     var campNom=k.campania||_campNombre(k.campania_id)||'';
     var s=pujaSugerida(k);
-    var acosReal=(+k.ventas>0)?(k.gasto/k.ventas*100):null;
+    var clics=+k.clics||0, impr=+k.impresiones||0, gasto=+k.gasto||0, ventas=+k.ventas||0;
+    var pedidos=(k.pedidos!=null?+k.pedidos:null);
+    var ctr=impr>0?clics/impr*100:null;
+    var cpc=clics>0?gasto/clics:null;
+    var cvr=(clics>0&&pedidos!=null)?pedidos/clics*100:null;
+    var roas=gasto>0?ventas/gasto:null;
+    var acosReal=(ventas>0)?(gasto/ventas*100):null;
     var acosCol=acosReal==null?'var(--mu)':(acosReal<=acosObj()?'var(--gn)':(acosReal<=acosObj()*1.5?'var(--am)':'#ff8a8a'));
+    var cvrCol=(cvr==null||clics<5)?'var(--mu)':(cvr>=8?'var(--gn)':(cvr>=4?'var(--am)':'#ff8a8a'));
+    var roasCol=roas==null?'var(--mu)':(roas>=roasObj?'var(--gn)':(roas>=roasObj*0.7?'var(--am)':'#ff8a8a'));
     var sugCell = s ? (s.val!=null?'<span title="'+String(s.motivo).replace(/"/g,'&quot;')+'" style="font-weight:700;color:'+s.color+'">'+s.txt+'</span>':'<span style="color:var(--mu)" title="'+String(s.motivo).replace(/"/g,'&quot;')+'">'+s.txt+'</span>') : '<span style="color:var(--mu)">—</span>';
     var edit=esAdmin?('<button class="acc-cp" title="Poner una puja a mano en Amazon" onclick="editarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+(+k.puja||0)+')">✏️</button>'):'';
     var usar=(esAdmin && s && s.val!=null && Math.abs((s.val)-(+k.puja||0))>=0.01)?(' <button class="acc-cp" style="border-color:rgba(46,230,160,.4);color:var(--or2)" title="Aplicar la puja sugerida ('+s.txt+') en Amazon" onclick="aplicarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+s.val+')">usar</button>'):'';
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
       '<td style="padding:7px 8px;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="'+(k.keyword||'').replace(/"/g,'&quot;')+'"><b>'+(k.keyword||'')+'</b> '+mtBadge(k.concordancia)+'</td>'+
       '<td style="padding:7px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)" title="'+String(campNom).replace(/"/g,'&quot;')+'">'+(campNom||'<span style="color:var(--mu)">—</span>')+'</td>'+
-      '<td style="padding:7px 8px">'+(k.clics!=null?k.clics:'—')+'</td>'+
-      '<td style="padding:7px 8px">'+(k.gasto!=null?f(k.gasto,2)+'€':'—')+'</td>'+
-      '<td style="padding:7px 8px">'+(k.ventas!=null?f(k.ventas,2)+'€':'—')+'</td>'+
-      '<td style="padding:7px 8px;color:'+acosCol+'">'+(acosReal!=null?f(acosReal,0)+'%':(k.clics>0?'∞':'—'))+'</td>'+
+      '<td style="padding:7px 8px;color:var(--mu2)">'+(impr?f(impr,0):'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(k.clics!=null?clics:'—')+'</td>'+
+      '<td style="padding:7px 8px;color:var(--mu2)">'+(ctr!=null?f(ctr,2)+'%':'—')+'</td>'+
+      '<td style="padding:7px 8px;color:var(--mu2)">'+(cpc!=null?f(cpc,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(k.gasto!=null?f(gasto,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(pedidos!=null?pedidos:'—')+'</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:'+cvrCol+'" title="conversión">'+(cvr!=null?f(cvr,1)+'%':'—')+'</td>'+
+      '<td style="padding:7px 8px">'+(k.ventas!=null?f(ventas,2)+'€':'—')+'</td>'+
+      '<td style="padding:7px 8px;color:'+acosCol+'">'+(acosReal!=null?f(acosReal,0)+'%':(clics>0?'∞':'—'))+'</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:'+roasCol+'">'+(roas!=null?f(roas,2):'—')+'</td>'+
       '<td style="padding:7px 8px;font-weight:700;color:var(--or2)">'+(k.puja!=null?f(k.puja,2)+'€':'—')+'</td>'+
       '<td style="padding:7px 8px">'+sugCell+'</td>'+
       '<td style="padding:7px 8px">'+((k.estado||'').toLowerCase()==='enabled'?'<span style="color:var(--gn)">activa</span>':'<span style="color:var(--mu)">'+(k.estado||'').toLowerCase()+'</span>')+'</td>'+
       (esAdmin?('<td style="padding:7px 8px;white-space:nowrap">'+edit+usar+'</td>'):'')+'</tr>';
   });
   h+='</tbody></table></div>';
-  if(total>tope) h+='<div style="font-size:11px;color:var(--mu);margin-top:6px">Mostrando 200 de '+total+' keywords (las de más gasto). Usa el buscador para acotar.</div>';
+  var rango=KW_RANGO?(' · '+KW_RANGO.desde+' → '+KW_RANGO.hasta):' · resumen 30 días';
+  h+='<div style="font-size:11.5px;color:var(--mu2);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center">'+
+     '<span><b style="color:var(--tx)">'+total+'</b> keywords'+rango+'</span>'+
+     '<span>Gasto <b style="color:var(--tx)">'+f(tGasto,2)+'€</b></span>'+
+     '<span>Ventas <b style="color:var(--tx)">'+f(tVentas,2)+'€</b></span>'+
+     '<span>ACoS <b style="color:var(--tx)">'+(tAcos!=null?f(tAcos,0)+'%':'—')+'</b></span>'+
+     '<span>CVR <b style="color:var(--tx)">'+(tCvr!=null?f(tCvr,1)+'%':'—')+'</b></span>'+
+     '<span>ROAS <b style="color:var(--tx)">'+(tRoas!=null?f(tRoas,2):'—')+'</b></span>'+
+     '</div>';
+  if(total>tope) h+='<div style="font-size:11px;color:var(--mu);margin-top:4px">Mostrando 200 de '+total+' keywords (las de más gasto). Usa el buscador para acotar.</div>';
   el.innerHTML=h;
 }
 // Aplica una puja concreta (la sugerida) en Amazon, con confirmación.

@@ -18,6 +18,7 @@ Worker actual: **v98-listings-diag** (verifícalo en `…workers.dev/version`).
 - [ ] `sql/listings-pais.sql` — **estado de listings por país** ← el de "no sale nada"
 - [ ] `sql/listings-acciones.sql` — registro de cerrar/reabrir listing
 - [ ] `sql/ppc-keywords-perf.sql` — rendimiento por keyword (para la puja sugerida)
+- [ ] `sql/ppc-keywords-dia.sql` — **rendimiento DIARIO por keyword + filtro por fechas** (CVR/CTR/CPC/ACoS/ROAS por rango). Tras correrlo, re-carga keywords (🔌 Conexión → «Cargar keywords») para poblar el histórico.
 
 ## 2) Cloudflare → pegar el Worker
 

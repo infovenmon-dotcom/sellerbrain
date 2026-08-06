@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v108-keywords-activas'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v109-keywords-rango'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -198,7 +198,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -1126,6 +1126,35 @@ export default {
           return { ...f, campania: (c && c.campania) || '', campania_estado: (c && c.estado) || '' };
         });
         return json({ datos, actualizado }, cors);
+      }
+
+      // --- KEYWORDS por RANGO DE FECHAS: rendimiento agregado (gasto, clics,
+      //     impresiones, ventas, pedidos → CVR/CTR/CPC/ACoS/ROAS) entre dos días.
+      //     Lee ppc_keywords_dia vía RPC kw_perf_rango. Lectura. ---
+      if (url.pathname === '/v1/ads/keywords-perf') {
+        const hoy = new Date();
+        const finDef = new Date(hoy.getTime() - 86400000).toISOString().slice(0, 10);   // ayer
+        const iniDef = new Date(hoy.getTime() - 30 * 86400000).toISOString().slice(0, 10); // 30 días
+        const desde = (url.searchParams.get('desde') || iniDef).slice(0, 10);
+        const hasta = (url.searchParams.get('hasta') || finDef).slice(0, 10);
+        let datos = [];
+        try {
+          const r = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/kw_perf_rango?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta),
+            { headers: { apikey: env.SUPABASE_SERVICE_KEY } });
+          if (r.ok) datos = await r.json();
+          else return json({ error: 'rpc ' + r.status, hint: 'Ejecuta sql/ppc-keywords-dia.sql en Supabase', desde, hasta, datos: [] }, cors);
+        } catch (e) { return json({ error: (e && e.message) || String(e), desde, hasta, datos: [] }, cors); }
+        // Normaliza tipos (la RPC devuelve bigint como número) y añade puja num.
+        datos = (datos || []).map(d => ({
+          keyword_id: d.keyword_id, pais: d.pais, campania_id: d.campania_id,
+          keyword: d.keyword || '', concordancia: d.concordancia || '',
+          puja: (d.puja != null ? +d.puja : null), estado: d.estado || '',
+          campania: d.campania || '', campania_estado: d.campania_estado || '',
+          clics: +d.clics || 0, impresiones: +d.impresiones || 0,
+          gasto: d.gasto != null ? +d.gasto : 0, ventas: d.ventas != null ? +d.ventas : 0,
+          pedidos: +d.pedidos || 0, dias: +d.dias || 0
+        }));
+        return json({ datos, desde, hasta }, cors);
       }
 
       // --- Ingesta de keywords + rendimiento (admin). En segundo plano (el informe
@@ -2550,9 +2579,11 @@ async function adsInformeKeywordPerf(env, profileId, desde, hasta) {
     configuration: {
       adProduct: 'SPONSORED_PRODUCTS',
       groupBy: ['keyword'],
-      columns: ['keywordId', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
+      // DAILY (una fila por keyword y día) para poder guardar el detalle diario en
+      // ppc_keywords_dia y luego filtrar por rango de fechas en el panel.
+      columns: ['date', 'keywordId', 'campaignId', 'cost', 'clicks', 'impressions', 'sales14d', 'purchases14d'],
       reportTypeId: 'spKeywords',
-      timeUnit: 'SUMMARY',
+      timeUnit: 'DAILY',
       format: 'GZIP_JSON'
     }
   };
@@ -2566,13 +2597,18 @@ async function adsInformeKeywordPerf(env, profileId, desde, hasta) {
       const ds = new DecompressionStream('gzip');
       const txt = await new Response(new Response(await gz.arrayBuffer()).body.pipeThrough(ds)).text();
       const arr = JSON.parse(txt);
-      const map = {};
+      const map = {};    // resumen por keyword (suma del periodo) → puja sugerida y columnas de ppc_keywords
+      const dias = [];   // filas diarias → ppc_keywords_dia (para el filtro por fechas)
       for (const r of (arr || [])) {
         const id = String(r.keywordId || '');
         if (!id) continue;
-        map[id] = { clics: +r.clicks || 0, gasto: +r.cost || 0, ventas: +r.sales14d || 0, pedidos: +r.purchases14d || 0, impresiones: +r.impressions || 0 };
+        const clics = +r.clicks || 0, gasto = +r.cost || 0, ventas = +r.sales14d || 0, pedidos = +r.purchases14d || 0, impresiones = +r.impressions || 0;
+        const m = map[id] || (map[id] = { clics: 0, gasto: 0, ventas: 0, pedidos: 0, impresiones: 0 });
+        m.clics += clics; m.gasto += gasto; m.ventas += ventas; m.pedidos += pedidos; m.impresiones += impresiones;
+        const fecha = String(r.date || '').slice(0, 10);
+        if (fecha) dias.push({ keyword_id: id, campania_id: String(r.campaignId || ''), fecha, clics, gasto: +gasto.toFixed(2), ventas: +ventas.toFixed(2), pedidos, impresiones });
       }
-      return map;
+      return { map, dias };
     }
     if (j.status === 'FAILURE') throw new Error('Ads spKeywords FAILURE');
   }
@@ -2686,7 +2722,16 @@ async function ingestaKeywords(env, opts) {
       try {
         const hoy = new Date(), fin = new Date(hoy.getTime() - 86400000);
         const ini = new Date(fin.getTime() - 29 * 86400000);
-        perf = await adsInformeKeywordPerf(env, profileId, ini.toISOString().slice(0, 10), fin.toISOString().slice(0, 10));
+        const rep = await adsInformeKeywordPerf(env, profileId, ini.toISOString().slice(0, 10), fin.toISOString().slice(0, 10));
+        perf = (rep && rep.map) || {};
+        // Detalle DIARIO por keyword → ppc_keywords_dia (para el filtro por fechas).
+        // PK (seller,pais,keyword_id,fecha): el upsert acumula histórico sin borrar.
+        const dias = (rep && rep.dias) || [];
+        if (dias.length) {
+          const drows = dias.map(d => ({ seller: 'venmon', pais, keyword_id: d.keyword_id, campania_id: d.campania_id, fecha: d.fecha, clics: d.clics, impresiones: d.impresiones, gasto: d.gasto, ventas: d.ventas, pedidos: d.pedidos }));
+          for (let i = 0; i < drows.length; i += 500) { try { await upsertSupabase(env, 'ppc_keywords_dia', drows.slice(i, i + 500)); } catch (_) {} }
+          res.pasos.push({ pais, dias: drows.length });
+        }
       } catch (e) { res.pasos.push({ pais, perf_error: (e.message || '').slice(0, 120) }); }
       const rows = ks.map(k => {
         const id = String(k.keywordId || '');
