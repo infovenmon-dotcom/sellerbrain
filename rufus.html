@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SellerBrain — Rufus · Auditor de atributos para la IA de Amazon</title>
+<title>SellerBrain — Rufus & COSMO · Auditor de listing para la IA de Amazon</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -18,7 +18,7 @@ body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-
 .hero{padding:30px 0 12px;text-align:center}
 .hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1.25}
 .hero h1 span{color:var(--or)}
-.hero p{color:var(--mu);font-size:13px;max-width:720px;margin:10px auto 0}
+.hero p{color:var(--mu);font-size:13px;max-width:740px;margin:10px auto 0}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
 .ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
@@ -38,7 +38,7 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
 .score{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .ring{--p:0;width:96px;height:96px;border-radius:50%;background:conic-gradient(var(--or) calc(var(--p)*1%), #222 0);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .ring>div{width:76px;height:76px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center}
-.ring .n{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1}
+.ring .n{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1}
 .ring .l{font-size:9px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em}
 .attr{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
 .attr .ico{flex-shrink:0;width:18px}
@@ -51,7 +51,7 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
 .pill.gn{background:rgba(46,204,113,.14);color:var(--gn)}
 .pill.am{background:rgba(245,166,35,.14);color:var(--am)}
 .pill.rd{background:rgba(232,64,64,.14);color:var(--rd)}
-.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:760px;margin-left:auto;margin-right:auto}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:780px;margin-left:auto;margin-right:auto}
 .err{display:none;margin-top:10px;padding:12px;border-radius:10px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.25);font-size:12px;color:var(--rd)}
 </style>
 </head>
@@ -59,34 +59,34 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
 
 <div class="topbar">
   <div class="logo">Seller<b>Brain</b></div>
-  <div class="badge">🤖 Rufus · Atributos IA</div>
+  <div class="badge">🤖 Rufus & COSMO</div>
 </div>
 
 <div class="wrap">
 
 <div class="hero">
-  <h1>¿Tu ficha está lista para <span>Rufus</span>, la IA de compra de Amazon?</h1>
-  <p>Rufus ya media el <b>15-20%</b> de las búsquedas en móvil y responde al comprador leyendo los <b>atributos estructurados</b> de tu ficha. Si un dato no está, Rufus no lo puede decir y recomienda a la competencia. Aquí puntúas la cobertura de tu ficha y ves qué atributos rellenar.</p>
+  <h1>¿Tu ficha está lista para <span>Rufus y COSMO</span>?</h1>
+  <p>COSMO es el nuevo motor de Amazon: entiende la <b>intención</b> (para quién, para qué, cuándo, dónde), no solo las keywords. Rufus responde al comprador <b>leyendo tu ficha</b>. Aquí auditamos tu listing contra los <b>15 atributos COSMO</b>, los <b>penalizadores de Rufus</b> y las preguntas típicas del comprador — y te decimos exactamente qué falta.</p>
 </div>
 
 <div class="card" style="border-color:rgba(74,158,222,.3);background:rgba(74,158,222,.05)">
   <div class="ct"><span class="ci" style="background:rgba(74,158,222,.15)">💡</span> Por qué importa (2026)</div>
-  <div class="rule">Rufus responde preguntas del comprador (“¿es apto para lavavajillas?”, “¿sirve para viajar?”) con los <b>atributos backend</b> — no con el marketing.</div>
-  <div class="rule">Amazon prioriza fichas con <b>90%+ de atributos rellenos</b> (material, uso, certificaciones…) por encima del “keyword stuffing”.</div>
-  <div class="rule">Con el nuevo límite de <b>75 caracteres</b> en el título, los atributos e Item Highlights pasan a ser el sitio donde vive el SEO. Rellenarlos es doblemente rentable.</div>
+  <div class="rule">COSMO mapea cada producto a <b>intención, uso, audiencia y ocasión</b>: un listing que responde los 15 atributos puede rankear <b>sin historial de ventas</b> (ventaja de lanzamiento).</div>
+  <div class="rule">Rufus extrae sus respuestas <b>del texto de tu ficha</b> (título, viñetas, descripción, A+ y reseñas). Lo que no está escrito, no lo puede decir → recomienda a la competencia.</div>
+  <div class="rule">Rufus <b>penaliza</b>: claims sin dato ("calidad premium"), keyword stuffing, contradicción con las reseñas y <b>rating &lt; 4,0</b>. Los datos medibles y la coherencia ganan.</div>
 </div>
 
 <!-- 1 · FUENTE -->
 <div class="card">
   <div class="ct"><span class="ci">1️⃣</span> Pega el contenido de tu ficha</div>
-  <div class="inf">Trae un producto para cargar su título, o pega a mano el <b>título + viñetas + descripción</b>. Cuanto más completo, mejor analiza.</div>
+  <div class="inf">Trae un producto para cargar su título, o pega a mano el <b>título + viñetas + descripción</b>. Cuanto más completo, mejor audita.</div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
     <button class="btn-sec" id="btn-prod" onclick="traerProductos()">📥 Traer mis productos</button>
     <div style="flex:1;min-width:220px">
       <label class="f">Producto</label>
       <select class="n" id="sel-prod" onchange="elegirProducto()"><option value="">— (pego a mano) —</option></select>
     </div>
-    <div style="min-width:150px">
+    <div style="min-width:140px">
       <label class="f">Categoría (para las preguntas)</label>
       <select class="n" id="sel-cat" onchange="analizar()">
         <option value="generico">Genérico</option>
@@ -99,38 +99,57 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
         <option value="ropa">Ropa / textil</option>
       </select>
     </div>
+    <div style="min-width:110px">
+      <label class="f">Rating actual (⭐)</label>
+      <input class="n" id="f-rating" type="number" min="0" max="5" step="0.1" placeholder="Ej: 4,3" oninput="analizar()">
+    </div>
   </div>
   <label class="f">Título</label>
   <input class="n" id="f-tit" placeholder="Título del producto" oninput="analizar()" style="margin-bottom:10px">
   <label class="f">Viñetas + descripción (pega todo)</label>
-  <textarea class="n" id="f-desc" rows="6" placeholder="Pega aquí las 5 viñetas y la descripción del producto. También el material, medidas, usos, certificaciones..." oninput="analizar()"></textarea>
+  <textarea class="n" id="f-desc" rows="6" placeholder="Pega aquí las 5 viñetas y la descripción. Incluye material, medidas, usos, ocasión, audiencia, certificaciones, compatibilidad..." oninput="analizar()"></textarea>
   <div class="err" id="err-prod"></div>
-  <div style="margin-top:12px"><button class="btn" onclick="analizar(true)">🤖 Analizar para Rufus</button></div>
+  <div style="margin-top:12px"><button class="btn" onclick="analizar(true)">🤖 Auditar COSMO + Rufus</button></div>
 </div>
 
-<!-- 2 · RESULTADO -->
+<!-- 2 · COSMO -->
 <div class="card" id="card-res" style="display:none;border:1.5px solid rgba(46,230,160,.35)">
-  <div class="ct"><span class="ci">📊</span> Preparación para Rufus</div>
+  <div class="ct"><span class="ci">🧠</span> Cobertura COSMO</div>
   <div class="score">
-    <div class="ring" id="ring"><div><div class="n" id="score-n">0%</div><div class="l">cobertura</div></div></div>
+    <div class="ring" id="ring"><div><div class="n" id="score-n">0/15</div><div class="l">atributos</div></div></div>
     <div style="flex:1;min-width:200px">
       <div id="score-txt" style="font-family:'Syne',sans-serif;font-weight:800;font-size:16px"></div>
       <div id="score-sub" style="font-size:12px;color:var(--mu);margin-top:4px"></div>
     </div>
   </div>
-  <div style="margin-top:16px;font-weight:700;font-size:13px">Atributos que Rufus busca</div>
-  <div id="attrs" style="margin-top:6px"></div>
+  <div style="margin-top:16px;font-weight:700;font-size:13px">Los 15 atributos COSMO</div>
+  <div class="inf" style="margin:2px 0 4px">Cada uno es una "pregunta" que tu ficha debe responder. Reparte los que falten entre título, viñetas, descripción, A+ y backend.</div>
+  <div id="attrs" style="margin-top:4px"></div>
 </div>
 
-<!-- 3 · PREGUNTAS -->
+<!-- 3 · PENALIZADORES -->
+<div class="card" id="card-pen" style="display:none">
+  <div class="ct"><span class="ci">🚫</span> Penalizadores de Rufus</div>
+  <div class="inf">Cosas que hacen que Rufus <b>desconfíe</b> de tu ficha o recomiende a otro. Verde = bien; rojo = corrígelo.</div>
+  <div id="pens"></div>
+</div>
+
+<!-- 4 · TIPOS DE PREGUNTA -->
+<div class="card" id="card-tipos" style="display:none">
+  <div class="ct"><span class="ci">🗂️</span> Los 7 tipos de pregunta de Rufus</div>
+  <div class="inf">Rufus recibe estos tipos de consulta. Verde = tu ficha ya tiene con qué responder.</div>
+  <div id="tipos"></div>
+</div>
+
+<!-- 5 · PREGUNTAS DE CATEGORÍA -->
 <div class="card" id="card-q" style="display:none">
-  <div class="ct"><span class="ci">💬</span> Preguntas que hará el comprador a Rufus</div>
-  <div class="inf">Simulamos las dudas típicas de tu categoría. Verde = tu ficha ya lo responde; rojo = Rufus no lo sabe y te puede penalizar.</div>
+  <div class="ct"><span class="ci">💬</span> Preguntas típicas de tu categoría</div>
+  <div class="inf">Dudas concretas del comprador en tu categoría. Verde = respondible con tu texto; rojo = Rufus no lo sabe.</div>
   <div id="qs"></div>
 </div>
 
 <div class="disclaimer">
-El análisis es orientativo: detecta la presencia de cada atributo por palabras clave en el texto que pegas. Lo ideal es rellenar además los <b>campos de atributos del backend</b> en Seller Central (pestaña del listado), no solo el texto — es lo que lee Rufus con más fiabilidad. SellerBrain procesa todo en tu navegador.
+Auditoría <b>orientativa</b>: detecta cada atributo por lenguaje en el texto que pegas (heurística, no IA). Complétala rellenando los <b>atributos del backend</b> en Seller Central (Intended Use, Target Audience, material…), que es lo que Rufus lee con más fiabilidad. Todo se procesa en tu navegador. Cuando conectemos el generador con IA, cada "falta" se podrá rellenar con un clic.
 </div>
 
 </div>
@@ -141,18 +160,23 @@ function apiCred(){ try{ return localStorage.getItem('sb_api_key')||sessionStora
 function authHdr(){ var c=apiCred(); return c?{'Authorization':'Bearer '+c}:{}; }
 var PRODS=[];
 
-/* Atributos que Rufus/Amazon valoran. det: regex de detección en el texto. */
-var ATTRS = [
-  {k:'material',  nom:'Material',              ej:'acero inox, algodón, silicona sin BPA', det:/\b(acero|inox|aluminio|plástico|plastico|silicona|algod[oó]n|poli[eé]ster|madera|bamb[uú]|vidrio|cristal|cer[aá]mica|cuero|nylon|metal|goma|lana)\b/i},
-  {k:'medidas',   nom:'Medidas / capacidad',   ej:'750 ml, 30x20 cm, 1,5 L',              det:/\b(\d+[.,]?\d*)\s?(ml|l\b|litros?|cm|mm|m\b|cl|g\b|gr|kg|oz|pulgadas?|"|talla|cap)/i},
-  {k:'uso',       nom:'Uso / ocasión',         ej:'para viaje, oficina, deporte, regalo', det:/\b(para|ideal|uso|apto para|perfecto para|pensado para|viaje|oficina|casa|cocina|deporte|gimnasio|regalo|exterior|interior|diario)\b/i},
-  {k:'publico',   nom:'Público objetivo',      ej:'hombre, mujer, niño, unisex, mascota',  det:/\b(hombre|mujer|ni[ñn]o|ni[ñn]a|beb[eé]|unisex|adulto|infantil|mascota|perro|gato|senior)\b/i},
-  {k:'cantidad',  nom:'Cantidad / pack',       ej:'pack de 2, set de 6, 500 uds',          det:/\b(pack|set|juego|lote|unidades|uds|piezas|x\s?\d+|\d+\s?(uds|piezas|unidades))\b/i},
-  {k:'color',     nom:'Color',                 ej:'negro, azul, transparente',             det:/\b(negro|blanco|azul|rojo|verde|gris|rosa|amarillo|marr[oó]n|beige|transparente|plateado|dorado|multicolor|colores)\b/i},
-  {k:'cert',      nom:'Certificaciones / seguridad', ej:'CE, sin BPA, apto alimentario',   det:/\b(ce\b|sin bpa|bpa[- ]?free|libre de bpa|apto (para )?aliment|homologado|certificad|iso\b|fda|fsc|ecol[oó]gico|hipoalerg)/i},
-  {k:'cuidado',   nom:'Cuidado / mantenimiento', ej:'apto lavavajillas, lavable a máquina', det:/\b(lavavajillas|lavable|lavadora|a mano|reutilizable|f[aá]cil de limpiar|mantenimiento|no requiere)\b/i},
-  {k:'compat',    nom:'Compatibilidad',        ej:'compatible con Thermomix TM6',          det:/\b(compatible|encaja|para modelo|para (el|la)?\s?[A-Z0-9]|válido para|sirve para el)\b/i},
-  {k:'benef',     nom:'Beneficio / problema que resuelve', ej:'mantiene frío 24h, ahorra espacio', det:/\b(mantiene|conserva|ahorra|evita|reduce|protege|antigoteo|antideslizante|hermétic|duradero|resistente|ligero|plegable|ergon[oó]mic)/i}
+/* Los 15 atributos/relaciones COSMO (paper SIGMOD 2024). det: heurística de detección en español. */
+var COSMO = [
+  {k:'func',  nom:'Función principal',        rel:'used_for_func', ej:'"seca la cara", "mantiene el frío"', det:/\b(para\s+\w+|sirve para|permite|ayuda a|mantiene|conserva|protege|seca|calienta|enfr[ií]a|limpia|corta|mezcla|hidrata|ilumina)\b/i},
+  {k:'eve',   nom:'Evento / actividad',       rel:'used_for_eve',  ej:'"para bodas", "pasear al perro"',   det:/\b(boda|fiesta|cumplea[ñn]os|viaje|camping|senderismo|playa|pasear|entrena|excursi[oó]n|p[ií]cnic|evento|navidad|regalo|acampada|monta[ñn]a)\b/i},
+  {k:'aud',   nom:'Audiencia por función',    rel:'used_for_aud',  ej:'"para enfermeras en turnos de 12h"', det:/\b(enfermer|profesor|cociner|deportista|corredor|ciclista|estudiante|profesional|trabajador|conductor|due[ñn]o de|para quienes|para los que)\b/i},
+  {k:'cap',   nom:'Capacidad concreta',       rel:'capable_of',    ej:'"soporte de arco", "aísla 24h"',     det:/\b(capaz de|proporciona|ofrece|soporte|sujeci[oó]n|agarre|aislamiento|impermeab|antidesliz|resistente al|a[ií]sla|soporta|aguanta|hasta \d)\b/i},
+  {k:'task',  nom:'Tarea específica',         rel:'used_to',       ej:'"para construir una valla"',        det:/\b(para (cortar|construir|montar|reparar|coser|pintar|medir|fijar|sujetar|colgar|abrir|cerrar|preparar|batir|exprimir)\w*)\b/i},
+  {k:'as',    nom:'Uso alternativo',          rel:'used_as',       ej:'"también como luz nocturna"',       det:/\b(tambi[eé]n (sirve|se puede usar|vale|como)|puede usarse como|adem[aá]s (sirve|funciona)|2 en 1|dos en uno|multiuso|multifunci[oó]n|versátil)\b/i},
+  {k:'isa',   nom:'Tipo de producto (definición)', rel:'is_a',     ej:'"traje formal", "botella térmica"',  det:/\b(es un|es una|tipo|modelo|kit|set|juego|pack)\b/i, tit:true},
+  {k:'on',    nom:'Temporada / momento',      rel:'used_on',       ej:'"final del invierno", "para el día a día"', det:/\b(verano|invierno|primavera|oto[ñn]o|navidad|temporada|noche|d[ií]a a d[ií]a|estaci[oó]n|todo el a[ñn]o|c[aá]lido|calor|fr[ií]o|lluvia)\b/i},
+  {k:'loc',   nom:'Ubicación / entorno',      rel:'used_in_loc',   ej:'"dormitorio", "exterior"',          det:/\b(cocina|ba[ñn]o|dormitorio|sal[oó]n|oficina|jard[ií]n|exterior|interior|coche|gimnasio|playa|monta[ñn]a|hogar|casa|escritorio|terraza|aire libre)\b/i},
+  {k:'body',  nom:'Parte del cuerpo',         rel:'used_in_body',  ej:'"piel sensible", "cuero cabelludo"', det:/\b(piel|cara|rostro|manos|pies|cabello|pelo|cuero cabelludo|labios|ojos|cuerpo|espalda|cuello|dientes|u[ñn]as|barba|axilas)\b/i},
+  {k:'with',  nom:'Compatibilidad / complemento', rel:'used_with', ej:'"funda + protector", "para iPhone 15"', det:/\b(compatible|junto con|combina con|incluye|se usa con|funda|protector|accesorio|para tu|encaja|para (el|la)?\s?[A-Z0-9])/i},
+  {k:'by',    nom:'Quién lo usa',             rel:'used_by',       ej:'"dueño de gato", "toda la familia"', det:/\b(hombre|mujer|ni[ñn]o|ni[ñn]a|beb[eé]|adulto|familia|due[ñn]o|mascota|perro|gato|unisex|para ti|para toda la familia|abuel)/i},
+  {k:'int',   nom:'Interés del comprador',    rel:'xInterested_in',ej:'"amantes del café", "eco"',         det:/\b(amantes de|si te gusta|aficionad|entusiasta|fan de|interesad|eco|sostenib|vegan|fitness|gourmet|minimalista|natural)\b/i},
+  {k:'xisa',  nom:'Identidad de la audiencia',rel:'xIs_a',         ej:'"mujeres embarazadas", "zurdos"',    det:/\b(embarazada|deportista|estudiante|profesional|vegan|zurd|senior|mayor|principiante|experto|madre|padre|viajero|runner|gamer)\b/i},
+  {k:'want',  nom:'Resultado buscado',        rel:'xWant',         ej:'"para dormir mejor", "lucir radiante"', det:/\b(consigue|lograr[aá]s|para que|resultado|disfruta|siente|ahorra|gana|mejora|luce|rinde|para (jugar|dormir|relajar|descansar|entrenar|cocinar)|sin esfuerzo|m[aá]s c[oó]modo)\b/i}
 ];
 
 var QBANK = {
@@ -183,32 +207,67 @@ function traerProductos(){
 function elegirProducto(){ var i=document.getElementById('sel-prod').value; if(i==='')return; var p=PRODS[+i]; if(!p)return;
   document.getElementById('f-tit').value=p.nom||''; analizar(); }
 
+function contarMedibles(txt){ var m=txt.match(/\b\d+[.,]?\d*\s?(ml|l|litros?|cl|cm|mm|m|g|gr|kg|oz|w|watios?|voltios?|v|mah|h|horas?|min|d[ií]as?|a[ñn]os?|pulgadas?|"|%|€|uds|piezas)\b/gi); return m?m.length:0; }
+
 function analizar(force){
   var tit=document.getElementById('f-tit').value||'';
   var desc=document.getElementById('f-desc').value||'';
   var txt=(tit+' \n '+desc);
   if(!txt.trim()){ if(force) alert('Pega al menos el título (y a poder ser las viñetas).'); return; }
-  document.getElementById('card-res').style.display='block';
-  document.getElementById('card-q').style.display='block';
+  ['card-res','card-pen','card-tipos','card-q'].forEach(function(id){ document.getElementById(id).style.display='block'; });
+  var titWords=(tit.trim().split(/\s+/).filter(Boolean)).length;
 
-  // Cobertura de atributos
-  var hechos=0;
-  var html=ATTRS.map(function(a){
-    var ok=a.det.test(txt);
-    if(ok) hechos++;
-    return '<div class="attr '+(ok?'ok':'no')+'"><span class="ico">'+(ok?'✅':'⬜')+'</span><span><b>'+a.nom+'</b> '+(ok?'<span class="pill gn">detectado</span>':'<span class="pill rd">falta</span>')+'<small>'+(ok?'Presente en tu ficha.':'Añádelo. Ej: '+a.ej)+'</small></span></div>';
+  // 1) Cobertura COSMO (15)
+  var hechos=0, cov={};
+  var html=COSMO.map(function(a){
+    var ok=a.det.test(txt) || (a.tit && titWords>=3);   // is_a: un título descriptivo ya define el tipo
+    cov[a.k]=ok; if(ok) hechos++;
+    return '<div class="attr '+(ok?'ok':'no')+'"><span class="ico">'+(ok?'✅':'⬜')+'</span><span><b>'+a.nom+'</b> <span style="color:var(--mu);font-size:10px">'+a.rel+'</span> '+(ok?'<span class="pill gn">cubierto</span>':'<span class="pill rd">falta</span>')+'<small>'+(ok?'Presente en tu ficha.':'Añádelo. Ej: '+a.ej)+'</small></span></div>';
   }).join('');
   document.getElementById('attrs').innerHTML=html;
-  var pct=Math.round(hechos/ATTRS.length*100);
+  var pct=Math.round(hechos/COSMO.length*100);
   var ring=document.getElementById('ring'); ring.style.setProperty('--p',pct);
-  ring.style.background='conic-gradient('+(pct>=80?'var(--gn)':pct>=50?'var(--am)':'var(--rd)')+' calc('+pct+'*1%), #222 0)';
-  document.getElementById('score-n').textContent=pct+'%';
+  ring.style.background='conic-gradient('+(hechos>=12?'var(--gn)':hechos>=8?'var(--am)':'var(--rd)')+' calc('+pct+'*1%), #222 0)';
+  document.getElementById('score-n').textContent=hechos+'/15';
   var st=document.getElementById('score-txt'), ss=document.getElementById('score-sub');
-  if(pct>=80){ st.textContent='✓ Ficha lista para Rufus'; st.style.color='var(--gn)'; ss.textContent='Rufus puede responder casi cualquier duda del comprador.'; }
-  else if(pct>=50){ st.textContent='⚠️ A medias'; st.style.color='var(--am)'; ss.textContent='Faltan atributos: Rufus dejará preguntas sin responder. Objetivo Amazon: 90%+.'; }
-  else { st.textContent='✕ Ficha pobre para la IA'; st.style.color='var(--rd)'; ss.textContent='Rufus apenas tiene datos: recomendará a la competencia. Rellena los atributos que faltan.'; }
+  if(hechos>=13){ st.textContent='✓ Listing sólido para COSMO'; st.style.color='var(--gn)'; ss.textContent='Cubres casi todas las intenciones. Objetivo: 15/15.'; }
+  else if(hechos>=8){ st.textContent='⚠️ A medias'; st.style.color='var(--am)'; ss.textContent='Faltan atributos de intención: COSMO te muestra en menos búsquedas de las que podrías.'; }
+  else { st.textContent='✕ Pobre para COSMO'; st.style.color='var(--rd)'; ss.textContent='Tu ficha va casi solo de keywords. Añade uso, audiencia, ocasión y resultado.'; }
 
-  // Preguntas de la categoría
+  // 2) Penalizadores de Rufus
+  var pen=[];
+  var med=contarMedibles(txt);
+  pen.push({ok:med>=2, t:'Datos medibles', okTxt:med+' dato(s) medible(s) (medidas, capacidad, duración…).', noTxt:'Casi sin cifras. Rufus premia datos concretos: añade capacidad, medidas, duración, potencia.'});
+  var claims=/\b(premium|alta calidad|m[aá]xima calidad|mejor calidad|calidad superior|rendimiento superior|la mejor|el mejor|excelente|incre[ií]ble|s[uú]per\b|lo mejor)\b/i.test(txt);
+  pen.push({ok:!claims, t:'Claims sin dato', okTxt:'Sin frases vacías de calidad.', noTxt:'Detectados claims vagos ("premium", "la mejor calidad"…). Sustitúyelos por datos: "aísla 24 h", "acero 304".'});
+  // keyword stuffing: palabra de contenido muy repetida
+  var pals=(txt.toLowerCase().match(/[a-záéíóúñ]{5,}/g)||[]); var frec={},maxRep=0,palRep='';
+  pals.forEach(function(w){ frec[w]=(frec[w]||0)+1; if(frec[w]>maxRep){maxRep=frec[w];palRep=w;} });
+  var stuffing=maxRep>=5;
+  pen.push({ok:!stuffing, t:'Keyword stuffing', okTxt:'Sin repetición excesiva de una palabra.', noTxt:'La palabra «'+palRep+'» se repite '+maxRep+' veces. Rufus lee coherencia, no relleno — varía el vocabulario.'});
+  var vago=/\b(ideal para|perfecto para)\b/i.test(txt) && med<2;
+  pen.push({ok:!vago, t:'Vaguedad', okTxt:'Los usos van acompañados de concreción.', noTxt:'Usas "ideal/perfecto para" sin concretar. Cambia "ideal para cocinar" por "para meal-prep de 4 raciones".'});
+  var rating=parseFloat((document.getElementById('f-rating').value||'').replace(',','.'));
+  if(!isNaN(rating)) pen.push({ok:rating>=4.0, t:'Rating ≥ 4,0', okTxt:'Rating '+rating.toFixed(1)+' ⭐ — dentro del umbral de recomendación.', noTxt:'Rating '+rating.toFixed(1)+' ⭐: por debajo de 4,0 Rufus prácticamente te excluye. Prioriza reseñas y calidad.'});
+  document.getElementById('pens').innerHTML=pen.map(function(p){
+    return '<div class="q"><span class="ico">'+(p.ok?'✅':'⛔')+'</span><span><b>'+p.t+'</b> '+(p.ok?'<span class="pill gn">ok</span>':'<span class="pill rd">a corregir</span>')+'<small style="color:var(--mu);display:block;font-size:11px;margin-top:1px">'+(p.ok?p.okTxt:p.noTxt)+'</small></span></div>';
+  }).join('');
+
+  // 3) Los 7 tipos de pregunta de Rufus (mapeados a la cobertura COSMO)
+  var tipos=[
+    {t:'Necesidad ("¿qué debo mirar al comprar X?")', ok:cov.cap||cov.func},
+    {t:'Ocasión / regalo', ok:cov.eve},
+    {t:'Caso de uso específico', ok:cov.func||cov.task},
+    {t:'Comparación con otros', ok:false, tip:'Se responde mejor con una TABLA COMPARATIVA en el A+.'},
+    {t:'Compatibilidad ("¿funciona con…?")', ok:cov.with},
+    {t:'Sobre el producto (material, talla, lavado)', ok:cov.isa&&(cov.body||cov.with)},
+    {t:'Proyecto / actividad ("¿qué necesito para…?")', ok:cov.eve||cov.task}
+  ];
+  document.getElementById('tipos').innerHTML=tipos.map(function(x){
+    return '<div class="q"><span class="ico">'+(x.ok?'✅':'❌')+'</span><span>'+x.t+' '+(x.ok?'<span class="pill gn">cubierto</span>':'<span class="pill am">flojo</span>')+(x.tip?'<small style="color:var(--mu);display:block;font-size:11px;margin-top:1px">'+x.tip+'</small>':'')+'</span></div>';
+  }).join('');
+
+  // 4) Preguntas de la categoría
   var cat=document.getElementById('sel-cat').value;
   var qs=(QBANK[cat]||QBANK.generico);
   document.getElementById('qs').innerHTML=qs.map(function(q){
@@ -217,20 +276,24 @@ function analizar(force){
   }).join('');
 }
 
-// Heurística: ¿el texto tiene con qué responder esta pregunta?
+// Heurística: ¿el texto tiene con qué responder esta pregunta de categoría?
 function respondible(q,txt){
   var ql=q.toLowerCase();
-  function has(re){ return re.test(txt); }
-  if(/material|hecho|tejido/.test(ql)) return ATTRS[0].det.test(txt);
-  if(/medida|capacidad|talla|ml|potencia/.test(ql)) return ATTRS[1].det.test(txt);
-  if(/lavavajillas|lava|limpia|esteriliz|encoge/.test(ql)) return ATTRS[7].det.test(txt);
-  if(/bpa|apto aliment|seguro|parabenos|sulfatos|normativa|certificaci|dermatol|testad/.test(ql)) return ATTRS[6].det.test(txt);
-  if(/compatible|dispositiv|conexi|entrada|cable|accesorio/.test(ql)) return ATTRS[8].det.test(txt) || ATTRS[9].det.test(txt);
-  if(/edad|hombre|mujer|unisex|raza|tamaño de/.test(ql)) return ATTRS[3].det.test(txt);
-  if(/deporte|actividad|sirve|se usa|para qu[eé]/.test(ql)) return ATTRS[2].det.test(txt);
-  if(/agua|sudor|resistente|mordedura/.test(ql)) return ATTRS[9].det.test(txt);
-  if(/unidad|incluye|cuánt|cuant/.test(ql)) return ATTRS[4].det.test(txt);
-  return ATTRS[2].det.test(txt);
+  var reMat=/\b(acero|inox|aluminio|pl[aá]stico|silicona|algod[oó]n|poli[eé]ster|madera|bamb[uú]|vidrio|cristal|cer[aá]mica|cuero|nylon|metal|goma|lana|tejido)\b/i;
+  var reMed=/\b(\d+[.,]?\d*)\s?(ml|l|litros?|cm|mm|m|cl|g|gr|kg|oz|w|talla|cap|pulgadas?)/i;
+  var reCuid=/\b(lavavajillas|lavable|lavadora|a mano|reutilizable|f[aá]cil de limpiar|esteriliz|encoge)\b/i;
+  var reCert=/\b(ce\b|sin bpa|bpa|apto (para )?aliment|homologado|certificad|iso|fda|ecol[oó]gico|hipoalerg|parabenos|sulfatos|dermatol|testad|normativa)\b/i;
+  var reComp=/\b(compatible|dispositiv|conexi|entrada|cable|accesorio|para (el|la)?\s?[A-Z0-9])/i;
+  var rePub=/\b(hombre|mujer|ni[ñn]o|unisex|edad|raza|tama[ñn]o|beb[eé]|adulto)\b/i;
+  if(/material|hecho|tejido/.test(ql)) return reMat.test(txt);
+  if(/medida|capacidad|talla|ml|potencia/.test(ql)) return reMed.test(txt);
+  if(/lavavajillas|lava|limpia|esteriliz|encoge/.test(ql)) return reCuid.test(txt);
+  if(/bpa|apto aliment|seguro|parabenos|sulfatos|normativa|certificaci|dermatol|testad/.test(ql)) return reCert.test(txt);
+  if(/compatible|dispositiv|conexi|entrada|cable|accesorio/.test(ql)) return reComp.test(txt);
+  if(/edad|hombre|mujer|unisex|raza|tama[ñn]o de/.test(ql)) return rePub.test(txt);
+  if(/agua|sudor|resistente|mordedura/.test(ql)) return /\b(resistente|impermeab|antidesliz|a prueba de|waterproof|sudor|mordedura)\b/i.test(txt);
+  if(/unidad|incluye|cu[aá]nt/.test(ql)) return /\b(pack|set|juego|lote|unidades|uds|piezas|incluye|x\s?\d+)\b/i.test(txt);
+  return /\b(para|sirve|uso|ideal)\b/i.test(txt);
 }
 </script>
 </body>
