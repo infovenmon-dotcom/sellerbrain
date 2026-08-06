@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v103-ppc-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v104-alerta-margen'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1247,7 +1247,7 @@ export default {
         // Admin (clave maestra) puede gestionar/probar un vendedor con ?seller=
         if (!email && url.searchParams.get('seller')) email = url.searchParams.get('seller').trim().toLowerCase();
         if (!email) return json({ error: 'sin_sesion' }, cors, 401);
-        const defs = { on: true, stock_dias: +(env.ALERTAS_STOCK_DIAS || 14), acos: +(env.ALERTAS_ACOS || 40), sobrecoste: +(env.ALERTAS_SOBRECOSTE || 20) };
+        const defs = { on: true, stock_dias: +(env.ALERTAS_STOCK_DIAS || 14), acos: +(env.ALERTAS_ACOS || 40), sobrecoste: +(env.ALERTAS_SOBRECOSTE || 20), margen_min: +(env.ALERTAS_MARGEN_MIN || 10) };
         if (request.method === 'POST') {
           let b; try { b = await request.json(); } catch (_) { b = {}; }
           const clamp = (v, lo, hi, d) => v == null || v === '' ? null : Math.max(lo, Math.min(hi, isFinite(+v) ? +v : d));
@@ -1257,18 +1257,20 @@ export default {
             stock_dias: clamp(b.stock_dias, 1, 120, defs.stock_dias),
             acos: clamp(b.acos, 5, 300, defs.acos),
             sobrecoste: clamp(b.sobrecoste, 0, 100000, defs.sobrecoste),
+            margen_min: clamp(b.margen_min, 0, 90, defs.margen_min),
             actualizado: new Date().toISOString()
           };
           try { await upsertSupabase(env, 'alertas_prefs', [row]); } catch (e) { return json({ error: 'no_guardado', detalle: e.message }, cors, 500); }
-          return json({ ok: true, prefs: { on: row.activo, stock_dias: row.stock_dias ?? defs.stock_dias, acos: row.acos ?? defs.acos, sobrecoste: row.sobrecoste ?? defs.sobrecoste } }, cors);
+          return json({ ok: true, prefs: { on: row.activo, stock_dias: row.stock_dias ?? defs.stock_dias, acos: row.acos ?? defs.acos, sobrecoste: row.sobrecoste ?? defs.sobrecoste, margen_min: row.margen_min ?? defs.margen_min } }, cors);
         }
         // GET
-        let m = null; try { m = (await selSafe(env, 'alertas_prefs?seller=eq.' + encodeURIComponent(email) + '&select=activo,stock_dias,acos,sobrecoste&limit=1', []))[0]; } catch (_) {}
+        let m = null; try { m = (await selSafe(env, 'alertas_prefs?seller=eq.' + encodeURIComponent(email) + '&select=activo,stock_dias,acos,sobrecoste,margen_min&limit=1', []))[0]; } catch (_) {}
         const prefs = {
           on: m && m.activo != null ? !!m.activo : defs.on,
           stock_dias: m && m.stock_dias != null ? +m.stock_dias : defs.stock_dias,
           acos: m && m.acos != null ? +m.acos : defs.acos,
-          sobrecoste: m && m.sobrecoste != null ? +m.sobrecoste : defs.sobrecoste
+          sobrecoste: m && m.sobrecoste != null ? +m.sobrecoste : defs.sobrecoste,
+          margen_min: m && m.margen_min != null ? +m.margen_min : defs.margen_min
         };
         return json({ ok: true, email, prefs, defaults: defs }, cors);
       }
@@ -4305,6 +4307,27 @@ async function calcularAlertas(env, seller, opts) {
         detalle: 'Pierde ' + Math.abs(it.net).toFixed(2) + '€ en 30 días (margen ' + it.mg + '%' + (it.ppc ? ', ' + it.ppc.toFixed(2) + '€ de PPC' : '') + '). Sube precio, baja coste o revisa la publicidad.'
       });
     }
+
+    // 4b) RENTABILIDAD BAJA (preventivo): margen neto DESPUÉS de PPC por debajo del
+    //     umbral (por defecto 10%) pero todavía positivo. El punto clave que pediste:
+    //     antes de entrar en pérdidas ya avisa para que actúes (o apagues la campaña).
+    const MARGEN_MIN = +(opts.margen_min != null ? opts.margen_min : (env.ALERTAS_MARGEN_MIN || 10));
+    const flojos = [];
+    for (const p of (prods || [])) {
+      if (!(p.coste > 0)) continue;
+      const ventas = +p.ventas || 0; if (ventas < LOSS_MIN) continue;
+      const net = (+p.ben || 0) - (+p.ppc || 0);
+      const mgNeto = ventas > 0 ? (net / ventas * 100) : 0;
+      if (net >= 0 && mgNeto < MARGEN_MIN) flojos.push({ nom: p.nom, mg: +mgNeto.toFixed(1), ppc: +p.ppc || 0 });
+    }
+    flojos.sort((a, b) => a.mg - b.mg);
+    for (const it of flojos.slice(0, 10)) {
+      A.push({
+        nivel: 'aviso', cat: 'margen', ic: '⚠️',
+        titulo: 'Rentabilidad baja: ' + it.nom,
+        detalle: 'Su margen neto (tras PPC) ha bajado a ' + it.mg + '%, por debajo de tu umbral (' + MARGEN_MIN + '%)' + (it.ppc ? '. La publicidad se está comiendo el beneficio (' + it.ppc.toFixed(2) + '€ de PPC)' : '') + '. Revisa la campaña: baja pujas o pausa antes de entrar en pérdidas.'
+      });
+    }
   } catch (_) {}
 
   // 5) HIJACKING: cambio de ficha reciente + Buy Box perdida.
@@ -4357,7 +4380,7 @@ async function procesarAlertas(env) {
 
   // Preferencias por vendedor (opt-in + umbrales). Se cargan de una vez.
   const prefs = {};
-  try { for (const p of (await selSafe(env, 'alertas_prefs?select=seller,activo,stock_dias,acos,sobrecoste', []))) prefs[p.seller] = p; } catch (_) {}
+  try { for (const p of (await selSafe(env, 'alertas_prefs?select=seller,activo,stock_dias,acos,sobrecoste,margen_min', []))) prefs[p.seller] = p; } catch (_) {}
 
   const vistos = new Set(), res = [];
   for (const d of lista) {
@@ -4365,7 +4388,7 @@ async function procesarAlertas(env) {
     if (vistos.has(key)) continue; vistos.add(key);
     const p = prefs[d.seller] || prefs[d.email] || null;
     if (p && p.activo === false) continue;   // el vendedor ha desactivado sus alertas
-    const opts = p ? { stock_dias: p.stock_dias, acos: p.acos, sobrecoste: p.sobrecoste } : {};
+    const opts = p ? { stock_dias: p.stock_dias, acos: p.acos, sobrecoste: p.sobrecoste, margen_min: p.margen_min } : {};
     let alertas = [];
     try { alertas = await calcularAlertas(env, d.seller, opts); } catch (_) {}
     if (!alertas.length) continue;
