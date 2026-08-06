@@ -1388,9 +1388,11 @@ function diagRendimientoKw(){
   fetch(SB_CONFIG.apiBase+'/v1/ads/keywords-perf-probe?pais='+encodeURIComponent(pais),{headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(j){
-      if(j && j.ok){
-        if(j.keywords_con_datos>0) d.innerHTML='✅ '+pais+': Amazon devolvió <b>'+j.keywords_con_datos+'</b> keywords con datos ('+j.filas_diarias+' filas diarias) entre '+j.desde+' y '+j.hasta+'. Ya deberían verse las métricas — pulsa un atajo de fechas para recargar.';
-        else d.innerHTML='⚠️ '+pais+': el informe funciona pero vino <b>vacío</b> ('+j.desde+'→'+j.hasta+'). Puede que no haya habido gasto en ese mercado/periodo, o que aún se esté procesando. Prueba otro país o reinténtalo.';
+      var tf=(j&&j.terminos_filas)||0;
+      if(tf>0){
+        d.innerHTML='✅ '+pais+': hay <b>'+tf+'</b> filas de términos en '+j.desde+'→'+j.hasta+' — el panel tiene datos de rendimiento. Pulsa un atajo de fechas (30d) para recargar. <span style="color:var(--mu)">(Si aún ves «—», ejecuta <code>sql/ppc-keywords-dia.sql</code> en Supabase.)</span>';
+      } else if(j && j.ok){
+        d.innerHTML='⚠️ '+pais+': no hay términos de búsqueda guardados en ese rango todavía. Pulsa 🔌 Conexión → «Cargar keywords» (refresca también los términos) y espera 1-3 min.';
       } else {
         d.innerHTML='❌ '+pais+': '+((j&&j.error)||'error')+'. '+((j&&j.pista)||'');
       }
@@ -1575,8 +1577,9 @@ function renderKeywords(){
     var cvrCol=(cvr==null||clics<5)?'var(--mu)':(cvr>=8?'var(--gn)':(cvr>=4?'var(--am)':'#ff8a8a'));
     var roasCol=roas==null?'var(--mu)':(roas>=roasObj?'var(--gn)':(roas>=roasObj*0.7?'var(--am)':'#ff8a8a'));
     var sugCell = s ? (s.val!=null?'<span title="'+String(s.motivo).replace(/"/g,'&quot;')+'" style="font-weight:700;color:'+s.color+'">'+s.txt+'</span>':'<span style="color:var(--mu)" title="'+String(s.motivo).replace(/"/g,'&quot;')+'">'+s.txt+'</span>') : '<span style="color:var(--mu)">—</span>';
-    var edit=esAdmin?('<button class="acc-cp" title="Poner una puja a mano en Amazon" onclick="editarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+(+k.puja||0)+')">✏️</button>'):'';
-    var usar=(esAdmin && s && s.val!=null && Math.abs((s.val)-(+k.puja||0))>=0.01)?(' <button class="acc-cp" style="border-color:rgba(46,230,160,.4);color:var(--or2)" title="Aplicar la puja sugerida ('+s.txt+') en Amazon" onclick="aplicarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+s.val+')">usar</button>'):'';
+    var tieneId=!!(k.keyword_id);
+    var edit=(esAdmin&&tieneId)?('<button class="acc-cp" title="Poner una puja a mano en Amazon" onclick="editarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+(+k.puja||0)+')">✏️</button>'):'';
+    var usar=(esAdmin && tieneId && s && s.val!=null && Math.abs((s.val)-(+k.puja||0))>=0.01)?(' <button class="acc-cp" style="border-color:rgba(46,230,160,.4);color:var(--or2)" title="Aplicar la puja sugerida ('+s.txt+') en Amazon" onclick="aplicarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+s.val+')">usar</button>'):'';
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
       '<td style="padding:7px 8px;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="'+(k.keyword||'').replace(/"/g,'&quot;')+'"><b>'+(k.keyword||'')+'</b> '+mtBadge(k.concordancia)+'</td>'+
       '<td style="padding:7px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)" title="'+String(campNom).replace(/"/g,'&quot;')+'">'+(campNom||'<span style="color:var(--mu)">—</span>')+'</td>'+

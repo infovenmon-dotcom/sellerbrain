@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v110-keywords-perf-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v111-keywords-terminos'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1162,7 +1162,10 @@ export default {
       if (url.pathname === '/v1/ads/keywords-ingest') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
         ctx.waitUntil(ingestaKeywords(env, { pais }).catch(() => {}));
-        return json({ ok: true, lanzado: true, nota: 'Trayendo keywords y su rendimiento en segundo plano (1-3 min). Ábrelo en «PPC → Keywords» en un momento.' }, cors);
+        // Refresca también los TÉRMINOS de búsqueda: es la fuente del rendimiento
+        // por keyword del panel (clics/gasto/ventas por keyword y campaña).
+        ctx.waitUntil(ingestaPPC(env, { solo: 'terminos', pais }).catch(() => {}));
+        return json({ ok: true, lanzado: true, nota: 'Trayendo keywords, su rendimiento y los términos en segundo plano (1-3 min). Ábrelo en «PPC → Keywords» en un momento.' }, cors);
       }
 
       // --- DIAGNÓSTICO (admin): ejecuta el informe de RENDIMIENTO de keywords para
@@ -1176,14 +1179,17 @@ export default {
         const hoy = new Date(), fin = new Date(hoy.getTime() - 86400000);
         const ini = new Date(fin.getTime() - 29 * 86400000);
         const desde = ini.toISOString().slice(0, 10), hasta = fin.toISOString().slice(0, 10);
+        // Fuente REAL del panel: los términos de búsqueda ya recogidos (ppc_terminos).
+        let terminos_filas = 0;
+        try { terminos_filas = (await selSafe(env, 'ppc_terminos?pais=eq.' + encodeURIComponent(pais) + '&fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=keyword&limit=20000', [])).length; } catch (_) {}
         try {
           const rep = await adsInformeKeywordPerf(env, profileId, desde, hasta);
           const map = (rep && rep.map) || {}, dias = (rep && rep.dias) || [];
           const ids = Object.keys(map);
           const muestra = ids.slice(0, 5).map(id => ({ keyword_id: id, ...map[id] }));
-          return json({ ok: true, pais, desde, hasta, keywords_con_datos: ids.length, filas_diarias: dias.length, muestra }, cors);
+          return json({ ok: true, pais, desde, hasta, keywords_con_datos: ids.length, filas_diarias: dias.length, terminos_filas, muestra }, cors);
         } catch (e) {
-          return json({ ok: false, pais, desde, hasta, error: (e && e.message) || String(e), pista: 'Si dice FAILURE, Amazon rechaza el informe; si dice timeout, tarda más que la ventana. Cuéntame el mensaje.' }, cors);
+          return json({ ok: false, pais, desde, hasta, terminos_filas, error: (e && e.message) || String(e), pista: 'El panel usa los TÉRMINOS (ppc_terminos): si terminos_filas>0 el panel tendrá datos aunque el informe spKeywords falle.' }, cors);
         }
       }
 
