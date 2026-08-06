@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v106-plan-pujas'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v107-accion-correo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -154,6 +154,34 @@ export default {
       //     actualizado: abre la URL/health y mira 'version'. ---
       if (url.pathname === '/health' || url.pathname === '/' || url.pathname === '/version') {
         return json({ ok: true, version: SB_VERSION, ts: new Date().toISOString() }, cors);
+      }
+
+      // --- ACCIÓN desde el correo (botón "pausar" / "bajar puja"). El token va
+      //     firmado (HMAC) y caduca; hacer clic aplica el cambio en Amazon. No pide
+      //     login: el token ES la capacidad. Sigue exigiendo ADS_WRITE=1. ---
+      if (url.pathname.startsWith('/a/')) {
+        const o = await verificarToken(env, url.pathname.slice(3));
+        if (!o) return paginaAccion('Enlace no válido o caducado', 'Este enlace ha caducado o no es correcto. Entra en SellerBrain para hacer el cambio a mano.', false);
+        if (String(env.ADS_WRITE || '') !== '1') return paginaAccion('Ejecución desactivada', 'La escritura en Amazon está desactivada (ADS_WRITE). No se ha cambiado nada.', false);
+        if (o.a === 'pausa') {
+          let r = {}; try { r = await adsCampanaEstado(env, o.pais, o.cid, 'PAUSED'); } catch (_) {}
+          return paginaAccion(r.aplicado ? '✓ Campaña pausada' : 'No se pudo pausar',
+            r.aplicado ? '«' + (o.nom || o.cid) + '» (' + o.pais + ') está PAUSADA en Amazon. Puedes reactivarla cuando quieras desde SellerBrain.' : 'Amazon no confirmó el cambio. Revísalo en SellerBrain.', !!r.aplicado);
+        }
+        if (o.a === 'puja') {
+          const token = await lwaToken(env, 'ads');
+          const profileId = ADS_PROFILES[o.pais];
+          let aplicado = false;
+          if (profileId) {
+            try {
+              const rr = await fetch(ADS_HOST + '/sp/keywords', { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token, 'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID, 'Amazon-Advertising-API-Scope': profileId, 'Content-Type': 'application/vnd.spKeyword.v3+json', 'Accept': 'application/vnd.spKeyword.v3+json' }, body: JSON.stringify({ keywords: [{ keywordId: String(o.kw), bid: +o.puja }] }) });
+              const dd = await rr.json().catch(() => null);
+              aplicado = !!(dd && dd.keywords && dd.keywords.success && dd.keywords.success.length);
+            } catch (_) {}
+          }
+          return paginaAccion(aplicado ? '✓ Puja bajada' : 'No se pudo cambiar', aplicado ? 'La puja de «' + (o.nom || o.kw) + '» es ahora ' + (+o.puja).toFixed(2) + '€ en Amazon.' : 'Amazon no confirmó. Revísalo en SellerBrain.', aplicado);
+        }
+        return paginaAccion('Acción desconocida', 'No se reconoce la acción del enlace.', false);
       }
 
       // ============ SEGURIDAD ============
@@ -2764,7 +2792,13 @@ async function autopausaPorRentabilidad(env) {
         let r = {}; try { r = await adsCampanaEstado(env, c.pais, c.campania_id, 'PAUSED'); } catch (_) {}
         lines.push({ nivel: 'critico', cat: 'autopausa', ic: '⏸️', titulo: 'Campaña PAUSADA por baja rentabilidad: ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Pausé automáticamente su única campaña (' + c.pais + ') ' + (r.aplicado ? '✓.' : '— revisa, Amazon no lo confirmó.') });
       } else {
-        lines.push({ nivel: 'aviso', cat: 'autopausa', ic: '⏸️', titulo: 'Recomendado pausar: ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Solo lo anuncia 1 campaña (' + c.pais + '), candidata a pausar. Pon PPC_AUTOPAUSE=1 para que se haga solo.' });
+        // Botón "Pausar esta campaña" en el correo: enlace firmado (caduca en 7 días).
+        let accion = null;
+        try {
+          const tok = await firmarToken(env, { a: 'pausa', pais: c.pais, cid: c.campania_id, nom: it.nom, exp: Math.floor(Date.now() / 1000) + 7 * 86400 });
+          if (tok) accion = { url: (env.WORKER_URL || 'https://sellerbrain-api.info-venmon.workers.dev') + '/a/' + tok, texto: '⏸️ Pausar esta campaña' };
+        } catch (_) {}
+        lines.push({ nivel: 'aviso', cat: 'autopausa', ic: '⏸️', titulo: 'Recomendado pausar: ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Solo lo anuncia 1 campaña (' + c.pais + '). Puedes pausarla desde aquí, o pon PPC_AUTOPAUSE=1 para que se haga solo.', accion });
       }
     } else if (lista.length > 1) {
       lines.push({ nivel: 'aviso', cat: 'autopausa', ic: '⚠️', titulo: 'Rentabilidad baja (varias campañas): ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Lo anuncian ' + lista.length + ' campañas: NO pauso automáticamente (ambiguo). Decide tú cuál bajar o pausar.' });
@@ -4244,6 +4278,28 @@ function b64urlDecode(str) {
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
+// Token de ACCIÓN firmado (para botones "pausar/bajar" en el correo). HMAC sobre
+// el payload JSON. No es un JWT completo: es una capacidad de un solo propósito.
+async function firmarToken(env, obj) {
+  if (!env.SB_JWT_SECRET) return null;
+  const body = b64url(new TextEncoder().encode(JSON.stringify(obj)));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.SB_JWT_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+  return body + '.' + b64url(new Uint8Array(sig));
+}
+async function verificarToken(env, token) {
+  if (!env.SB_JWT_SECRET || !token || token.indexOf('.') < 0) return null;
+  const [body, sig] = token.split('.');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.SB_JWT_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const s = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+  if (b64url(new Uint8Array(s)) !== sig) return null;
+  try { const o = JSON.parse(new TextDecoder().decode(b64urlDecode(body))); if (o.exp && o.exp < Math.floor(Date.now() / 1000)) return null; return o; } catch (_) { return null; }
+}
+function paginaAccion(titulo, msg, ok) {
+  const color = ok ? '#14663f' : '#c0392b';
+  return new Response('<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:Arial,sans-serif;background:#0D0D0D;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center;max-width:420px;padding:24px"><h1 style="color:' + color + ';font-size:22px">' + titulo + '</h1><p style="color:#bbb;font-size:14px;line-height:1.6">' + msg + '</p><a href="https://sellersbrain.io/dashboard.html" style="color:#2EE6A0;font-size:13px">Abrir SellerBrain</a></div></body></html>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
 // Verifica el JWT del login (firma HMAC + caducidad). Devuelve el payload o null.
 async function verificarJWT(env, token) {
   if (!env.SB_JWT_SECRET || !token || token.split('.').length !== 3) return null;
@@ -4563,7 +4619,9 @@ async function enviarEmailAlertas(env, email, alertas) {
       '<div style="font-size:15px">' + a.ic + '</div></td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #eee">' +
       '<div style="font-weight:700;color:' + col + ';font-size:14px">' + esc(a.titulo) + '</div>' +
-      '<div style="color:#5b6b63;font-size:12.5px;margin-top:2px">' + esc(a.detalle) + '</div></td>' +
+      '<div style="color:#5b6b63;font-size:12.5px;margin-top:2px">' + esc(a.detalle) + '</div>' +
+      (a.accion && a.accion.url ? '<div style="margin-top:9px"><a href="' + a.accion.url + '" style="background:#14663f;color:#fff;text-decoration:none;font-weight:700;font-size:12px;padding:8px 15px;border-radius:8px;display:inline-block">' + esc(a.accion.texto || 'Aplicar') + '</a></div>' : '') +
+      '</td>' +
       '<td style="padding:10px 12px;border-bottom:1px solid #eee;text-align:right"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:' + col + ';background:' + bg + ';padding:2px 8px;border-radius:100px">' + (a.nivel === 'critico' ? 'crítico' : 'aviso') + '</span></td></tr>';
   }).join('');
   const html =
