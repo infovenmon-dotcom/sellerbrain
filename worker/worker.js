@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v99-listings-flush'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v100-listings-paralelo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2054,7 +2054,12 @@ async function getListingEstado(env, sellerId, sku, mkt, ctx) {
   const path = '/listings/2021-08-01/items/' + encodeURIComponent(sellerId) + '/' + encodeURIComponent(sku) +
     '?marketplaceIds=' + encodeURIComponent(mkt) + '&includedData=summaries,issues';
   const token = await lwaToken(env, 'spapi', ctx);
-  const r = await fetch(SPAPI_HOST + path, { headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' } });
+  let r;
+  for (let intento = 0; intento < 3; intento++) {
+    r = await fetch(SPAPI_HOST + path, { headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' } });
+    if (r.status !== 429) break;
+    await sleep(1500 * (intento + 1));    // Amazon satura → backoff y reintento
+  }
   if (r.status === 404) return { estado: 'no_publicado', motivo: '', asin: '' };
   if (r.status === 403 || r.status === 401) { const t = await r.text(); return { _rol: true, _err: t.slice(0, 160) }; }
   if (!r.ok) return { _err: 'HTTP ' + r.status };
@@ -2089,19 +2094,23 @@ async function ingestaListingsPais(env, ctx, opts) {
   // corta la tarea en segundo plano, el progreso ya guardado se conserva y la
   // rotación (más antiguos primero) avanza en la siguiente pulsación.
   for (const it of lote) {
+    // Los 5 países del producto EN PARALELO (burst permitido) → ~5× más rápido.
+    let results = [];
+    try {
+      results = await Promise.all(LISTINGS_MKTS.map(p =>
+        getListingEstado(env, sellerId, it.sku, MARKETPLACES[p], ctx).then(e => ({ p, e })).catch(() => ({ p, e: { _err: 'fetch' } }))
+      ));
+    } catch (_) { results = []; }
     const skuRows = [];
-    for (const p of LISTINGS_MKTS) {
-      try {
-        const e = await getListingEstado(env, sellerId, it.sku, MARKETPLACES[p], ctx);
-        if (e._rol) { rolFalta = true; break; }
-        if (e._err) { err++; continue; }
-        skuRows.push({ seller, sku: it.sku, asin: e.asin || it.asin || null, pais: p, estado: e.estado, motivo: e.motivo || '', fecha: new Date().toISOString() });
-        ok++;
-      } catch (_) { err++; }
-      await sleep(220);   // rate limit getListingsItem (~5/s)
+    for (const { p, e } of results) {
+      if (e._rol) { rolFalta = true; continue; }
+      if (e._err) { err++; continue; }
+      skuRows.push({ seller, sku: it.sku, asin: e.asin || it.asin || null, pais: p, estado: e.estado, motivo: e.motivo || '', fecha: new Date().toISOString() });
+      ok++;
     }
     if (skuRows.length) { try { await upsertSupabase(env, 'listings_pais', skuRows); guardados += skuRows.length; } catch (_) {} }
     if (rolFalta) break;
+    await sleep(500);   // entre productos, para no pasar el ritmo sostenido (~5/s)
   }
   if (rolFalta) return { ok: false, rol_falta: true, guardados };
   return { ok: true, skus: lote.length, guardados, ok_calls: ok, err };

@@ -1482,13 +1482,15 @@ function renderFichas(d){
 }
 
 // ---- Listings por país ----
+var _LISTINGS_D=null, _verNoPub=false;
+function toggleNoPub(){ _verNoPub=!_verNoPub; if(_LISTINGS_D) renderListings(_LISTINGS_D); }
 function cargarListings(){
   var body=document.getElementById('listings-body'); if(!body) return;
   if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ body.innerHTML='<div style="color:var(--am);font-size:13px">Conecta tu cuenta (🔌 Conexión) para ver el estado de tus listings por país.</div>'; return; }
   body.innerHTML='<div style="color:var(--mu);font-size:13px">Cargando…</div>';
   fetch(SB_CONFIG.apiBase+'/v1/listings',{headers:authHdr()})
     .then(function(r){return r.json();})
-    .then(function(d){ renderListings(d); })
+    .then(function(d){ _LISTINGS_D=d; renderListings(d); })
     .catch(function(){ body.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo cargar ahora mismo.</div>'; });
 }
 function _estCell(e,sku,pais,asin,esAdmin){
@@ -1551,17 +1553,23 @@ function renderListings(d){
   var totProb=filas.reduce(function(a,f){return a+f._prob;},0);
   var h='<div style="font-size:13px;margin-bottom:8px">'+(totProb?('<b style="color:#ff8a8a">'+totProb+'</b> listing(s) inactivos que revisar.'):'👍 Todos tus listings publicados están activos.')+'</div>'+
         '<div style="display:flex;flex-wrap:wrap;margin-bottom:12px">'+chips+'</div>';
+  // Separa los que tienen listing (activo/inactivo en algún país) de los que NO
+  // están publicados en ninguno (SKUs antiguos/duplicados de pedidos viejos).
+  function estaPublicado(f){ return paises.some(function(p){ return f.p[p] && (f.p[p].estado==='activo'||f.p[p].estado==='inactivo'); }); }
+  var pub=filas.filter(estaPublicado), sinPub=filas.filter(function(f){return !estaPublicado(f);});
+  var mostrar = _verNoPub ? filas : pub;
   // Tabla matriz producto × país
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">Producto</th>';
   paises.forEach(function(p){ h+='<th style="padding:6px 8px;text-align:center">'+(BANDERA[p]||p)+' '+p+'</th>'; });
   h+='</tr></thead><tbody>';
-  filas.forEach(function(f){
+  mostrar.forEach(function(f){
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(f._prob?';background:rgba(232,64,64,.04)':'')+'">'+
        '<td style="padding:7px 8px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+String(f.nombre||f.sku).replace(/"/g,"&quot;")+'"><b>'+String(f.nombre||f.sku).replace(/</g,'&lt;').slice(0,70)+'</b></td>';
     paises.forEach(function(p){ h+='<td style="padding:7px 8px;text-align:center">'+_estCell(f.p[p],f.sku,p,f.asin,esAdmin)+'</td>'; });
     h+='</tr>';
   });
   h+='</tbody></table></div>';
+  if(sinPub.length) h+='<div style="margin-top:8px;font-size:11.5px;color:var(--mu)"><b>'+sinPub.length+'</b> producto(s) no publicados en ningún país (SKUs antiguos o sin oferta). <a href="#" onclick="toggleNoPub();return false" style="color:var(--bl)">'+(_verNoPub?'ocultar':'ver')+'</a></div>';
   // Detalle de inactivos con motivo
   var inact=[];
   filas.forEach(function(f){ paises.forEach(function(p){ if(f.p[p]&&f.p[p].estado==='inactivo') inact.push({nombre:f.nombre||f.sku,pais:p,motivo:f.p[p].motivo}); }); });
