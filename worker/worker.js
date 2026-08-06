@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v104-alerta-margen'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v105-autopausa'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1060,6 +1060,13 @@ export default {
         return json({ ok: true, lanzado: true, nota: 'Trayendo keywords y su rendimiento en segundo plano (1-3 min). Ábrelo en «PPC → Keywords» en un momento.' }, cors);
       }
 
+      // --- Ingesta del mapa producto↔campaña (admin). Para el auto-apagado. ---
+      if (url.pathname === '/v1/ads/productads-ingest') {
+        const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
+        const r = await ingestaProductAds(env, { pais });
+        return json({ ok: true, ...r }, cors);
+      }
+
       // --- EJECUCIÓN vía Ads API: cambiar la PUJA de una keyword (SP keywords v3).
       //     Doble seguridad (admin + ADS_WRITE). body: { pais, keyword_id, puja } ---
       if (url.pathname === '/v1/ads/puja' && request.method === 'POST') {
@@ -1675,7 +1682,7 @@ export default {
       // refresca solo en unas pocas horas, sin pulsar ningún botón. Como el PPC por horas.
       try { await ingestaBuyBoxLoteTodas(env, 40); } catch (_) {}
       // A las 06:00 UTC: placement (ACoS por ubicación del anuncio, Ads API).
-      if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} try { await ingestaKeywords(env); } catch (_) {} }
+      if (hora === 6) { try { await ingestaPlacement(env); } catch (_) {} try { await ingestaKeywords(env); } catch (_) {} try { await ingestaProductAds(env); } catch (_) {} }
       // A las 10:00 UTC: listings por país (estado + motivo). Solo si hay Merchant Token.
       if (hora === 10 && env.SPAPI_SELLER_ID) { try { await ingestaListingsPais(env, undefined, {}); } catch (_) {} }
       // Lunes 06:00 UTC: Search Query Performance (Brand Analytics, semanal).
@@ -2630,6 +2637,100 @@ async function ingestaKeywords(env, opts) {
     } catch (e) { res.pasos.push({ pais, error: e.message }); }
   }
   return res;
+}
+
+/* =====================================================================
+ * MAPA PRODUCTO ↔ CAMPAÑA (Sponsored Products) + AUTO-APAGADO por rentabilidad.
+ * =================================================================== */
+async function spProductAdsList(env, profileId) {
+  const token = await lwaToken(env, 'ads');
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID,
+    'Amazon-Advertising-API-Scope': profileId,
+    'Content-Type': 'application/vnd.spProductAd.v3+json',
+    'Accept': 'application/vnd.spProductAd.v3+json'
+  };
+  const out = []; let next = null, g = 0;
+  do {
+    const body = { maxResults: 500 };
+    if (next) body.nextToken = next;
+    const r = await fetch(ADS_HOST + '/sp/productAds/list', { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('productAds/list ' + r.status + ' ' + (await r.text()).slice(0, 150));
+    const j = await r.json();
+    for (const a of (j.productAds || [])) out.push(a);
+    next = j.nextToken || null; g++;
+  } while (next && g < 12);
+  return out;
+}
+async function ingestaProductAds(env, opts) {
+  opts = opts || {};
+  const perfiles = opts.pais ? (ADS_PROFILES[opts.pais] ? { [opts.pais]: ADS_PROFILES[opts.pais] } : {}) : ADS_PROFILES;
+  const res = { pasos: [] };
+  for (const [pais, profileId] of Object.entries(perfiles)) {
+    try {
+      const ads = await spProductAdsList(env, profileId);
+      const rows = ads.map(a => ({
+        seller: 'venmon', pais, campania_id: String(a.campaignId || ''), adgroup_id: String(a.adGroupId || ''),
+        sku: (a.sku || ''), asin: (a.asin || ''), estado: a.state || '', fecha: new Date().toISOString()
+      })).filter(r => r.campania_id && (r.sku || r.asin));
+      if (rows.length) await upsertSupabase(env, 'ppc_product_ads', rows);
+      res.pasos.push({ pais, filas: rows.length });
+    } catch (e) { res.pasos.push({ pais, error: (e.message || '').slice(0, 120) }); }
+  }
+  return res;
+}
+// Cambia el estado de UNA campaña (para el auto-apagado). PUT SP campaigns v3.
+async function adsCampanaEstado(env, pais, cid, estado) {
+  const profileId = ADS_PROFILES[pais]; if (!profileId) return { ok: false, error: 'sin_perfil' };
+  const token = await lwaToken(env, 'ads');
+  const r = await fetch(ADS_HOST + '/sp/campaigns', {
+    method: 'PUT',
+    headers: { 'Authorization': 'Bearer ' + token, 'Amazon-Advertising-API-ClientId': env.ADS_CLIENT_ID, 'Amazon-Advertising-API-Scope': profileId, 'Content-Type': 'application/vnd.spCampaign.v3+json', 'Accept': 'application/vnd.spCampaign.v3+json' },
+    body: JSON.stringify({ campaigns: [{ campaignId: cid, state: estado }] })
+  });
+  let d = null; try { d = await r.json(); } catch (_) {}
+  return { ok: r.ok, aplicado: !!(d && d.campaigns && d.campaigns.success && d.campaigns.success.length) };
+}
+// Auto-apagado por baja rentabilidad (solo cuenta propia). Devuelve líneas de
+// alerta para el email. Solo PAUSA de verdad si PPC_AUTOPAUSE=1 y ADS_WRITE=1, y
+// solo cuando el SKU lo anuncia UNA sola campaña activa (si son varias, avisa).
+async function autopausaPorRentabilidad(env) {
+  const lines = [];
+  const owner = env.OWNER_SELLER || 'venmon';
+  let margenMin = +(env.ALERTAS_MARGEN_MIN || 10);
+  try { const p = (await selSafe(env, 'alertas_prefs?seller=eq.' + encodeURIComponent(owner) + '&select=margen_min&limit=1', []))[0]; if (p && p.margen_min != null) margenMin = +p.margen_min; } catch (_) {}
+  const hoy = new Date().toISOString().slice(0, 10), hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  let prods = []; try { prods = await productosPeriodo(env, hace30, hoy); } catch (_) { return lines; }
+  const LOSS_MIN = +(env.ALERTAS_PERDIDA_MIN || 30);
+  const flojos = [];
+  for (const p of (prods || [])) {
+    if (!(p.coste > 0)) continue;
+    const ventas = +p.ventas || 0; if (ventas < LOSS_MIN) continue;
+    const net = (+p.ben || 0) - (+p.ppc || 0);
+    const mg = ventas > 0 ? (net / ventas * 100) : 0;
+    if (net >= 0 && mg < margenMin) flojos.push({ sku: p.sku, nom: p.nom, mg: +mg.toFixed(1) });
+  }
+  if (!flojos.length) return lines;
+  const bySku = {};
+  try { for (const r of (await selSafe(env, 'ppc_product_ads?select=sku,campania_id,pais,estado', []))) { if ((r.estado || '').toUpperCase() !== 'ENABLED') continue; const s = r.sku || ''; if (!s) continue; (bySku[s] = bySku[s] || []).push(r); } } catch (_) {}
+  const canWrite = env.ADS_WRITE === '1' && env.PPC_AUTOPAUSE === '1';
+  for (const it of flojos) {
+    const uniq = {}; (bySku[it.sku] || []).forEach(c => uniq[c.pais + '|' + c.campania_id] = c);
+    const lista = Object.values(uniq);
+    if (lista.length === 1) {
+      const c = lista[0];
+      if (canWrite) {
+        let r = {}; try { r = await adsCampanaEstado(env, c.pais, c.campania_id, 'PAUSED'); } catch (_) {}
+        lines.push({ nivel: 'critico', cat: 'autopausa', ic: '⏸️', titulo: 'Campaña PAUSADA por baja rentabilidad: ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Pausé automáticamente su única campaña (' + c.pais + ') ' + (r.aplicado ? '✓.' : '— revisa, Amazon no lo confirmó.') });
+      } else {
+        lines.push({ nivel: 'aviso', cat: 'autopausa', ic: '⏸️', titulo: 'Recomendado pausar: ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Solo lo anuncia 1 campaña (' + c.pais + '), candidata a pausar. Pon PPC_AUTOPAUSE=1 para que se haga solo.' });
+      }
+    } else if (lista.length > 1) {
+      lines.push({ nivel: 'aviso', cat: 'autopausa', ic: '⚠️', titulo: 'Rentabilidad baja (varias campañas): ' + it.nom, detalle: 'Margen ' + it.mg + '% (por debajo de ' + margenMin + '%). Lo anuncian ' + lista.length + ' campañas: NO pauso automáticamente (ambiguo). Decide tú cuál bajar o pausar.' });
+    }
+  }
+  return lines;
 }
 
 /* =====================================================================
@@ -4382,6 +4483,11 @@ async function procesarAlertas(env) {
   const prefs = {};
   try { for (const p of (await selSafe(env, 'alertas_prefs?select=seller,activo,stock_dias,acos,sobrecoste,margen_min', []))) prefs[p.seller] = p; } catch (_) {}
 
+  // Auto-apagado por rentabilidad (solo cuenta propia): se calcula una vez y se
+  // adjunta al correo del dueño.
+  let autoLines = [];
+  try { autoLines = await autopausaPorRentabilidad(env); } catch (_) {}
+
   const vistos = new Set(), res = [];
   for (const d of lista) {
     const key = d.email.toLowerCase();
@@ -4391,6 +4497,7 @@ async function procesarAlertas(env) {
     const opts = p ? { stock_dias: p.stock_dias, acos: p.acos, sobrecoste: p.sobrecoste, margen_min: p.margen_min } : {};
     let alertas = [];
     try { alertas = await calcularAlertas(env, d.seller, opts); } catch (_) {}
+    if (d.seller === ownerSeller && autoLines.length) alertas = autoLines.concat(alertas);   // el auto-apagado es de la cuenta propia
     if (!alertas.length) continue;
     const r = await enviarEmailAlertas(env, d.email, alertas);
     res.push({ email: d.email, enviadas: alertas.length, ok: !!(r && r.ok) });
