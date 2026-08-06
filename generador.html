@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SellerBrain — Generador de listing IA (COSMO + Rufus)</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0D0D0D;--card:#1A1A1A;--card2:#1F1F1F;--bd:#2A2A2A;--bd2:#333;--tx:#FFF;--mu:rgba(255,255,255,.45);--mu2:rgba(255,255,255,.65);--or:#2EE6A0;--or2:#6FEBBB;--gn:#2ECC71;--am:#F5A623;--rd:#E84040;--bl:#4A9EDE}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.5}
+.wrap{max-width:none;margin:0 auto;padding:0 24px 80px}
+.topbar{background:#161616;border-bottom:1px solid rgba(46,230,160,.15);padding:13px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:16px}
+.logo b{color:#14B87A}
+.badge{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or2);background:rgba(46,230,160,.12);border:1px solid rgba(46,230,160,.3);padding:3px 10px;border-radius:100px}
+.hero{padding:30px 0 12px;text-align:center}
+.hero h1{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;line-height:1.25}
+.hero h1 span{color:var(--or)}
+.hero p{color:var(--mu);font-size:13px;max-width:740px;margin:10px auto 0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+.ct{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ci{width:28px;height:28px;background:rgba(46,230,160,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.inf{font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6}
+.inf b{color:rgba(255,255,255,.75)}
+.btn{display:inline-block;padding:12px 20px;background:var(--or);color:#fff;border:none;border-radius:11px;font-family:'Syne',sans-serif;font-size:14px;font-weight:800;cursor:pointer}
+.btn:disabled{opacity:.5}
+.btn-sec{background:none;border:1.5px solid var(--bd2);color:var(--mu2);padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.btn-sec:hover{border-color:var(--or);color:var(--or2)}
+label.f{display:block;font-size:11px;color:var(--mu);margin-bottom:4px}
+input.n,select.n,textarea.n{width:100%;padding:10px 11px;background:#111;border:1.5px solid var(--bd);border-radius:9px;color:var(--tx);font-size:13px;font-family:'DM Sans',sans-serif}
+textarea.n{resize:vertical;line-height:1.5}
+input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.chip{display:inline-block;background:#141414;border:1px solid var(--bd2);border-radius:8px;padding:4px 8px;font-size:11px;margin:0 5px 5px 0}
+.out{background:var(--card2);border:1px solid var(--bd);border-radius:11px;padding:14px;margin-top:10px}
+.out h4{font-family:'Syne',sans-serif;font-size:13px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.cp{cursor:pointer;font-size:11px;color:var(--bl);border:1px solid var(--bd2);border-radius:7px;padding:3px 8px;background:none}
+.cp:hover{border-color:var(--or);color:var(--or2)}
+.blt{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700}
+.pill.gn{background:rgba(46,204,113,.14);color:var(--gn)}.pill.rd{background:rgba(232,64,64,.14);color:var(--rd)}
+.err{display:none;margin-top:10px;padding:12px;border-radius:10px;background:rgba(232,64,64,.08);border:1px solid rgba(232,64,64,.25);font-size:12px;color:var(--rd)}
+.disclaimer{font-size:10.5px;color:var(--mu);text-align:center;margin-top:24px;line-height:1.6;max-width:780px;margin-left:auto;margin-right:auto}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Seller<b>Brain</b></div>
+  <div class="badge">✨ Generador de listing IA</div>
+</div>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>Generador de listing <span>COSMO + Rufus</span></h1>
+  <p>Rellena los datos, pega tus keywords de <b>Helium 10</b> y la IA compone el listing completo — título (×3), 5 viñetas con roles, descripción, briefs de 7 imágenes y A+/Q&amp;A — cubriendo los <b>15 atributos COSMO</b> y colocando las keywords por volumen/competencia, sin stuffing.</p>
+</div>
+
+<!-- 1 · PRODUCTO -->
+<div class="card">
+  <div class="ct"><span class="ci">1️⃣</span> Datos del producto</div>
+  <div class="grid">
+    <div><label class="f">Producto *</label><input class="n" id="g-producto" placeholder="Ej: Botella térmica de acero"></div>
+    <div><label class="f">Tipo de producto</label><input class="n" id="g-tipo" placeholder="Ej: Botella térmica"></div>
+    <div><label class="f">Marca</label><input class="n" id="g-marca" placeholder="Ej: Venmon"></div>
+    <div><label class="f">Categoría</label><input class="n" id="g-categoria" placeholder="Ej: Cocina / Deporte"></div>
+    <div><label class="f">Marketplace / idioma</label>
+      <select class="n" id="g-idioma"><option value="es_ES">España (español)</option><option value="fr_FR">Francia (francés)</option><option value="it_IT">Italia (italiano)</option><option value="de_DE">Alemania (alemán)</option><option value="en_GB">Reino Unido (inglés)</option></select></div>
+    <div><label class="f">Precio</label><input class="n" id="g-precio" placeholder="Ej: 24,99 €"></div>
+  </div>
+  <div style="margin-top:12px"><label class="f">Material / características clave</label><input class="n" id="g-carac" placeholder="Ej: acero inox 304, doble pared, 750 ml, tapa antigoteo"></div>
+  <div class="grid" style="margin-top:12px">
+    <div><label class="f">Usos principales</label><input class="n" id="g-usos" placeholder="Ej: mantener bebidas frías/calientes"></div>
+    <div><label class="f">Usos alternativos</label><input class="n" id="g-usosalt" placeholder="Ej: también como jarra de té"></div>
+    <div><label class="f">Audiencia / cliente objetivo</label><input class="n" id="g-audiencia" placeholder="Ej: deportistas, oficina, senderismo"></div>
+    <div><label class="f">Ocasiones de uso</label><input class="n" id="g-ocasiones" placeholder="Ej: gimnasio, viaje, regalo"></div>
+    <div><label class="f">Certificaciones</label><input class="n" id="g-cert" placeholder="Ej: sin BPA, apto alimentario, CE"></div>
+    <div><label class="f">Contenido de la caja / garantía</label><input class="n" id="g-caja" placeholder="Ej: botella + 2 tapas + garantía 2 años"></div>
+  </div>
+</div>
+
+<!-- 2 · KEYWORDS HELIUM 10 -->
+<div class="card">
+  <div class="ct"><span class="ci">2️⃣</span> Keywords de Helium 10</div>
+  <div class="inf">Pega el <b>CSV exportado de Helium 10</b> (Cerebro/Magnet) tal cual — detecto solas las columnas <b>Keyword Phrase, Search Volume, Competing Products y Title Density</b> y priorizo las de más volumen y menos competencia. O escribe keywords a mano (una por línea).</div>
+  <textarea class="n" id="g-h10" rows="5" placeholder="Pega aquí el CSV de Helium 10 (con cabeceras) o una keyword por línea…" oninput="procesarH10()"></textarea>
+  <div id="g-kwprev" style="margin-top:10px;font-size:12px;color:var(--mu)"></div>
+</div>
+
+<!-- 3 · RESEÑAS -->
+<div class="card">
+  <div class="ct"><span class="ci">3️⃣</span> Dolores y objeciones (opcional pero potente)</div>
+  <div class="inf">Pega frases de <b>reseñas de competidores</b> (sobre todo negativas y recientes): la IA usará el lenguaje real del cliente y neutralizará esas objeciones en la descripción.</div>
+  <textarea class="n" id="g-resenas" rows="4" placeholder="Ej: «se abolla fácil», «la tapa gotea», «no cabe en el portavasos del coche»…"></textarea>
+</div>
+
+<div style="margin-top:16px;text-align:center">
+  <button class="btn" id="g-btn" onclick="generar()">✨ Generar listing con IA</button>
+  <div id="g-status" style="font-size:12px;color:var(--mu);margin-top:8px"></div>
+  <div class="err" id="g-err"></div>
+</div>
+
+<!-- 4 · RESULTADO -->
+<div id="g-out" style="display:none"></div>
+
+<div class="disclaimer">
+El generador usa IA (Claude) sobre tus datos. Revisa siempre el resultado antes de publicar: la IA compone y estructura, pero tú validas datos, medidas y afirmaciones. Requiere la clave de IA (ANTHROPIC_API_KEY) puesta en el Worker. Todo pasa por tu backend; nada se comparte con terceros salvo la llamada a la IA.
+</div>
+
+</div>
+
+<script>
+function apiBase(){ return (localStorage.getItem('sb_api_base')||'https://sellerbrain-api.info-venmon.workers.dev').replace(/\/$/,''); }
+function apiCred(){ try{ return localStorage.getItem('sb_api_key')||sessionStorage.getItem('fba_token')||''; }catch(e){ return ''; } }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+var KEYWORDS=[];
+
+// --- Parser CSV sencillo (soporta comillas) ---
+function parseCSV(text){
+  var rows=[], row=[], cur='', q=false;
+  for(var i=0;i<text.length;i++){ var c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else { if(c==='"') q=true; else if(c===','){ row.push(cur); cur=''; } else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; } else if(c==='\r'){} else cur+=c; }
+  }
+  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+function numFrom(s){ var n=parseFloat(String(s==null?'':s).replace(/[^0-9.,]/g,'').replace(/\.(?=\d{3}\b)/g,'').replace(',','.')); return isNaN(n)?null:n; }
+function procesarH10(){
+  var txt=document.getElementById('g-h10').value||'';
+  var prev=document.getElementById('g-kwprev');
+  if(!txt.trim()){ KEYWORDS=[]; prev.innerHTML=''; return; }
+  var out=[];
+  if(txt.indexOf(',')>-1 && /\n/.test(txt)){
+    var rows=parseCSV(txt).filter(function(r){return r.length>1;});
+    if(rows.length){
+      var head=rows[0].map(function(h){return String(h).toLowerCase().trim();});
+      function col(names){ for(var i=0;i<head.length;i++){ for(var j=0;j<names.length;j++){ if(head[i].indexOf(names[j])>-1) return i; } } return -1; }
+      var iK=col(['keyword phrase','keyword','phrase','palabra','término','termino']);
+      var iV=col(['search volume','volume','volumen']);
+      var iC=col(['competing products','competing','competidor','competencia','products']);
+      var iD=col(['title density','density','densidad']);
+      if(iK<0) iK=0;
+      for(var r=1;r<rows.length;r++){ var row=rows[r]; var f=(row[iK]||'').trim(); if(!f) continue;
+        out.push({frase:f, volumen:iV>=0?numFrom(row[iV]):null, competencia:iC>=0?numFrom(row[iC]):null, densidad:iD>=0?numFrom(row[iD]):null}); }
+    }
+  }
+  if(!out.length){ // texto plano, una por línea
+    txt.split('\n').forEach(function(l){ l=l.trim(); if(l) out.push({frase:l,volumen:null,competencia:null,densidad:null}); });
+  }
+  // Prioridad: más volumen, menos competencia
+  out.sort(function(a,b){ return (b.volumen||0)-(a.volumen||0) || (a.competencia||1e9)-(b.competencia||1e9); });
+  KEYWORDS=out.slice(0,40);
+  prev.innerHTML='<b style="color:var(--or2)">'+KEYWORDS.length+'</b> keywords listas (priorizadas por volumen/competencia). Top: '+
+    KEYWORDS.slice(0,8).map(function(k){return '<span class="chip">'+esc(k.frase)+(k.volumen?' · '+k.volumen:'')+'</span>';}).join(' ');
+}
+
+function val(id){ return (document.getElementById(id).value||'').trim(); }
+function generar(){
+  var producto=val('g-producto');
+  if(!producto){ alert('Pon al menos el producto.'); return; }
+  var cred=apiCred();
+  if(!cred){ alert('Necesitas iniciar sesión (o clave admin) para usar el generador.'); return; }
+  var btn=document.getElementById('g-btn'), st=document.getElementById('g-status'), err=document.getElementById('g-err');
+  err.style.display='none'; btn.disabled=true; st.textContent='⏳ Generando con IA… (10-30 s, no cierres)';
+  var body={ producto:producto, tipo:val('g-tipo'), marca:val('g-marca'), categoria:val('g-categoria'),
+    idioma:val('g-idioma'), precio:val('g-precio'), caracteristicas:val('g-carac'), usos:val('g-usos'),
+    usos_alt:val('g-usosalt'), audiencia:val('g-audiencia'), ocasiones:val('g-ocasiones'),
+    certificaciones:val('g-cert'), caja:val('g-caja'), resenas:val('g-resenas'), keywords:KEYWORDS };
+  fetch(apiBase()+'/v1/generar-listing',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cred},body:JSON.stringify(body)})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      btn.disabled=false; st.textContent='';
+      if(d.falta_apikey){ err.innerHTML='⚠️ Falta la clave de IA. Pon <b>ANTHROPIC_API_KEY</b> en Cloudflare (Worker → Variables).'; err.style.display='block'; return; }
+      if(d.error==='no_autorizado'){ err.innerHTML='🔑 Necesitas admin (clave o login de admin).'; err.style.display='block'; return; }
+      if(!d.ok||!d.data){ err.innerHTML='No se pudo generar: '+esc(d.error||'')+(d.crudo?'<div style="margin-top:6px;color:var(--mu)">'+esc(d.crudo).slice(0,400)+'</div>':''); err.style.display='block'; return; }
+      render(d.data, d.uso);
+    })
+    .catch(function(e){ btn.disabled=false; st.textContent=''; err.textContent='Error: '+e.message; err.style.display='block'; });
+}
+
+function copiar(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
+function bloque(titulo, contenido, textoCopiar){
+  return '<div class="out"><h4>'+esc(titulo)+(textoCopiar!=null?'<button class="cp" onclick="copiar(this.getAttribute(\'data-t\'))" data-t="'+esc(textoCopiar).replace(/"/g,'&quot;')+'">📋 copiar</button>':'')+'</h4>'+contenido+'</div>';
+}
+function render(d, uso){
+  var box=document.getElementById('g-out'); box.style.display='block';
+  var h='<div class="card" style="border:1.5px solid rgba(46,230,160,.35)"><div class="ct"><span class="ci">✨</span> Listing generado</div>';
+
+  // Títulos
+  var tits=(d.titulos||[]);
+  h+=bloque('Títulos (3 opciones)', tits.map(function(t,i){ return '<div class="blt">'+(i+1)+'. '+esc(t)+' <span style="color:var(--mu);font-size:10px">('+String(t).length+' car.)</span> <button class="cp" onclick="copiar(this.getAttribute(\'data-t\'))" data-t="'+esc(t).replace(/"/g,'&quot;')+'">📋</button></div>'; }).join(''), null);
+
+  // Bullets
+  var bs=(d.bullets||[]);
+  h+=bloque('Viñetas (5)', bs.map(function(b){ return '<div class="blt">• '+esc(b)+'</div>'; }).join(''), bs.join('\n'));
+
+  // Descripción
+  h+=bloque('Descripción', '<div style="white-space:pre-wrap;font-size:12.5px">'+esc(d.descripcion||'')+'</div>', d.descripcion||'');
+
+  // Imágenes
+  if(d.imagenes&&d.imagenes.length){
+    h+=bloque('Briefs de imagen (7)', d.imagenes.map(function(im){ return '<div class="blt"><b>'+(im.n||'')+'. '+esc(im.tipo||'')+'</b><br><span style="color:var(--mu2)">'+esc(im.brief||'')+'</span>'+(im.overlay?'<br><span style="color:var(--or2);font-size:11px">Texto en imagen: '+esc(im.overlay)+'</span>':'')+'</div>'; }).join(''), null);
+  }
+
+  // A+ / Q&A
+  if(d.aplus){
+    var ap='';
+    if(d.aplus.tabla_comparativa) ap+='<div class="blt"><b>Tabla comparativa</b><br><span style="color:var(--mu2);white-space:pre-wrap">'+esc(d.aplus.tabla_comparativa)+'</span></div>';
+    if(d.aplus.qa&&d.aplus.qa.length) ap+=d.aplus.qa.map(function(x){ return '<div class="blt"><b>P: '+esc(x.q)+'</b><br><span style="color:var(--mu2)">R: '+esc(x.a)+'</span></div>'; }).join('');
+    if(d.aplus.brand_story) ap+='<div class="blt"><b>Brand story</b><br><span style="color:var(--mu2);white-space:pre-wrap">'+esc(d.aplus.brand_story)+'</span></div>';
+    h+=bloque('Contenido A+ / Q&A', ap, null);
+  }
+
+  // Backend
+  if(d.backend&&d.backend.length){
+    var bk=d.backend.join(' ');
+    h+=bloque('Términos backend (Search Terms)', '<div style="font-size:12px;color:var(--mu2)">'+esc(bk)+'</div>', bk);
+  }
+
+  // COSMO checklist
+  if(d.cosmo&&d.cosmo.length){
+    var cubiertos=d.cosmo.filter(function(c){return c.cubierto;}).length;
+    var cc=d.cosmo.map(function(c){ return '<div class="blt">'+(c.cubierto?'✅':'⬜')+' <b>'+esc(c.attr||('#'+c.n))+'</b> '+(c.cubierto?'<span class="pill gn">'+esc(c.donde||'cubierto')+'</span>':'<span class="pill rd">falta</span>')+'</div>'; }).join('');
+    h+=bloque('Cobertura COSMO ('+cubiertos+'/15)', cc, null);
+  }
+
+  // Avisos
+  if(d.avisos&&d.avisos.length){
+    h+=bloque('⚠️ Avisos y datos que faltan', d.avisos.map(function(a){ return '<div class="blt">• '+esc(a)+'</div>'; }).join(''), null);
+  }
+
+  if(uso) h+='<div style="font-size:10.5px;color:var(--mu);margin-top:10px">Tokens IA: '+((uso.input_tokens||0)+(uso.output_tokens||0))+'</div>';
+  h+='</div>';
+  box.innerHTML=h;
+  box.scrollIntoView({behavior:'smooth'});
+}
+</script>
+</body>
+</html>

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v101-motivos-es'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v102-generador-ia'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -794,6 +794,19 @@ export default {
         try { await upsertSupabase(env, 'listings_acciones', [{ seller: 'venmon', sku, pais, accion: 'reabrir', estado: okAcc ? 'ok' : 'error', detalle: JSON.stringify(r.d || {}).slice(0, 400), fecha: new Date().toISOString() }]); } catch (_) {}
         return json({ ok: okAcc, status: r.status, detalle: r.d,
           seller_central: 'https://sellercentral.amazon.es/inventory' }, cors);
+      }
+
+      // --- GENERADOR DE LISTING con IA (admin). Claude + marco COSMO/Rufus +
+      //     keywords de Helium 10. Requiere ANTHROPIC_API_KEY en Cloudflare. ---
+      if (url.pathname === '/v1/generar-listing' && request.method === 'POST') {
+        if (!env.ANTHROPIC_API_KEY) return json({ ok: false, falta_apikey: true,
+          nota: 'Falta la clave de IA. Pon ANTHROPIC_API_KEY en Cloudflare (Worker → Variables) para usar el generador.' }, cors);
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const r = await llamarClaude(env, SYSTEM_LISTING, buildPromptListing(b), 5000);
+        if (r.error) return json({ ok: false, error: r.error }, cors);
+        let data = null; try { data = JSON.parse(extraerJSON(r.texto)); } catch (_) {}
+        if (!data) return json({ ok: false, error: 'respuesta_no_json', crudo: (r.texto || '').slice(0, 2000) }, cors);
+        return json({ ok: true, data, uso: r.uso || null }, cors);
       }
 
       // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
@@ -2134,6 +2147,89 @@ async function listingWrite(env, method, sellerId, sku, mkt, body, ctx) {
   let d = null; try { d = await r.json(); } catch (_) {}
   return { status: r.status, ok: r.ok, d };
 }
+
+/* =====================================================================
+ * GENERADOR DE LISTING con IA (Claude) — marco COSMO/Rufus (paper SIGMOD 2024
+ * + método Libertad Virtual). Requiere ANTHROPIC_API_KEY. Solo admin.
+ * =================================================================== */
+async function llamarClaude(env, system, userText, maxTokens) {
+  const model = env.LISTING_MODEL || 'claude-sonnet-5';
+  let r;
+  try {
+    r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: maxTokens || 4000, system, messages: [{ role: 'user', content: userText }] })
+    });
+  } catch (e) { return { error: 'red: ' + (e.message || '') }; }
+  let j = null; try { j = await r.json(); } catch (_) {}
+  if (!r || !r.ok) return { error: (j && j.error && j.error.message) || ('HTTP ' + (r ? r.status : '0')) };
+  const txt = (j && j.content && j.content[0] && j.content[0].text) || '';
+  return { texto: txt, uso: (j && j.usage) || null };
+}
+// Extrae el objeto JSON de la respuesta (quita ```json … ``` si viene con vallas).
+function extraerJSON(s) {
+  if (!s) return '';
+  const i = s.indexOf('{'), j = s.lastIndexOf('}');
+  return (i > -1 && j > i) ? s.slice(i, j + 1) : s;
+}
+function buildPromptListing(b) {
+  b = b || {};
+  const kws = Array.isArray(b.keywords) ? b.keywords : [];
+  const kwTxt = kws.length ? kws.slice(0, 40).map(k => '- ' + (k.frase || k.keyword || '') +
+    ' (volumen: ' + (k.volumen != null ? k.volumen : '?') + ', competencia: ' + (k.competencia != null ? k.competencia : '?') +
+    (k.densidad != null ? ', title density: ' + k.densidad : '') + ')').join('\n') : '(no aportadas)';
+  return [
+    'PRODUCTO: ' + (b.producto || ''),
+    'TIPO DE PRODUCTO: ' + (b.tipo || ''),
+    'MARCA: ' + (b.marca || ''),
+    'CATEGORÍA: ' + (b.categoria || ''),
+    'MARKETPLACE / IDIOMA DE SALIDA: ' + (b.idioma || 'es_ES'),
+    'PRECIO: ' + (b.precio || ''),
+    'MATERIAL / CARACTERÍSTICAS CLAVE: ' + (b.caracteristicas || b.material || ''),
+    'USOS PRINCIPALES: ' + (b.usos || ''),
+    'USOS ALTERNATIVOS: ' + (b.usos_alt || ''),
+    'AUDIENCIA / CLIENTE OBJETIVO: ' + (b.audiencia || ''),
+    'OCASIONES DE USO: ' + (b.ocasiones || ''),
+    'CERTIFICACIONES: ' + (b.certificaciones || ''),
+    'CONTENIDO DE LA CAJA / GARANTÍA: ' + (b.caja || ''),
+    'DOLORES Y OBJECIONES REALES (de reseñas de competidores):\n' + (b.resenas || '(no aportadas)'),
+    '',
+    'KEYWORDS DE HELIUM 10 (prioriza MAYOR volumen y MENOR competencia; colócalas por peso: título → bullets → descripción → backend; NUNCA hagas keyword stuffing):',
+    kwTxt,
+    '',
+    'Genera el listing y devuelve SOLO el JSON del esquema, escrito en el idioma del marketplace.'
+  ].join('\n');
+}
+const SYSTEM_LISTING = `Eres un experto en listings de Amazon optimizados para COSMO (el grafo de intención de Amazon, paper SIGMOD 2024) y para Rufus/Alexa for Shopping (el asistente de compra con IA que responde leyendo el listing). Sigues el método de Libertad Virtual.
+
+OBJETIVO: crear un listing que cubra los 15 atributos/relaciones COSMO, evite los penalizadores de Rufus y use las keywords de Helium 10 aportadas colocándolas por peso (mayor volumen y menor competencia primero) sin stuffing.
+
+LOS 15 ATRIBUTOS COSMO (el listing debe responder todos, repartidos entre título, bullets, descripción, A+ y backend):
+1 used_for_func (función principal) · 2 used_for_eve (evento/actividad) · 3 used_for_aud (audiencia por función) · 4 capable_of (capacidad concreta) · 5 used_to (tarea específica) · 6 used_as (uso alternativo) · 7 is_a (tipo de producto) · 8 used_on (temporada/momento) · 9 used_in_loc (ubicación/entorno) · 10 used_in_body (parte del cuerpo) · 11 used_with (compatibilidad/complemento) · 12 used_by (quién lo usa) · 13 xInterested_in (interés del comprador) · 14 xIs_a (identidad de la audiencia) · 15 xWant (resultado buscado).
+
+REGLAS POR ELEMENTO:
+- TÍTULO: 3 opciones, ≤200 caracteres, lo crítico en los primeros 80 (tipo de producto + beneficio + caso de uso). Estructura: producto + característica con DATO medible + contexto/ocasión + audiencia + beneficio, como frase natural. Keyword principal cuanto antes. Sin stuffing.
+- BULLETS: exactamente 5, con roles fijos: (1) diferenciador principal con especificación nombrada [capable_of]; (2) materiales, seguridad y certificaciones como entidades nombradas [is_a, used_in_body]; (3) caso de uso + audiencia explícita [used_for_eve, used_by, xIs_a]; (4) compatibilidad y dimensiones exactas [used_with]; (5) contenido de la caja + garantía + resultado esperado [xWant]. Empieza cada bullet con una etiqueta en MAYÚSCULAS + beneficio desarrollado, un dato medible por bullet, beneficio antes que característica, sin repetir frases.
+- DESCRIPCIÓN: 1500-2000 caracteres, 4 párrafos, sin repetir los bullets: (1) propuesta de valor en prosa; (2) 2-3 escenarios de uso con contexto; (3) neutralización de objeciones reales de reseñas; (4) marca, origen, certificaciones y garantía. Usa puentes semánticos (característica → beneficio directo → beneficio inferible).
+- IMÁGENES: 7 conceptos (principal fondo blanco; lifestyle con demográfico visible; infografía con datos; dimensiones/comparativa; uso alternativo; materiales/certificaciones; contenido de la caja/resultado). Por cada una da un brief y el texto overlay (frases nominales legibles por OCR, coherentes con el copy).
+- A+ / A+ PREMIUM: una tabla comparativa (contra tu propia gama), 5 preguntas Q&A de alta intención (cada una refuerza varios atributos COSMO y responde una objeción), y un brand story breve con certificaciones y origen. ≥500 palabras rastreables en total.
+- BACKEND: términos de búsqueda de intención/contexto que NO estén ya en el copy visible (sin repetir título/bullets), separados por espacios.
+
+PENALIZADORES A EVITAR (Rufus): claims sin dato ("premium", "la mejor calidad"), keyword stuffing, vaguedad ("ideal para cocinar" → concreta), contradicción con reseñas. Usa siempre datos medibles.
+
+DEVUELVE SOLO ESTE JSON (sin texto fuera, sin vallas de código):
+{
+ "titulos": ["op1","op2","op3"],
+ "bullets": ["b1","b2","b3","b4","b5"],
+ "descripcion": "…",
+ "imagenes": [{"n":1,"tipo":"principal","brief":"…","overlay":"…"}],
+ "aplus": {"tabla_comparativa":"…","qa":[{"q":"…","a":"…"}],"brand_story":"…"},
+ "backend": ["término1","término2"],
+ "cosmo": [{"n":1,"attr":"used_for_func","cubierto":true,"donde":"bullet 1"}],
+ "avisos": ["recomendación o dato que falta para mejorar"]
+}
+El array "cosmo" DEBE tener las 15 relaciones con cubierto true/false y dónde queda cubierta cada una. Si algún dato de entrada falta, indícalo en "avisos" y usa un placeholder claro entre [corchetes].`;
 
 async function traerInventarioFBA(env, marketplaceId, ctx) {
   const inv = {}, cat = {};
