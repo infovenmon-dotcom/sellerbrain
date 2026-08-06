@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v109-keywords-rango'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v110-keywords-perf-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -198,7 +198,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -1163,6 +1163,28 @@ export default {
         const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
         ctx.waitUntil(ingestaKeywords(env, { pais }).catch(() => {}));
         return json({ ok: true, lanzado: true, nota: 'Trayendo keywords y su rendimiento en segundo plano (1-3 min). Ábrelo en «PPC → Keywords» en un momento.' }, cors);
+      }
+
+      // --- DIAGNÓSTICO (admin): ejecuta el informe de RENDIMIENTO de keywords para
+      //     UN mercado de forma SÍNCRONA y devuelve qué contesta Amazon (status,
+      //     nº de filas diarias, keywords con datos y una muestra). Sirve para ver
+      //     por qué salen «—»: si el informe falla, tarda o vuelve vacío. ---
+      if (url.pathname === '/v1/ads/keywords-perf-probe') {
+        const pais = (url.searchParams.get('pais') || 'ES').toUpperCase();
+        const profileId = ADS_PROFILES[pais];
+        if (!profileId) return json({ error: 'sin perfil de Ads para ' + pais, paises: Object.keys(ADS_PROFILES) }, cors);
+        const hoy = new Date(), fin = new Date(hoy.getTime() - 86400000);
+        const ini = new Date(fin.getTime() - 29 * 86400000);
+        const desde = ini.toISOString().slice(0, 10), hasta = fin.toISOString().slice(0, 10);
+        try {
+          const rep = await adsInformeKeywordPerf(env, profileId, desde, hasta);
+          const map = (rep && rep.map) || {}, dias = (rep && rep.dias) || [];
+          const ids = Object.keys(map);
+          const muestra = ids.slice(0, 5).map(id => ({ keyword_id: id, ...map[id] }));
+          return json({ ok: true, pais, desde, hasta, keywords_con_datos: ids.length, filas_diarias: dias.length, muestra }, cors);
+        } catch (e) {
+          return json({ ok: false, pais, desde, hasta, error: (e && e.message) || String(e), pista: 'Si dice FAILURE, Amazon rechaza el informe; si dice timeout, tarda más que la ventana. Cuéntame el mensaje.' }, cors);
+        }
       }
 
       // --- Ingesta del mapa producto↔campaña (admin). Para el auto-apagado. ---
@@ -2713,7 +2735,10 @@ async function ingestaKeywords(env, opts) {
   opts = opts || {};
   const perfiles = opts.pais ? (ADS_PROFILES[opts.pais] ? { [opts.pais]: ADS_PROFILES[opts.pais] } : {}) : ADS_PROFILES;
   const res = { pasos: [] };
-  for (const [pais, profileId] of Object.entries(perfiles)) {
+  // Mercados EN PARALELO: cada informe de rendimiento tarda 1-4 min; hacerlos a la
+  // vez (en vez de en serie) evita que el trabajo en segundo plano se corte antes
+  // de guardar el rendimiento de todos los países.
+  await Promise.all(Object.entries(perfiles).map(async ([pais, profileId]) => {
     try {
       const ks = await spKeywordsList(env, profileId);
       // Rendimiento por keyword (últimos 30 días) para la puja sugerida. Si el
@@ -2756,7 +2781,7 @@ async function ingestaKeywords(env, opts) {
       if (rows.length) await upsertSupabase(env, 'ppc_keywords', rows);
       res.pasos.push({ pais, filas: rows.length, con_rendimiento: Object.keys(perf).length });
     } catch (e) { res.pasos.push({ pais, error: e.message }); }
-  }
+  }));
   return res;
 }
 
