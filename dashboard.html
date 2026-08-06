@@ -3936,16 +3936,20 @@ function calcRegion(r){
 }
 
 function cargarPPC(){
-  if(SB_CONFIG.mode==='api' || SB_CONFIG.apiKey){
-    var H={'Authorization':'Bearer '+SB_CONFIG.apiKey};
-    var js=function(u){ return fetch(u,{headers:H}).then(function(r){return r.ok?r.json():{datos:[]};}).catch(function(){return {datos:[]};}); };
+  var cred=(SB_CONFIG.apiKey||(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return '';}})()||'');
+  if(cred){
+    var H={'Authorization':'Bearer '+cred};
+    var estado={c:0};
+    var js=function(u){ return fetch(u,{headers:H}).then(function(r){ if(r.status===401) estado.c=401; return r.ok?r.json():{datos:[]}; }).catch(function(){ if(!estado.c) estado.c=-1; return {datos:[]}; }); };
     Promise.all([
       js(SB_CONFIG.apiBase+'/v1/ppc?days=30'),
       js(SB_CONFIG.apiBase+'/v1/ppc/campanas?days=30'),
       js(SB_CONFIG.apiBase+'/v1/ppc/terminos')
     ]).then(function(res){
       var dias=res[0].datos||[], camp=res[1].datos||[], term=res[2].datos||[];
-      if(!dias.length && !camp.length && !term.length){ PPC_DATA=PPC_DEMO; renderPPC('demo — conecta y sincroniza para ver tus datos'); return; }
+      if(estado.c===401){ PPC_DATA=PPC_DEMO; renderPPC('demo — tu sesión caducó (401). Vuelve a entrar en login.'); return; }
+      if(estado.c===-1 && !dias.length && !camp.length && !term.length){ PPC_DATA=PPC_DEMO; renderPPC('demo — no pude conectar con el backend.'); return; }
+      if(!dias.length && !camp.length && !term.length){ PPC_DATA=PPC_DEMO; renderPPC('demo — conectado, pero sin datos de PPC en 30 días (sincroniza en 🔌 Conexión).'); return; }
       // Agregar campañas de 30 días por nombre
       var porCamp={};
       camp.forEach(function(c){

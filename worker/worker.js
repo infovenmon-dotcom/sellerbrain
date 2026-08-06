@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v102-generador-ia'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v103-ppc-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -477,7 +477,7 @@ export default {
       if (url.pathname === '/v1/ppc') {
         const dias = Math.min(+url.searchParams.get('days') || 30, 90);
         const desde = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
-        const filas = await selectSupabase(env, 'ppc_dia?fecha=gte.' + desde + '&order=fecha.asc&select=*'.replace('?select=*',''));
+        const filas = await selSafe(env, 'ppc_dia?fecha=gte.' + desde + '&order=fecha.asc', []);
         return json({ dias, datos: filas }, cors);
       }
 
