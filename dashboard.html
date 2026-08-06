@@ -450,6 +450,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       </div>
 
       <div class="card">
+        <div class="ch"><h2><span class="ci">🧭</span> Rentabilidad por campaña <span style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
+        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Por cada campaña: su <b>ACoS real</b> frente a tu <b>ACoS objetivo</b>, si es <b>rentable</b>, y si el <b>presupuesto se agota antes de acabar el día</b> (con la hora). Si se agota pronto, estás perdiendo las horas buenas: baja pujas para que dure más.</div>
+        <div id="ppc-rentab-camp"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+      </div>
+
+      <div class="card">
         <div class="ch"><h2><span class="ci">📍</span> Rendimiento por ubicación (placement) <span style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
         <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Dónde convierte mejor tu publicidad: <b>Top of Search</b> (arriba de la búsqueda), <b>páginas de producto</b> o <b>resto de la búsqueda</b>. Si el ACoS de Top of Search es mucho mejor, sube el <b>ajuste de puja</b> de esa ubicación (y baja el del resto) en vez de tocar la puja base.</div>
         <div id="ppc-placement"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
@@ -1322,6 +1328,57 @@ function cargarKeywords(){
     .catch(function(){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">No se pudo cargar ahora mismo.</div>'; });
 }
 function _campNombre(cid){ var c=((PPC_DATA&&PPC_DATA.campanas)||[]).filter(function(x){return String(x.campania_id)===String(cid);})[0]; return c?c.nombre:''; }
+// ---- Rentabilidad por campaña (Fase 1 del copiloto PPC) ----
+var PPC_LIMIT=null;
+function cargarRentabCamp(){
+  var el=document.getElementById('ppc-rentab-camp'); if(!el) return;
+  var cred=(SB_CONFIG.apiKey||(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return '';}})()||'');
+  if(!cred){ renderRentabCamp(); return; }
+  fetch(SB_CONFIG.apiBase+'/v1/ppc/presupuestos',{headers:authHdr()})
+    .then(function(r){return r.ok?r.json():{};}).then(function(d){ PPC_LIMIT=(d&&d.limitadas)||[]; renderRentabCamp(); })
+    .catch(function(){ PPC_LIMIT=[]; renderRentabCamp(); });
+}
+function renderRentabCamp(){
+  var el=document.getElementById('ppc-rentab-camp'); if(!el) return;
+  var camps=(PPC_DATA&&PPC_DATA.campanas)||[];
+  if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') camps=camps.filter(function(c){return (c.pais||'')===PPC_PAIS;});
+  if(!camps.length){ el.innerHTML='<div style="color:var(--mu);font-size:13px">Sin campañas con datos.</div>'; return; }
+  var obj=acosObj();
+  var lim={}; (PPC_LIMIT||[]).forEach(function(l){ lim[(l.pais||'')+'|'+(l.campania_id||'')]=l; });
+  var rows=camps.map(function(c){
+    var gasto=+c.gasto||0, ventas=+c.ventas_ppc||0;
+    var acos=ventas>0?(gasto/ventas*100):null;    // null = gasta sin vender (∞)
+    var roas=gasto>0?(ventas/gasto):0;
+    return {c:c,gasto:gasto,ventas:ventas,acos:acos,roas:roas,lim:lim[(c.pais||'')+'|'+(c.campania_id||'')]};
+  }).sort(function(a,b){return b.gasto-a.gasto;});
+  function verd(r){
+    if(r.gasto<=0) return {t:'sin gasto',col:'var(--mu)'};
+    if(r.ventas<=0) return {t:'✕ sin ventas',col:'#ff5c5c'};
+    if(r.acos<=obj) return {t:'✓ rentable',col:'var(--gn)'};
+    if(r.acos<=obj*1.5) return {t:'ajustar',col:'var(--am)'};
+    return {t:'✕ en pérdida',col:'#ff5c5c'};
+  }
+  var h='<div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D"><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">ROAS</th><th style="padding:6px 8px">Veredicto</th><th style="padding:6px 8px">Presupuesto</th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var v=verd(r);
+    var acosTxt=r.acos==null?'∞':f(r.acos,0)+'%';
+    var acosCol=r.acos==null?'#ff5c5c':(r.acos<=obj?'var(--gn)':(r.acos<=obj*1.5?'var(--am)':'#ff5c5c'));
+    var pres=r.lim?('<span style="color:var(--am)" title="Se queda sin presupuesto '+(r.lim.hora_tope!=null?('~'+r.lim.hora_tope+':00 UTC'):'pronto')+', pierde las horas siguientes">⏰ limitada'+(r.lim.hora_tope!=null?(' ~'+r.lim.hora_tope+'h'):'')+'</span>'):'<span style="color:var(--mu)">ok</span>';
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)'+(v.t.indexOf('✕')>-1?';background:rgba(232,64,64,.04)':'')+'">'+
+      '<td style="padding:7px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis" title="'+String(r.c.nombre||'').replace(/"/g,'&quot;')+'"><b>'+String(r.c.nombre||'').replace(/</g,'&lt;').slice(0,60)+'</b> <span style="color:var(--mu);font-size:10px">'+(r.c.pais||'')+'</span></td>'+
+      '<td style="padding:7px 8px">'+f(r.gasto,2)+'€</td>'+
+      '<td style="padding:7px 8px">'+f(r.ventas,2)+'€</td>'+
+      '<td style="padding:7px 8px;color:'+acosCol+'">'+acosTxt+'</td>'+
+      '<td style="padding:7px 8px">'+f(r.roas,2)+'x</td>'+
+      '<td style="padding:7px 8px;color:'+v.col+';font-weight:700">'+v.t+'</td>'+
+      '<td style="padding:7px 8px">'+pres+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  var nLim=rows.filter(function(r){return r.lim;}).length;
+  if(nLim) h+='<div style="font-size:11.5px;color:var(--am);margin-top:8px">⏰ <b>'+nLim+'</b> campaña(s) se quedan sin presupuesto antes de acabar el día. Baja pujas (para que el gasto rinda más horas) o valora subir el presupuesto si son rentables.</div>';
+  el.innerHTML=h;
+}
 function acosObj(){ var v=parseFloat(localStorage.getItem('sb_kw_acos_obj')); return (v>0&&v<=100)?v:20; }
 function guardarAcosObj(v){ var n=parseFloat(v); if(n>0&&n<=100){ localStorage.setItem('sb_kw_acos_obj',n);
   var be=document.getElementById('ppc-be'); if(be) be.value=n;
@@ -3765,7 +3822,7 @@ function filtrarPPCPais(code){
 }
 function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; dibujarPPCChart(); }
 // ---- Controles del filtro maestro de fechas ----
-function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} }
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} }
 function ppcPreset(p){
   var hoy=new Date();
   if(p==='30d'){ PPC_RANGO=null; }
@@ -3922,7 +3979,7 @@ function cambiarVista(v){
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
-  if(v==='ppc'){ try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} }
+  if(v==='ppc'){ try{ cargarRentabCamp(); }catch(e){} try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} }
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} try{ mostrarBienvenida(); }catch(e){} }   // refresca la capa fiscal y el banner de bienvenida
   if(TOOL_SRC[v]){
