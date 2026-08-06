@@ -175,7 +175,7 @@ function generar(){
     .then(function(d){
       btn.disabled=false; st.textContent='';
       if(d.falta_apikey){ err.innerHTML='⚠️ Falta la clave de IA. Pon <b>ANTHROPIC_API_KEY</b> en Cloudflare (Worker → Variables).'; err.style.display='block'; return; }
-      if(d.error==='no_autorizado'){ err.innerHTML='🔑 Necesitas admin (clave o login de admin).'; err.style.display='block'; return; }
+      if(d.error==='no_autorizado'){ err.innerHTML='🔑 Tu sesión no está reconocida como admin. Añade tu email de login a <b>ADMIN_EMAILS</b> en Cloudflare (una vez) y tu login ya podrá generar sin pegar ninguna clave.'; err.style.display='block'; return; }
       if(!d.ok||!d.data){ err.innerHTML='No se pudo generar: '+esc(d.error||'')+(d.crudo?'<div style="margin-top:6px;color:var(--mu)">'+esc(d.crudo).slice(0,400)+'</div>':''); err.style.display='block'; return; }
       render(d.data, d.uso);
     })

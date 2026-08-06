@@ -1380,7 +1380,7 @@ function renderKeywords(){
 function aplicarPuja(kid,pais,nmEnc,valor){
   var nombre=decodeURIComponent(nmEnc||'');
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ alert('Necesitas admin (🔌 Conexión → clave, o entra con tu login de admin).'); return; }
+  if(!key){ alert('Entra con tu cuenta — tu login ya vale como admin. (Solo si no has iniciado sesión, pega la clave en 🔌 Conexión.)'); return; }
   if(!confirm('Aplicar puja '+f(valor,2)+'€ a «'+nombre+'» ('+pais+') en Amazon?\n\nEsto cambia tu campaña REAL.')) return;
   fetch(SB_CONFIG.apiBase+'/v1/ads/puja',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:pais,keyword_id:kid,puja:valor})})
     .then(function(r){return r.json();}).then(function(d){
@@ -1391,7 +1391,7 @@ function aplicarPuja(kid,pais,nmEnc,valor){
 function editarPuja(kid,pais,nmEnc,pujaAct){
   var nombre=decodeURIComponent(nmEnc||'');
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ alert('Necesitas la clave admin (🔌 Conexión) para cambiar pujas.'); return; }
+  if(!key){ alert('Entra con tu cuenta — tu login ya vale como admin. (Solo si no has iniciado sesión, pega la clave en 🔌 Conexión.)'); return; }
   var v=prompt('Nueva puja (€) para la keyword:\n\n«'+nombre+'» ('+pais+')\nPuja actual: '+(pujaAct?pujaAct.toFixed(2)+'€':'—')+'\n\nEsto cambia tu puja REAL en Amazon Ads.', pujaAct?String(pujaAct):'');
   if(v===null) return;
   var p=parseFloat(String(v).replace(',','.'));
@@ -1511,13 +1511,13 @@ function _estCell(e,sku,pais,asin,esAdmin){
 function cerrarListingAdmin(skuE,pais){
   var sku=decodeURIComponent(skuE||'');
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ alert('Necesitas admin (🔌 Conexión → clave, o entra con tu login de admin).'); return; }
+  if(!key){ alert('Entra con tu cuenta — tu login ya vale como admin. (Solo si no has iniciado sesión, pega la clave en 🔌 Conexión.)'); return; }
   var conf=prompt('CERRAR el listing en '+pais+':\n\n«'+sku+'»\n\nDejará de venderse en ese país. Esto cambia tu cuenta REAL de Amazon.\n\nEscribe '+pais+' para confirmar:');
   if((conf||'').trim().toUpperCase()!==pais) return;
   fetch(SB_CONFIG.apiBase+'/v1/listings/cerrar',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({sku:sku,pais:pais})})
     .then(function(r){return r.json();}).then(function(d){
       if(d.error==='listings_write_off'){ alert('⚠️ Escritura de listings DESACTIVADA. Pon LISTINGS_WRITE=1 en Cloudflare (Worker → Variables).'); return; }
-      if(d.error==='no_autorizado'){ alert('🔑 Falta la clave admin (o entra con tu login de admin).'); return; }
+      if(d.error==='no_autorizado'){ alert('🔑 Tu sesión no está reconocida como admin. Añade tu email de login a la variable ADMIN_EMAILS en Cloudflare (una vez) y tu login ya podrá hacer esto sin pegar ninguna clave.'); return; }
       if(d.error==='falta_sellerid'){ alert('⚠️ Falta el Merchant Token (SPAPI_SELLER_ID) en Cloudflare.'); return; }
       if(d.ok){ alert('✅ Listing cerrado en '+pais+':\n«'+sku+'»'); cargarListings(); }
       else { alert('⛔ Amazon no pudo cerrarlo'+((d.detalle&&(d.status===401||d.status===403))?' (permiso: tu app necesita el rol de gestión de listings).':'.')+'\n\n'+JSON.stringify(d.detalle||d).slice(0,300)); }
@@ -1526,12 +1526,12 @@ function cerrarListingAdmin(skuE,pais){
 function reabrirListingAdmin(skuE,pais,asinE){
   var sku=decodeURIComponent(skuE||''), asin=decodeURIComponent(asinE||'');
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ alert('Necesitas admin (🔌 Conexión → clave, o entra con tu login de admin).'); return; }
+  if(!key){ alert('Entra con tu cuenta — tu login ya vale como admin. (Solo si no has iniciado sesión, pega la clave en 🔌 Conexión.)'); return; }
   if(!confirm('Intentar REABRIR «'+sku+'» en '+pais+'?\n\nSi Amazon no lo permite automáticamente, te doy el enlace a Seller Central para hacerlo a mano.')) return;
   fetch(SB_CONFIG.apiBase+'/v1/listings/reabrir',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({sku:sku,pais:pais,asin:asin})})
     .then(function(r){return r.json();}).then(function(d){
       if(d.error==='listings_write_off'){ alert('⚠️ Escritura de listings DESACTIVADA. Pon LISTINGS_WRITE=1 en Cloudflare.'); return; }
-      if(d.error==='no_autorizado'){ alert('🔑 Falta la clave admin (o entra con tu login de admin).'); return; }
+      if(d.error==='no_autorizado'){ alert('🔑 Tu sesión no está reconocida como admin. Añade tu email de login a la variable ADMIN_EMAILS en Cloudflare (una vez) y tu login ya podrá hacer esto sin pegar ninguna clave.'); return; }
       if(d.ok){ alert('✅ Solicitud de reapertura enviada para '+pais+'. Puede tardar unos minutos en reflejarse.'); cargarListings(); }
       else { if(confirm('Amazon no pudo reabrirlo automáticamente (a veces hace falta hacerlo a mano). ¿Abrir Seller Central para reactivarlo?')) window.open((d&&d.seller_central)||'https://sellercentral.amazon.es/inventory','_blank'); }
     }).catch(function(e){ alert('Error: '+e.message); });
@@ -3623,7 +3623,7 @@ function ppcAccionCampana(x){
 // Traduce la respuesta de un cambio en Ads a un mensaje claro según la causa.
 function msgErrAds(d){
   if(!d) return '⚠️ Amazon no respondió. Reintenta en unos segundos.';
-  if(d.error==='no_autorizado') return '🔑 Falta la CLAVE ADMIN.\n\nPausar/encender/ajustar campañas es una acción de administrador. Ve a 🔌 Conexión → «Clave privada (SB_API_KEY)», pega tu clave maestra y pulsa Probar conexión. Con tu login normal (miembro) solo puedes VER, no cambiar campañas en Amazon.';
+  if(d.error==='no_autorizado') return '🔑 Tu sesión no está reconocida como ADMIN.\n\nSolución (una sola vez): añade tu email de login a la variable ADMIN_EMAILS en Cloudflare (Worker → Variables). A partir de ahí, tu login normal ya podrá pausar/ajustar campañas, listings, etc. SIN pegar ninguna clave.\n\n(Alternativa rápida para forzar sin loguearte: pega la clave maestra en 🔌 Conexión.)';
   if(d.error==='ads_write_off') return '⚠️ La ejecución de cambios está DESACTIVADA por seguridad.\n\nPara activarla: Cloudflare → tu Worker → Settings → Variables → añade ADS_WRITE = 1 y guarda. Luego reintenta.';
   if(d.status===401||d.status===403) return '⛔ Amazon rechazó el cambio por PERMISOS (código '+d.status+').\n\nTu conexión de Amazon Ads no tiene permiso de ESCRITURA (gestión de campañas), solo de lectura. Hay que volver a conectar Amazon Ads concediendo «gestión de campañas», o usar un perfil con rol de administrador.\n\nDetalle de Amazon:\n'+JSON.stringify(d.detalle||{}).slice(0,300);
   return 'No se pudo aplicar. Respuesta de Amazon:\n'+JSON.stringify((d&&d.detalle)||d||{}).slice(0,400);
@@ -3633,7 +3633,7 @@ function cambiarEstadoCampana(cid,pais,estado,nmEnc){
   var accion=estado==='PAUSED'?'PAUSAR':'REACTIVAR';
   if(!confirm(accion+' la campaña en Amazon:\n\n«'+nombre+'» ('+pais+')\n\nEsto cambia tu campaña REAL en Amazon Ads. ¿Continuar?')) return;
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ alert('Necesitas la clave admin (🔌 Conexión) para ejecutar cambios en Amazon.'); return; }
+  if(!key){ alert('Entra con tu cuenta — tu login ya vale como admin. (Solo si no has iniciado sesión, pega la clave en 🔌 Conexión.)'); return; }
   fetch(SB_CONFIG.apiBase+'/v1/ads/campana-estado',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:pais,campania_id:cid,estado:estado})})
     .then(function(r){return r.json();})
     .then(function(d){
@@ -3660,7 +3660,7 @@ function negativizarTermino(termEnc,pais){
 function cambiarPresupuesto(cid,pais,nmEnc){
   var nombre=decodeURIComponent(nmEnc||'');
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ alert('Necesitas la clave admin (🔌 Conexión) para ejecutar cambios en Amazon.'); return; }
+  if(!key){ alert('Entra con tu cuenta — tu login ya vale como admin. (Solo si no has iniciado sesión, pega la clave en 🔌 Conexión.)'); return; }
   var v=prompt('Nuevo presupuesto DIARIO (€) para la campaña:\n\n«'+nombre+'» ('+pais+')\n\nEsto cambia tu campaña REAL en Amazon Ads.','');
   if(v===null) return;
   var p=parseFloat(String(v).replace(',','.'));
@@ -3680,14 +3680,14 @@ function confirmarNegativo(){
   var campNombre=(sel.selectedOptions&&sel.selectedOptions[0])?sel.selectedOptions[0].textContent:'';
   var msg=document.getElementById('neg-msg'), btn=document.getElementById('neg-ok');
   var key=(SB_CONFIG.apiKey||'').trim();
-  if(!key){ msg.style.color='var(--am)'; msg.textContent='Necesitas la clave admin (🔌 Conexión).'; return; }
+  if(!key){ msg.style.color='var(--am)'; msg.textContent='Entra con tu cuenta (tu login ya vale como admin).'; return; }
   if(!confirm('Negativizar «'+NEG_CTX.termino+'» en la campaña «'+campNombre+'» ('+NEG_CTX.pais+').\n\nEsto añade una palabra negativa REAL en Amazon. ¿Continuar?')) return;
   btn.disabled=true; btn.style.opacity=.5; msg.style.color='var(--mu)'; msg.textContent='Enviando a Amazon…';
   fetch(SB_CONFIG.apiBase+'/v1/ads/negativo',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:NEG_CTX.pais,campania_id:cid,termino:NEG_CTX.termino,tipo:tipo})})
     .then(function(r){return r.json();})
     .then(function(d){
       if(d && d.aplicado){ msg.style.color='var(--gn)'; msg.textContent='✅ Negativizado en Amazon.'; setTimeout(cerrarNeg,1400); }
-      else { msg.style.color='var(--am)'; msg.textContent=(d&&d.error==='no_autorizado')?'🔑 Falta la clave admin (🔌 Conexión → SB_API_KEY).':((d&&d.error==='ads_write_off')?'⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.':((d&&(d.status===401||d.status===403))?'⛔ Amazon: sin permiso de escritura en Ads. Reconecta Ads con «gestión de campañas».':'No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300))); }
+      else { msg.style.color='var(--am)'; msg.textContent=(d&&d.error==='no_autorizado')?'🔑 Tu login no está como admin: añade tu email a ADMIN_EMAILS en Cloudflare.':((d&&d.error==='ads_write_off')?'⚠️ Ejecución desactivada. Pon ADS_WRITE=1 en Cloudflare.':((d&&(d.status===401||d.status===403))?'⛔ Amazon: sin permiso de escritura en Ads. Reconecta Ads con «gestión de campañas».':'No se pudo: '+JSON.stringify((d&&d.detalle)||d||{}).slice(0,300))); }
       btn.disabled=false; btn.style.opacity=1;
     })
     .catch(function(e){ msg.style.color='var(--am)'; msg.textContent='Error: '+e.message; btn.disabled=false; btn.style.opacity=1; });
