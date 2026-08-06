@@ -477,6 +477,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
             <label style="font-size:11px;color:var(--mu)">ACoS objetivo</label>
             <input id="kw-acos" type="number" min="1" max="100" step="1" oninput="guardarAcosObj(this.value)" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 7px;width:56px">
             <span style="font-size:11px;color:var(--mu)">%</span>
+            <label style="font-size:11px;color:var(--mu2);display:flex;align-items:center;gap:4px;cursor:pointer" title="Oculta las keywords pausadas y las de campañas apagadas"><input type="checkbox" id="kw-solo-activas" checked onchange="renderKeywords()"> solo activas</label>
             <input id="kw-buscar" placeholder="Buscar keyword…" oninput="renderKeywords()" style="background:#111;border:1px solid var(--bd2);border-radius:8px;color:var(--tx);font-size:12px;padding:5px 9px;width:150px">
           </div>
         </div>
@@ -1475,18 +1476,27 @@ function renderKeywords(){
   var ai=document.getElementById('kw-acos'); if(ai && !ai.value) ai.value=acosObj();
   var datos=(KW_DATA||[]).slice();
   if(PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  // Solo activas: oculta keywords pausadas y las de campañas apagadas (estado
+  // de campaña desconocido → NO se oculta, para no perder keywords reales).
+  var soloAct=document.getElementById('kw-solo-activas'); soloAct=soloAct?soloAct.checked:true;
+  if(soloAct) datos=datos.filter(function(x){
+    var kwOk=(x.estado||'').toLowerCase()==='enabled';
+    var cs=(x.campania_estado||'').toUpperCase();
+    return kwOk && (cs===''||cs==='ENABLED');
+  });
   var q=((document.getElementById('kw-buscar')||{}).value||'').toLowerCase().trim();
   if(q) datos=datos.filter(function(x){return (x.keyword||'').toLowerCase().indexOf(q)>-1;});
-  if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">'+(KW_DATA&&KW_DATA.length?'Ningún resultado con ese filtro.':'Aún no hay keywords. Se cargan a diario (o desde 🔌 Conexión → «Cargar keywords»).')+'</div>'; return; }
+  if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">'+(KW_DATA&&KW_DATA.length?'Ningún resultado con ese filtro (prueba a desmarcar «solo activas»).':'Aún no hay keywords. Se cargan a diario (o desde 🔌 Conexión → «Cargar keywords»).')+'</div>'; return; }
   // Orden: primero las que más gastan (donde más importa ajustar la puja).
   datos.sort(function(a,b){return (+b.gasto||0)-(+a.gasto||0) || (+b.puja||0)-(+a.puja||0);});
   var total=datos.length, tope=200; datos=datos.slice(0,tope);
   var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
   var h='<div style="overflow-x:auto;max-height:460px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
     '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D">'+
-    '<th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Clics</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Sugerida</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
+    '<th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Clics</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">Sugerida</th><th style="padding:6px 8px">Estado</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
   datos.forEach(function(k){
     var nm=encodeURIComponent(k.keyword||'');
+    var campNom=k.campania||_campNombre(k.campania_id)||'';
     var s=pujaSugerida(k);
     var acosReal=(+k.ventas>0)?(k.gasto/k.ventas*100):null;
     var acosCol=acosReal==null?'var(--mu)':(acosReal<=acosObj()?'var(--gn)':(acosReal<=acosObj()*1.5?'var(--am)':'#ff8a8a'));
@@ -1495,6 +1505,7 @@ function renderKeywords(){
     var usar=(esAdmin && s && s.val!=null && Math.abs((s.val)-(+k.puja||0))>=0.01)?(' <button class="acc-cp" style="border-color:rgba(46,230,160,.4);color:var(--or2)" title="Aplicar la puja sugerida ('+s.txt+') en Amazon" onclick="aplicarPuja(\''+k.keyword_id+'\',\''+(k.pais||'')+'\',\''+nm+'\','+s.val+')">usar</button>'):'';
     h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
       '<td style="padding:7px 8px;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="'+(k.keyword||'').replace(/"/g,'&quot;')+'"><b>'+(k.keyword||'')+'</b> '+mtBadge(k.concordancia)+'</td>'+
+      '<td style="padding:7px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)" title="'+String(campNom).replace(/"/g,'&quot;')+'">'+(campNom||'<span style="color:var(--mu)">—</span>')+'</td>'+
       '<td style="padding:7px 8px">'+(k.clics!=null?k.clics:'—')+'</td>'+
       '<td style="padding:7px 8px">'+(k.gasto!=null?f(k.gasto,2)+'€':'—')+'</td>'+
       '<td style="padding:7px 8px">'+(k.ventas!=null?f(k.ventas,2)+'€':'—')+'</td>'+

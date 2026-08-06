@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v107-accion-correo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v108-keywords-activas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1115,9 +1115,17 @@ export default {
       // --- KEYWORDS: lista de palabras clave con su puja actual (para ajustar puja). Lectura. ---
       if (url.pathname === '/v1/ads/keywords') {
         const filas = await selSafe(env, 'ppc_keywords?order=fecha.desc&limit=8000', []);
+        // Estado de la CAMPAÑA (de ppc_presupuestos) y nombre, para poder filtrar las
+        // keywords de campañas apagadas y mostrar a qué campaña pertenece cada una.
+        const camp = {};
+        try { for (const c of (await selSafe(env, 'ppc_presupuestos?select=campania_id,campania,estado', []))) camp[c.campania_id] = c; } catch (_) {}
         let actualizado = null;
-        for (const f of (filas || [])) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
-        return json({ datos: filas || [], actualizado }, cors);
+        const datos = (filas || []).map(f => {
+          if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
+          const c = camp[f.campania_id];
+          return { ...f, campania: (c && c.campania) || '', campania_estado: (c && c.estado) || '' };
+        });
+        return json({ datos, actualizado }, cors);
       }
 
       // --- Ingesta de keywords + rendimiento (admin). En segundo plano (el informe
