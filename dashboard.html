@@ -439,7 +439,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <div class="card">
         <div class="ch">
           <h2><span class="ci">🔤</span> Términos de búsqueda <span style="font-weight:400;color:var(--mu)">· 30 días</span> <span id="ppc-terminos-nota" style="font-size:10px;color:var(--am);font-weight:400;display:none">· resumen del periodo (aún no varía por día)</span></h2>
-          <span style="font-size:11px;color:var(--mu)">ACoS objetivo: <input type="number" id="ppc-be" value="25" style="width:44px;padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px" onchange="renderPPCTerminos()">%</span>
+          <span style="font-size:11px;color:var(--mu)" title="ACoS objetivo = cuánto de cada venta aceptas gastar en anuncios. MÁS BAJO = más rentable cada venta, pero muy bajo pierdes volumen. Ponlo POR DEBAJO de tu margen (break-even). Se recuerda entre sesiones.">ACoS objetivo: <input type="number" id="ppc-be" min="1" max="100" oninput="guardarAcosObj(this.value)" style="width:44px;padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px">%</span>
         </div>
         <div style="overflow-x:auto">
         <table class="tbl">
@@ -1322,8 +1322,11 @@ function cargarKeywords(){
     .catch(function(){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">No se pudo cargar ahora mismo.</div>'; });
 }
 function _campNombre(cid){ var c=((PPC_DATA&&PPC_DATA.campanas)||[]).filter(function(x){return String(x.campania_id)===String(cid);})[0]; return c?c.nombre:''; }
-function acosObj(){ var v=parseFloat(localStorage.getItem('sb_kw_acos_obj')); return (v>0&&v<=100)?v:30; }
-function guardarAcosObj(v){ var n=parseFloat(v); if(n>0&&n<=100){ localStorage.setItem('sb_kw_acos_obj',n); renderKeywords(); } }
+function acosObj(){ var v=parseFloat(localStorage.getItem('sb_kw_acos_obj')); return (v>0&&v<=100)?v:20; }
+function guardarAcosObj(v){ var n=parseFloat(v); if(n>0&&n<=100){ localStorage.setItem('sb_kw_acos_obj',n);
+  var be=document.getElementById('ppc-be'); if(be) be.value=n;
+  var kw=document.getElementById('kw-acos'); if(kw) kw.value=n;
+  try{ renderKeywords(); }catch(e){} try{ renderPPCTerminos(); }catch(e){} } }
 // Puja sugerida para alcanzar el ACoS objetivo, a partir del rendimiento (30 días).
 // Devuelve {val, txt, color, motivo} o null si no hay datos suficientes.
 function pujaSugerida(k){
@@ -4105,7 +4108,8 @@ function terminosRango(){
 }
 function renderPPCTerminos(){
   if(!PPC_DATA)return;
-  var be=(+document.getElementById('ppc-be').value||25)/100;
+  var beEl=document.getElementById('ppc-be'); if(beEl && !beEl.value) beEl.value=acosObj();   // recuerda tu ACoS objetivo
+  var be=(+ (beEl&&beEl.value) || acosObj())/100;
   var acciones=[],recuperable=0;
   document.getElementById('ppc-terminos').innerHTML=terminosRango().slice(0,40).map(function(t){
     var gasto=+t.gasto,clics=+t.clics,ped=+(t.pedidos_ppc||0),ven=+(t.ventas_ppc||0);
