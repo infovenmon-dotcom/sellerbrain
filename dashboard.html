@@ -455,6 +455,15 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div id="ppc-rentab-camp"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
       </div>
 
+      <div class="card" style="border-color:rgba(46,230,160,.3)">
+        <div class="ch" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <h2><span class="ci">🤖</span> Plan de optimización · pujas a la baja</h2>
+          <button class="chip" id="plan-aplicar-todas" onclick="aplicarTodasPlan()" style="display:none">✓ Aplicar todas</button>
+        </div>
+        <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Sugerencias de <b>bajar puja</b> (nunca subir) usando el <b>margen real</b> de cada producto como ACoS objetivo y priorizando las <b>campañas que se quedan sin presupuesto</b>. Bajar estas pujas mejora el margen y hace que el gasto <b>llegue a más horas del día</b>. Tú apruebas cada una.</div>
+        <div id="ppc-plan"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
+      </div>
+
       <div class="card">
         <div class="ch"><h2><span class="ci">📍</span> Rendimiento por ubicación (placement) <span style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
         <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Dónde convierte mejor tu publicidad: <b>Top of Search</b> (arriba de la búsqueda), <b>páginas de producto</b> o <b>resto de la búsqueda</b>. Si el ACoS de Top of Search es mucho mejor, sube el <b>ajuste de puja</b> de esa ubicación (y baja el del resto) en vez de tocar la puja base.</div>
@@ -1378,6 +1387,62 @@ function renderRentabCamp(){
   var nLim=rows.filter(function(r){return r.lim;}).length;
   if(nLim) h+='<div style="font-size:11.5px;color:var(--am);margin-top:8px">⏰ <b>'+nLim+'</b> campaña(s) se quedan sin presupuesto antes de acabar el día. Baja pujas (para que el gasto rinda más horas) o valora subir el presupuesto si son rentables.</div>';
   el.innerHTML=h;
+}
+// ---- Plan de pujas a la baja (Fase 2 del copiloto PPC) ----
+var PLAN_PUJAS=[];
+function cargarPlanPujas(){
+  var el=document.getElementById('ppc-plan'); if(!el) return;
+  var cred=(SB_CONFIG.apiKey||(function(){try{return sessionStorage.getItem('fba_token');}catch(e){return '';}})()||'');
+  if(!cred){ el.innerHTML='<div style="color:var(--mu);font-size:13px">Conecta tu cuenta para ver el plan.</div>'; return; }
+  el.innerHTML='<div style="color:var(--mu);font-size:13px">Calculando el plan…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/ppc/plan-pujas',{headers:authHdr()})
+    .then(function(r){return r.ok?r.json():{plan:[]};}).then(function(d){ PLAN_PUJAS=(d&&d.plan)||[]; renderPlanPujas(); })
+    .catch(function(){ el.innerHTML='<div style="color:var(--mu);font-size:13px">No se pudo calcular ahora mismo.</div>'; });
+}
+function renderPlanPujas(){
+  var el=document.getElementById('ppc-plan'); if(!el) return;
+  var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
+  var datos=PLAN_PUJAS.slice();
+  if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  var btnTodas=document.getElementById('plan-aplicar-todas');
+  if(!datos.length){ el.innerHTML='<div style="color:var(--gn);font-size:13px">👍 Nada que bajar: ninguna keyword está por encima de su objetivo de rentabilidad (o faltan datos/rendimiento). Recuerda cargar keywords y el mapa producto↔campaña.</div>'; if(btnTodas)btnTodas.style.display='none'; return; }
+  if(btnTodas) btnTodas.style.display=esAdmin?'inline-block':'none';
+  var ahorro=datos.reduce(function(a,x){return a+((x.puja-x.sugerida)||0);},0);
+  var h='<div style="font-size:12.5px;margin-bottom:8px"><b style="color:var(--or2)">'+datos.length+'</b> pujas a bajar. Las de <b style="color:var(--am)">⏰</b> son de campañas que se quedan sin presupuesto.</div>';
+  h+='<div style="overflow-x:auto;max-height:440px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<thead><tr style="text-align:left;color:var(--mu);font-size:11px;position:sticky;top:0;background:#0D0D0D"><th style="padding:6px 8px">Keyword</th><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">Obj.</th><th style="padding:6px 8px">Puja</th><th style="padding:6px 8px">→ Bajar a</th><th style="padding:6px 8px">Presup.</th>'+(esAdmin?'<th style="padding:6px 8px">Acción</th>':'')+'</tr></thead><tbody>';
+  datos.forEach(function(x){
+    var nm=encodeURIComponent(x.keyword||'');
+    var lim=(x.limitada!==false)?('<span style="color:var(--am)" title="Campaña sin presupuesto'+(typeof x.limitada==='number'?(' ~'+x.limitada+':00 UTC'):'')+'">⏰'+(typeof x.limitada==='number'?(' '+x.limitada+'h'):'')+'</span>'):'<span style="color:var(--mu)">—</span>';
+    var acosCol=x.acos==null?'#ff5c5c':(x.acos<=x.target?'var(--gn)':'#ff8a8a');
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)">'+
+      '<td style="padding:7px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="'+(x.keyword||'').replace(/"/g,'&quot;')+'"><b>'+(x.keyword||'')+'</b></td>'+
+      '<td style="padding:7px 8px;max-width:150px;overflow:hidden;text-overflow:ellipsis;color:var(--mu2)">'+(_campNombre(x.campania_id)||'')+' <span style="color:var(--mu);font-size:10px">'+(x.pais||'')+'</span></td>'+
+      '<td style="padding:7px 8px;color:'+acosCol+'">'+(x.acos==null?'∞':x.acos+'%')+'</td>'+
+      '<td style="padding:7px 8px;color:var(--mu2)">'+x.target+'%</td>'+
+      '<td style="padding:7px 8px">'+f(x.puja,2)+'€</td>'+
+      '<td style="padding:7px 8px;font-weight:700;color:var(--or2)">'+f(x.sugerida,2)+'€</td>'+
+      '<td style="padding:7px 8px">'+lim+'</td>'+
+      (esAdmin?('<td style="padding:7px 8px"><button class="acc-cp" style="border-color:rgba(46,230,160,.4);color:var(--or2)" title="Bajar la puja en Amazon" onclick="aplicarPuja(\''+x.keyword_id+'\',\''+(x.pais||'')+'\',\''+nm+'\','+x.sugerida+')">bajar</button></td>'):'')+'</tr>';
+  });
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+}
+function aplicarTodasPlan(){
+  var datos=PLAN_PUJAS.slice();
+  if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  if(!datos.length) return;
+  if(!confirm('Aplicar '+datos.length+' bajadas de puja en Amazon (una a una)?\n\nSolo bajan, nunca suben. Cambia tus campañas REALES.')) return;
+  var key=(SB_CONFIG.apiKey||'').trim();
+  if(!key){ alert('Entra con tu cuenta (tu login vale como admin).'); return; }
+  var i=0, ok=0, err=0;
+  (function next(){
+    if(i>=datos.length){ alert('✓ Hecho: '+ok+' pujas bajadas'+(err?(', '+err+' con error'):'')+'.'); cargarPlanPujas(); return; }
+    var x=datos[i++];
+    fetch(SB_CONFIG.apiBase+'/v1/ads/puja',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({pais:x.pais,keyword_id:x.keyword_id,puja:x.sugerida})})
+      .then(function(r){return r.json();}).then(function(d){ if(d&&d.aplicado)ok++; else err++; setTimeout(next,250); })
+      .catch(function(){ err++; setTimeout(next,250); });
+  })();
 }
 function acosObj(){ var v=parseFloat(localStorage.getItem('sb_kw_acos_obj')); return (v>0&&v<=100)?v:20; }
 function guardarAcosObj(v){ var n=parseFloat(v); if(n>0&&n<=100){ localStorage.setItem('sb_kw_acos_obj',n);
@@ -3979,7 +4044,7 @@ function cambiarVista(v){
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
-  if(v==='ppc'){ try{ cargarRentabCamp(); }catch(e){} try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} }
+  if(v==='ppc'){ try{ cargarRentabCamp(); }catch(e){} try{ cargarPlanPujas(); }catch(e){} try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} }
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} try{ mostrarBienvenida(); }catch(e){} }   // refresca la capa fiscal y el banner de bienvenida
   if(TOOL_SRC[v]){

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v105-autopausa'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v106-plan-pujas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -522,6 +522,46 @@ export default {
         const diag = await traerPresupuestosAds(env);
         const limitadas = await selSafe(env, 'v_ppc_limitadas?order=total_dia.desc', []);
         return json({ ok: true, diag, limitadas }, cors);
+      }
+
+      // --- PLAN DE PUJAS A LA BAJA (copiloto PPC · Fase 2). Cruza rendimiento por
+      //     keyword + MARGEN REAL del producto (break-even) + campañas limitadas por
+      //     presupuesto. Solo sugiere BAJAR (nunca subir): mejora margen y hace que el
+      //     presupuesto dure más horas. Solo lectura; el usuario aplica cada cambio. ---
+      if (url.pathname === '/v1/ppc/plan-pujas') {
+        const kws = await selSafe(env, 'ppc_keywords?select=keyword_id,campania_id,keyword,pais,puja,clics,gasto,ventas,estado', []);
+        // mapa campaña → SKUs anunciados (activos)
+        const pa = {};
+        try { for (const r of (await selSafe(env, 'ppc_product_ads?select=campania_id,sku,estado', []))) { if ((r.estado || '').toUpperCase() !== 'ENABLED') continue; (pa[r.campania_id] = pa[r.campania_id] || new Set()).add(r.sku); } } catch (_) {}
+        // ACoS objetivo REAL por SKU (break-even dejando ~10% de margen) — de productosPeriodo
+        const hoy = new Date().toISOString().slice(0, 10), hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+        let prods = []; try { prods = await productosPeriodo(env, hace30, hoy); } catch (_) {}
+        const acosObjSku = {}; for (const p of (prods || [])) if (p.acos_obj != null) acosObjSku[p.sku] = +p.acos_obj;
+        // campañas limitadas por presupuesto (hora de tope)
+        const lim = {}; try { for (const l of (await selSafe(env, 'v_ppc_limitadas?select=pais,campania_id,hora_tope', []))) lim[(l.pais || '') + '|' + l.campania_id] = (l.hora_tope != null ? +l.hora_tope : true); } catch (_) {}
+        const plan = [];
+        for (const k of (kws || [])) {
+          if ((k.estado || '').toLowerCase() !== 'enabled') continue;
+          const clics = +k.clics || 0, ventas = +k.ventas || 0, gasto = +k.gasto || 0, puja = +k.puja || 0;
+          if (clics < 5 || !(puja > 0)) continue;              // datos insuficientes o sin puja
+          // target ACoS = el más EXIGENTE (menor) de los productos que anuncia la campaña
+          let target = null; const skus = pa[k.campania_id];
+          if (skus) for (const s of skus) { if (acosObjSku[s] != null) target = (target == null) ? acosObjSku[s] : Math.min(target, acosObjSku[s]); }
+          if (target == null) target = 20;                     // sin margen conocido → objetivo prudente
+          let sug = ventas > 0 ? (ventas / clics) * (target / 100) : Math.max(0.10, puja * 0.5);
+          if (sug < 0.10) sug = 0.10;
+          if (sug < puja * 0.5) sug = puja * 0.5;              // no recortar más del 50% de golpe
+          sug = Math.round(sug * 100) / 100;
+          if (sug >= puja - 0.005) continue;                   // SOLO a la baja
+          const acosReal = ventas > 0 ? (gasto / ventas * 100) : null;
+          const l = lim[(k.pais || '') + '|' + k.campania_id];
+          plan.push({ keyword_id: k.keyword_id, keyword: k.keyword, pais: k.pais, campania_id: k.campania_id,
+            puja: +puja.toFixed(2), sugerida: sug, acos: acosReal != null ? +acosReal.toFixed(0) : null,
+            target: +(+target).toFixed(0), clics, ventas: +ventas.toFixed(2), limitada: l !== undefined ? l : false });
+        }
+        // prioridad: campañas sin presupuesto primero, luego mayor recorte (€)
+        plan.sort((a, b) => (b.limitada !== false ? 1 : 0) - (a.limitada !== false ? 1 : 0) || (b.puja - b.sugerida) - (a.puja - a.sugerida));
+        return json({ plan, total: plan.length }, cors);
       }
 
       // --- PPC por HORAS: patrón por hora del día + serie reciente ---
