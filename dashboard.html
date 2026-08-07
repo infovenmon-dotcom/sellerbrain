@@ -1993,11 +1993,14 @@ function renderChart(){
 }
 
 // Carga la serie diaria de un periodo y actualiza el gráfico (sigue al selector).
+var _serieSeq=0;
 function cargarSerie(desde,hasta,lab){
   if(SB_CONFIG.mode!=='api'){ CHART_SERIE=null; renderChart(); return; }
+  var myReq=++_serieSeq;               // igual que el P&L: solo la última respuesta manda
   fetch(SB_CONFIG.apiBase+'/v1/serie?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(d){
+      if(myReq!==_serieSeq) return;     // respuesta vieja: ignorar
       CHART_SERIE=(d.serie||[]).map(function(x){return {fecha:x.fecha,v:+x.v,b:+x.b,p:+x.p};});
       var t=document.getElementById('chart-per'); if(t)t.textContent='· '+(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
       renderChart();
@@ -2223,19 +2226,25 @@ function prodPeriodo(id){
   cargarSerie(desde,hasta,lab);   // el gráfico sigue al selector de fechas
   cargarPnl(desde,hasta,lab);     // el P&L del periodo también sigue las fechas
 }
+var _pnlSeq=0;
 function cargarPnl(desde,hasta,lab){
   if(SB_CONFIG.mode!=='api')return;
+  var myReq=++_pnlSeq;                 // sello de petición: solo la última manda
+  // Limpia el mosaico y el P&L mientras carga, para no mostrar el periodo anterior.
+  var tb=document.getElementById('tile-periodo-body'); if(tb) tb.innerHTML='<div class="lbl" style="padding:10px 0">Cargando '+(lab||'')+'…</div>';
+  var tl=document.getElementById('tile-periodo-lab'); if(tl) tl.textContent=(lab||'');
   fetch(SB_CONFIG.apiBase+'/v1/pnl?desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:authHdr()})
     .then(function(r){return r.json();})
     .then(function(d){
+      if(myReq!==_pnlSeq) return;      // respuesta vieja (llegó tarde): la ignoramos
       if(d.pnl && d.pnl.ventas!=null){
         PNL=d.pnl; window.PNL_REAL=true;
         window.PNL_DESDE=desde; window.PNL_HASTA=hasta;
         window.PNL_LAB=(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
         renderPnl();
         try{ actualizarMasterTot(); }catch(e){}
-      }
-    }).catch(function(){});
+      } else if(tb){ tb.innerHTML='<div class="lbl" style="padding:10px 0">Sin datos en «'+(lab||'')+'».</div>'; }
+    }).catch(function(){ if(myReq===_pnlSeq && tb) tb.innerHTML='<div class="lbl" style="padding:10px 0">No se pudo cargar.</div>'; });
 }
 // Total del periodo elegido (Ventas + Beneficio neto) → mosaico del filtro maestro,
 // en el hueco junto a «Este año / Año pasado».
