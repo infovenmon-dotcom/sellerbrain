@@ -1147,23 +1147,27 @@ function renderPnl(){
   }
   document.getElementById('pnl-per').textContent='· '+lab;
   var rows=[
-    {n:'Ventas brutas',v:PNL.ventas*esc,c:'var(--or)',pos:true,m:'Ventas CON IVA, como en Seller Central (lo que paga el cliente).'},
-    {n:'IVA repercutido (a Hacienda)',v:-(PNL.iva_rep||0)*esc,c:'#7a7a7a',m:'El IVA de tus ventas que ingresas a Hacienda (ventas − base sin IVA). Se resta porque no es tuyo, va al Estado.'},
-    {n:'Coste de producto',v:-PNL.prod*esc,c:'#2EE6A0',m:'Unidades vendidas × tu coste unitario (base SIN IVA). Se introduce por producto (o desde Compras de mercancía).'},
-    {n:'Tarifas FBA',v:-PNL.fba*esc,c:'#E84040',m:'Tarifa REAL de logística por unidad, del settlement de Amazon (sin IVA), aplicada a las unidades del periodo. Resuelve el desfase de liquidación.'},
-    {n:'Comisión Amazon',v:-PNL.com*esc,c:'#F5A623',m:'Comisión real de venta por unidad, del settlement (sin IVA).'},
-    {n:'PPC',v:-PNL.ppc*esc,c:'#9B59B6',m:'Gasto de publicidad del periodo (Amazon Ads API).'},
-    {n:'Devoluciones',v:-PNL.dev*esc,c:'#C0392B',m:'Reembolsos y costes de devolución del settlement (sin IVA).'},
-    {n:'Almacenaje',v:-PNL.alm*esc,c:'#888',m:'Tarifas de almacenaje FBA del settlement (sin IVA).'},
-    {n:'Otros ajustes',v:PNL.otros*esc,c:'#666',m:'Otros conceptos del settlement: reembolsos a tu favor, ajustes de inventario, etc.'}
+    {n:'Ventas brutas',k:'ventas',v:PNL.ventas*esc,c:'var(--or)',pos:true,m:'Ventas CON IVA, como en Seller Central (lo que paga el cliente).'},
+    {n:'IVA repercutido (a Hacienda)',k:'iva_rep',v:-(PNL.iva_rep||0)*esc,c:'#7a7a7a',m:'El IVA de tus ventas que ingresas a Hacienda (ventas − base sin IVA). Se resta porque no es tuyo, va al Estado.'},
+    {n:'Coste de producto',k:'prod',v:-PNL.prod*esc,c:'#2EE6A0',m:'Unidades vendidas × tu coste unitario (base SIN IVA). Se introduce por producto (o desde Compras de mercancía).'},
+    {n:'Tarifas FBA',k:'fba',v:-PNL.fba*esc,c:'#E84040',m:'Tarifa REAL de logística por unidad, del settlement de Amazon (sin IVA), aplicada a las unidades del periodo. Resuelve el desfase de liquidación.'},
+    {n:'Comisión Amazon',k:'com',v:-PNL.com*esc,c:'#F5A623',m:'Comisión real de venta por unidad, del settlement (sin IVA).'},
+    {n:'PPC',k:'ppc',v:-PNL.ppc*esc,c:'#9B59B6',m:'Gasto de publicidad del periodo (Amazon Ads API).'},
+    {n:'Devoluciones',k:'dev',v:-PNL.dev*esc,c:'#C0392B',m:'Reembolsos y costes de devolución del settlement (sin IVA).'},
+    {n:'Almacenaje',k:'alm',v:-PNL.alm*esc,c:'#888',m:'Tarifas de almacenaje FBA del settlement (sin IVA).'},
+    {n:'Otros ajustes',k:'otros',v:PNL.otros*esc,c:'#666',m:'Otros conceptos del settlement: reembolsos a tu favor, ajustes de inventario, etc.'}
   ];
   var ben=rows.reduce(function(a,r){return a+r.v;},0);
+  var puedeDrill=!!window.PNL_REAL;   // el desglose solo tiene sentido sobre el rango real
   var h='';
   rows.forEach(function(r){
     var inf=r.m?' <span class="pnl-i" title="'+r.m.replace(/"/g,'&quot;')+'">ⓘ</span>':'';
-    h+='<div class="row"><div class="n"><span class="dot" style="background:'+r.c+'"></span>'+r.n+inf+'</div>'+
+    var clic=(puedeDrill&&r.k)?(' style="cursor:pointer" title="Ver de dónde salen estos cargos" onclick="drillPnl(\''+r.k+'\')"'):'';
+    var flecha=(puedeDrill&&r.k)?' <span id="fx-'+r.k+'" style="color:var(--mu);font-size:9px">▸</span>':'';
+    h+='<div class="row"'+clic+'><div class="n"><span class="dot" style="background:'+r.c+'"></span>'+r.n+inf+flecha+'</div>'+
        '<div class="v" style="color:'+(r.v>=0?'var(--tx)':'var(--mu2)')+'">'+(r.v>=0?'+':'')+f(r.v,2)+'€</div>'+
        '<div class="p">'+f(Math.abs(r.v)/(PNL.ventas*esc)*100,1)+'%</div></div>';
+    if(puedeDrill&&r.k) h+='<div id="drill-'+r.k+'" style="display:none;margin:0 0 6px 16px"></div>';
   });
   h+='<div class="row total"><div class="n">Beneficio neto</div><div class="v" style="color:'+(ben>=0?'var(--gn)':'var(--rd)')+'">'+(ben>=0?'+':'')+f(ben,2)+'€</div><div class="p">'+f(ben/(PNL.ventas*esc)*100,1)+'%</div></div>';
   // IVA soportado recuperable (informativo, NO resta al beneficio: lo devuelve Hacienda)
@@ -1174,6 +1178,45 @@ function renderPnl(){
   h+='<div style="font-size:10.5px;color:var(--mu);margin-top:10px;line-height:1.5">ⓘ Pasa el ratón por cada línea para ver cómo se calcula. Criterio: ventas <b>sin IVA</b> menos costes <b>sin IVA</b> (tarifas por unidad reales del settlement, coste que introduces tú). El semáforo de productos mide el margen <b>antes</b> de PPC; el beneficio de aquí ya <b>incluye</b> PPC.</div>';
   document.getElementById('pnl').innerHTML=h;
   try{ renderImpactoFiscal(); }catch(e){}
+}
+
+// Desglose de una línea del P&L: de dónde salen los cargos (por concepto del
+// settlement, o por producto/país según la línea). Se abre/cierra al pinchar.
+var _drillCache={};
+function drillPnl(k){
+  var box=document.getElementById('drill-'+k), fx=document.getElementById('fx-'+k);
+  if(!box) return;
+  if(box.style.display!=='none'){ box.style.display='none'; if(fx) fx.textContent='▸'; return; }
+  box.style.display='block'; if(fx) fx.textContent='▾';
+  var desde=window.PNL_DESDE, hasta=window.PNL_HASTA;
+  if(!desde||!hasta){ box.innerHTML='<div style="font-size:11px;color:var(--mu)">Elige un rango de fechas para ver el desglose.</div>'; return; }
+  var ck=k+'|'+desde+'|'+hasta;
+  if(_drillCache[ck]){ box.innerHTML=_drillCache[ck]; return; }
+  box.innerHTML='<div style="font-size:11px;color:var(--mu)">Cargando desglose…</div>';
+  fetch(SB_CONFIG.apiBase+'/v1/pnl/desglose?linea='+encodeURIComponent(k)+'&desde='+encodeURIComponent(desde)+'&hasta='+encodeURIComponent(hasta),{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      d=d||{};
+      var filas=d.filas||[];
+      if(d.error){ box.innerHTML='<div style="font-size:11px;color:#ff8a8a">No se pudo desglosar: '+String(d.error).replace(/</g,'&lt;')+(d.hint?(' · '+d.hint):'')+'</div>'; return; }
+      if(!filas.length){ box.innerHTML='<div style="font-size:11.5px;color:var(--mu2);line-height:1.5">'+(d.nota||'Sin desglose para esta línea en el rango.')+'</div>'; return; }
+      var tot=filas.reduce(function(a,x){return a+(Math.abs(+x.importe)||0);},0)||1;
+      var h='<table style="width:100%;border-collapse:collapse;font-size:11.5px;margin:2px 0 4px">';
+      filas.forEach(function(x){
+        var imp=+x.importe||0, pct=Math.abs(imp)/tot*100;
+        var esLog=(x.sub==='logistica');
+        h+='<tr style="border-top:1px solid rgba(255,255,255,.05)">'+
+          '<td style="padding:4px 6px;color:'+(esLog?'#E8A040':'var(--mu2)')+'">'+(esLog?'🚚 ':'')+String(x.etiqueta||'').replace(/</g,'&lt;')+(x.lineas?(' <span style="color:var(--mu);font-size:10px">×'+x.lineas+'</span>'):'')+(x.aviso?(' <span style="color:#ff8a8a;font-size:10px">('+x.aviso+')</span>'):'')+'</td>'+
+          '<td style="padding:4px 6px;text-align:right;color:var(--tx);white-space:nowrap">'+f(imp,2)+'€</td>'+
+          '<td style="padding:4px 6px;text-align:right;color:var(--mu)">'+f(pct,0)+'%</td></tr>';
+      });
+      h+='</table>';
+      var hayLog=filas.some(function(x){return x.sub==='logistica';});
+      if(hayLog) h+='<div style="font-size:10.5px;color:#E8A040;line-height:1.5;margin-bottom:4px">🚚 = coste PUNTUAL (envío de stock a Amazon / retiradas), no tarifa por venta. Explica que el % de FBA suba en el mes que mandas mercancía.</div>';
+      if(d.nota) h+='<div style="font-size:10.5px;color:var(--mu);line-height:1.5">'+d.nota+'</div>';
+      _drillCache[ck]=h; box.innerHTML=h;
+    })
+    .catch(function(e){ box.innerHTML='<div style="font-size:11px;color:#ff8a8a">Error: '+e.message+'</div>'; });
 }
 
 // Capa fiscal aditiva: NO toca el P&L de arriba. Según el Perfil fiscal, muestra el
@@ -2171,6 +2214,7 @@ function cargarPnl(desde,hasta,lab){
     .then(function(d){
       if(d.pnl && d.pnl.ventas!=null){
         PNL=d.pnl; window.PNL_REAL=true;
+        window.PNL_DESDE=desde; window.PNL_HASTA=hasta;
         window.PNL_LAB=(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
         renderPnl();
       }

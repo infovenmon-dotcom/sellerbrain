@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v113-terminos-diario'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v114-pnl-desglose'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -198,7 +198,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -635,6 +635,51 @@ export default {
           }
         } catch (_) {}
         return json({ pnl }, cors);
+      }
+
+      // --- DESGLOSE del P&L: de dónde salen los cargos de una línea (al pinchar).
+      //     ?desde&hasta&linea=fba|com|alm|dev|otros|ppc|prod|ventas|iva_rep|iva_sop
+      //     Los cubos de settlement salen por CONCEPTO (RPC pnl_desglose). ---
+      if (url.pathname === '/v1/pnl/desglose') {
+        const desde = (url.searchParams.get('desde') || '').slice(0, 10);
+        const hasta = (url.searchParams.get('hasta') || '').slice(0, 10);
+        const linea = (url.searchParams.get('linea') || '').toLowerCase();
+        if (!desde || !hasta) return json({ error: 'faltan fechas', filas: [] }, cors);
+        const cubos = { fba: 'fba', com: 'com', alm: 'alm', dev: 'dev', otros: 'otros' };
+        try {
+          if (cubos[linea]) {
+            const r = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/pnl_desglose?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta) + '&p_cubo=' + encodeURIComponent(cubos[linea]),
+              { headers: { apikey: env.SUPABASE_SERVICE_KEY } });
+            if (!r.ok) return json({ error: 'rpc ' + r.status + ': ' + (await r.text()).slice(0, 160), hint: 'Ejecuta sql/pnl-desglose.sql en Supabase', filas: [] }, cors);
+            const arr = await r.json();
+            const filas = (arr || []).map(x => ({ etiqueta: limpiarConcepto(x.concepto), importe: +x.importe || 0, sub: x.sub || '', lineas: +x.lineas || 0 }));
+            return json({ linea, desde, hasta, filas }, cors);
+          }
+          if (linea === 'ppc') {
+            const rows = await selSafe(env, 'ppc_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,gasto', []);
+            const by = {}; for (const x of rows) by[x.pais || '?'] = (by[x.pais || '?'] || 0) + (+x.gasto || 0);
+            const filas = Object.entries(by).map(([k, v]) => ({ etiqueta: 'PPC ' + k, importe: +v.toFixed(2) })).sort((a, b) => b.importe - a.importe);
+            return json({ linea, desde, hasta, filas, nota: 'Gasto de publicidad por país (Ads API).' }, cors);
+          }
+          if (linea === 'prod' || linea === 'ventas') {
+            const vd = await selSafe(env, 'v_ventas_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,uds,ventas', []);
+            const by = {};
+            for (const x of vd) { const s = x.sku || '?'; if (!by[s]) by[s] = { uds: 0, ventas: 0 }; by[s].uds += (+x.uds || 0); by[s].ventas += (+x.ventas || 0); }
+            let filas;
+            if (linea === 'ventas') {
+              filas = Object.entries(by).map(([s, o]) => ({ etiqueta: s, importe: +o.ventas.toFixed(2), lineas: o.uds })).sort((a, b) => b.importe - a.importe).slice(0, 40);
+              return json({ linea, desde, hasta, filas, nota: 'Ventas brutas (con IVA) por producto · «uds» = unidades.' }, cors);
+            }
+            const cp = await selSafe(env, 'costes_producto?select=sku,coste', []);
+            const cm = {}; for (const c of cp) cm[c.sku] = +c.coste || 0;
+            filas = Object.entries(by).map(([s, o]) => ({ etiqueta: s, importe: +(o.uds * (cm[s] || 0)).toFixed(2), lineas: o.uds, aviso: cm[s] ? '' : 'sin coste' })).filter(f => f.importe > 0 || f.aviso).sort((a, b) => b.importe - a.importe).slice(0, 40);
+            const sinCoste = filas.filter(f => f.aviso).length;
+            return json({ linea, desde, hasta, filas, nota: 'Coste de compra por producto (uds × tu coste). ' + (sinCoste ? sinCoste + ' SKU sin coste puesto.' : '') }, cors);
+          }
+          if (linea === 'iva_rep') return json({ linea, filas: [], nota: 'IVA repercutido = ventas − ventas sin IVA. Es el IVA que cobras al cliente y liquidas a Hacienda; no es un coste tuyo (lo compensas con el IVA soportado).' }, cors);
+          if (linea === 'iva_sop') return json({ linea, filas: [], nota: 'IVA soportado = 21% de las tarifas de Amazon (FBA, comisión, almacenaje…). Lo pagas pero lo recuperas en tu declaración, por eso no resta al beneficio.' }, cors);
+          return json({ error: 'línea desconocida', filas: [] }, cors);
+        } catch (e) { return json({ error: (e && e.message) || String(e), filas: [] }, cors); }
       }
 
       // --- Ventas y unidades por MES (gráfico tipo Seller Central) ---
@@ -3609,6 +3654,33 @@ async function ingestaPPC(env, opts) {
  * =================================================================== */
 // Lectura tolerante: si la vista no existe o está vacía, devuelve el defecto
 // en vez de tumbar todo el endpoint (evita el "no pude leer tus datos").
+// Traduce el concepto crudo del settlement de Amazon a una etiqueta legible.
+function limpiarConcepto(c) {
+  c = String(c || '').trim();
+  const base = c.indexOf('/') > -1 ? c.slice(c.lastIndexOf('/') + 1) : c;
+  const map = {
+    FBAPerUnitFulfillmentFee: 'Tarifa FBA por unidad',
+    FBAPerOrderFulfillmentFee: 'Tarifa FBA por pedido',
+    FBAWeightBasedFee: 'Tarifa FBA por peso',
+    Commission: 'Comisión (referral)',
+    RefundCommission: 'Comisión devuelta (devolución)',
+    FBAInboundTransportationFee: 'Envío de stock a Amazon (inbound)',
+    FBAInboundTransportationProgramFee: 'Programa transporte de entrada',
+    FBAInboundConvenienceFee: 'Servicio de entrada',
+    FBARemovalFee: 'Retirada de inventario',
+    FBADisposalFee: 'Destrucción de inventario',
+    FBAStorageFee: 'Almacenaje',
+    StorageFee: 'Almacenaje',
+    FBALongTermStorageFee: 'Almacenaje largo plazo',
+    ShippingChargeback: 'Ajuste de envío',
+    Subscription: 'Suscripción (cuenta Pro)',
+    VariableClosingFee: 'Tarifa de cierre',
+    RefundFBAPerUnitFulfillmentFee: 'Gestión devolución (FBA)',
+    DigitalServicesFee: 'Tasa servicios digitales'
+  };
+  return map[base] || base;
+}
+
 async function selSafe(env, vista, def) {
   try { return await selectSupabase(env, vista); }
   catch (_) { return def === undefined ? [] : def; }
