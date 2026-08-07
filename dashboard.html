@@ -1168,7 +1168,7 @@ function renderPnl(){
     {n:'Coste de producto',k:'prod',v:-PNL.prod*esc,c:'#2EE6A0',m:'Unidades vendidas × tu coste unitario (base SIN IVA). Se introduce por producto (o desde Compras de mercancía).'},
     {n:'Tarifas FBA',k:'fba',v:-PNL.fba*esc,c:'#E84040',m:'Tarifa REAL de logística por unidad, del settlement de Amazon (sin IVA), aplicada a las unidades del periodo. Resuelve el desfase de liquidación.'},
     {n:'Comisión Amazon',k:'com',v:-PNL.com*esc,c:'#F5A623',m:'Comisión real de venta por unidad, del settlement (sin IVA).'},
-    {n:'PPC',k:'ppc',v:-PNL.ppc*esc,c:'#9B59B6',m:'Gasto de publicidad del periodo (Amazon Ads API).'},
+    {n:'PPC',k:'ppc',v:-PNL.ppc*esc,c:'#9B59B6',m:'Gasto de publicidad del periodo. OJO: Amazon FACTURA la publicidad una vez al mes y te la cobra de golpe el día de facturación (normalmente el 2). Por eso en el gráfico diario puede aparecer un PICO ese día que NO es el gasto de ese día, sino el recibo del ciclo entero (del 2 al 2). Ese pico se corresponde con tus facturas de Amazon Ads.'},
     {n:'Devoluciones',k:'dev',v:-PNL.dev*esc,c:'#C0392B',m:'Reembolsos y costes de devolución del settlement (sin IVA).'},
     {n:'Almacenaje',k:'alm',v:-PNL.alm*esc,c:'#888',m:'Tarifas de almacenaje FBA del settlement (sin IVA).'},
     {n:'Otros ajustes',k:'otros',v:PNL.otros*esc,c:'#666',m:'Otros conceptos del settlement: reembolsos a tu favor, ajustes de inventario, etc.'}
