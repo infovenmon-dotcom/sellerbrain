@@ -303,10 +303,9 @@ agg as (
     coalesce((select sum(neto)    from v_neto_dia   n where n.fecha >= r.ini and n.fecha < r.fin),0) neto,
     coalesce((select sum(uds)     from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) uds,
     coalesce((select sum(pedidos) from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) pedidos,
-    greatest(
-      coalesce((select sum(gasto) from ppc_dia p where p.fecha >= r.ini and p.fecha < r.fin),0),
-      coalesce((select -sum(importe)/1.21 from v_settle_clasificado s where s.cubo='ppc' and s.fecha >= r.ini and s.fecha < r.fin),0)
-    ) ppc,
+    -- PPC = gasto DIARIO real (ppc_dia), NO el recibo del settlement (ver nota en
+    -- margen-real.sql y docs/PPC-facturacion.md).
+    coalesce((select sum(gasto) from ppc_dia p where p.fecha >= r.ini and p.fecha < r.fin),0) ppc,
     coalesce((select sum(vd.uds*cp.coste) from v_ventas_dia vd left join costes_producto cp on cp.sku=vd.sku
               where vd.fecha >= r.ini and vd.fecha < r.fin),0) cogs,
     coalesce((select sum(fba+com) from v_tarifa_dia t where t.fecha >= r.ini and t.fecha < r.fin),0)

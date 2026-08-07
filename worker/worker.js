@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v115-pnl-cuadra'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v116-ppc-real-backfill'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -198,7 +198,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/cobertura' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -635,6 +635,24 @@ export default {
           }
         } catch (_) {}
         return json({ pnl }, cors);
+      }
+
+      // --- COBERTURA de datos REALES: desde/hasta qué fecha hay datos de cada
+      //     fuente (ventas, PPC diario, liquidaciones de Amazon). Transparencia:
+      //     lo posterior a esas fechas aún no está recogido / liquidado. ---
+      if (url.pathname === '/v1/cobertura') {
+        const rango = async (tabla, campo) => {
+          campo = campo || 'fecha';
+          try {
+            const mn = await selSafe(env, tabla + '?select=' + campo + '&order=' + campo + '.asc&limit=1', []);
+            const mx = await selSafe(env, tabla + '?select=' + campo + '&order=' + campo + '.desc&limit=1', []);
+            return { desde: (mn[0] || {})[campo] || null, hasta: (mx[0] || {})[campo] || null };
+          } catch (_) { return { desde: null, hasta: null }; }
+        };
+        const [ventas, ppc, settlement] = await Promise.all([
+          rango('v_ventas_dia'), rango('ppc_dia'), rango('settlement_lineas')
+        ]);
+        return json({ ventas, ppc, settlement }, cors);
       }
 
       // --- DESGLOSE del P&L: de dónde salen los cargos de una línea (al pinchar).
@@ -1250,6 +1268,17 @@ export default {
         const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
         const r = await ingestaProductAds(env, { pais });
         return json({ ok: true, ...r }, cors);
+      }
+
+      // --- BACKFILL del gasto de PPC por DÍA (admin). Rellena ppc_dia del histórico
+      //     para que el PPC del dashboard sea el gasto real repartido por días.
+      //     ?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&pais=ES (por defecto ~4 meses). ---
+      if (url.pathname === '/v1/ads/ppc-backfill') {
+        const pais = (url.searchParams.get('pais') || '').toUpperCase() || undefined;
+        const hasta = (url.searchParams.get('hasta') || '').slice(0, 10) || new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const desde = (url.searchParams.get('desde') || '').slice(0, 10) || new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+        ctx.waitUntil(ingestaPPCrango(env, desde, hasta, { pais }).catch(() => {}));
+        return json({ ok: true, lanzado: true, desde, hasta, nota: 'Rellenando el gasto de PPC por día en segundo plano (varios minutos según el rango). Recarga el P&L en un rato.' }, cors);
       }
 
       // --- EJECUCIÓN vía Ads API: cambiar la PUJA de una keyword (SP keywords v3).
@@ -3079,6 +3108,50 @@ async function guardarPPCdia(env, ads, pais, fecha) {
     ventas_ppc: +(c.sales14d || 0).toFixed(2), pedidos_ppc: c.purchases14d || 0
   })));
   return (ads || []).length;
+}
+
+// Ventanas de N días entre dos fechas (para no pasarnos del rango que admite el
+// informe de Ads). Determinista (fechas dadas), sin Date.now/new Date() vacío.
+function ventanasFechas(desde, hasta, dias) {
+  const out = [];
+  let ini = new Date(desde + 'T00:00:00Z');
+  const fin = new Date(hasta + 'T00:00:00Z');
+  let guard = 0;
+  while (ini <= fin && guard++ < 60) {
+    let f2 = new Date(ini.getTime() + (dias - 1) * 86400000);
+    if (f2 > fin) f2 = fin;
+    out.push([ini.toISOString().slice(0, 10), f2.toISOString().slice(0, 10)]);
+    ini = new Date(f2.getTime() + 86400000);
+  }
+  return out;
+}
+
+// BACKFILL del gasto de PPC POR DÍA (ppc_dia) en un rango: pide el informe diario
+// de spCampaigns por ventanas y guarda cada día. Así el PPC del dashboard sale del
+// gasto real repartido por días (no del recibo mensual del settlement).
+async function ingestaPPCrango(env, desde, hasta, opts) {
+  opts = opts || {};
+  const perfiles = opts.pais ? (ADS_PROFILES[opts.pais] ? { [opts.pais]: ADS_PROFILES[opts.pais] } : {}) : ADS_PROFILES;
+  const ventanas = ventanasFechas(desde, hasta, 30);
+  const res = { desde, hasta, ventanas: ventanas.length, pasos: [] };
+  await Promise.all(Object.entries(perfiles).map(async ([pais, profileId]) => {
+    let dias = 0, err = null;
+    try {
+      const headers = await cabecerasAds(env, profileId);
+      for (const [d1, d2] of ventanas) {
+        try {
+          const reportId = await crearReporteAds(headers, { ...cuerpoAdsDia(d1), name: 'sb-ppc-bf-' + d1 + '-' + d2, startDate: d1, endDate: d2 });
+          const data = await sondearInformeAds(headers, reportId, 20, 15000);   // ~5 min máx por ventana
+          if (!data) { err = 'timeout ' + d1; continue; }
+          const byDay = {};
+          for (const r of data) { const f = String(r.date || '').slice(0, 10); if (!f) continue; (byDay[f] = byDay[f] || []).push(r); }
+          for (const [f, rows] of Object.entries(byDay)) { await guardarPPCdia(env, rows, pais, f); dias++; }
+        } catch (e) { err = (e.message || '').slice(0, 80); }
+      }
+    } catch (e) { err = (e.message || '').slice(0, 120); }
+    res.pasos.push({ pais, dias, ...(err ? { error: err } : {}) });
+  }));
+  return res;
 }
 
 async function guardarPPCterminos(env, filas, pais, desde, hasta) {

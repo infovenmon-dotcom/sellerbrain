@@ -42,11 +42,11 @@ language sql stable as $$
       coalesce(sum(importe)  filter (where cubo='otros'),0)/1.21 otros
     from v_settle_clasificado, rango where fecha >= ini and fecha <= fin
   ),
+  -- PPC = gasto DIARIO real (ppc_dia). NO el recibo del settlement: Amazon factura
+  -- la publicidad 1 vez al mes y la cobra de golpe el día de facturación, lo que
+  -- inflaba el periodo. Ver docs/PPC-facturacion.md.
   p as (
-    select greatest(
-      coalesce((select sum(gasto) from ppc_dia, rango r2 where ppc_dia.fecha >= r2.ini and ppc_dia.fecha <= r2.fin),0),
-      coalesce((select -sum(importe)/1.21 from v_settle_clasificado sc, rango r3 where sc.cubo='ppc' and sc.fecha >= r3.ini and sc.fecha <= r3.fin),0)
-    ) ppc
+    select coalesce((select sum(gasto) from ppc_dia, rango r2 where ppc_dia.fecha >= r2.ini and ppc_dia.fecha <= r2.fin),0) ppc
   )
   select round(v.ventas,2), round(cogs.prod,2), round(t.fba,2), round(t.com,2),
          round(p.ppc,2), round(s.dev,2), round(s.alm,2), 0::numeric, round(s.otros,2),

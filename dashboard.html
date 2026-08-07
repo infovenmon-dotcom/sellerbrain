@@ -320,6 +320,12 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       </div>
 
       <div style="margin-top:12px">
+        <button class="chip" id="btn-ppcbf" onclick="rellenarPPC()">📅 Rellenar PPC por día (histórico)</button>
+        <span style="font-size:11px;color:var(--mu);margin-left:8px">Trae el gasto REAL de publicidad día a día (Ads API) de los últimos ~4 meses, para que el PPC del P&amp;L y el gráfico sean el gasto real repartido, no el recibo mensual. Varios minutos.</span>
+        <div id="cx-ppcbf-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
+      </div>
+
+      <div style="margin-top:12px">
         <button class="chip" id="btn-sqp" onclick="cargarSQPAdmin()">🔬 Cargar SQP (Search Query Performance)</button>
         <span style="font-size:11px;color:var(--mu);margin-left:8px">Informe semanal de Brand Analytics (requiere Brand Registry). Puede tardar 1-4 min.</span>
         <div id="cx-sqp-res" style="margin-top:8px;font-size:12px;line-height:1.6"></div>
@@ -1191,7 +1197,8 @@ function renderPnl(){
     h+='<div class="row" style="margin-top:6px;opacity:.85"><div class="n"><span class="dot" style="background:#4A9EDE"></span>IVA soportado (recuperable) <span style="color:var(--mu);font-size:10px">· no afecta al beneficio</span></div>'+
        '<div class="v" style="color:#4A9EDE">+'+f(PNL.iva_sop*esc,2)+'€</div><div class="p"></div></div>';
   }
-  h+='<div style="font-size:10.5px;color:var(--mu);margin-top:10px;line-height:1.5">ⓘ Pasa el ratón por cada línea para ver cómo se calcula. Criterio: ventas <b>sin IVA</b> menos costes <b>sin IVA</b> (tarifas por unidad reales del settlement, coste que introduces tú). El semáforo de productos mide el margen <b>antes</b> de PPC; el beneficio de aquí ya <b>incluye</b> PPC.</div>';
+  h+='<div style="font-size:10.5px;color:var(--mu);margin-top:10px;line-height:1.5">ⓘ Pasa el ratón por cada línea para ver cómo se calcula. Criterio: ventas <b>sin IVA</b> menos costes <b>sin IVA</b> (tarifas por unidad reales del settlement, coste que introduces tú). El PPC es el <b>gasto diario real</b> de Amazon Ads (no el recibo mensual). El semáforo de productos mide el margen <b>antes</b> de PPC; el beneficio de aquí ya <b>incluye</b> PPC.</div>';
+  h+=_coberturaHtml();
   document.getElementById('pnl').innerHTML=h;
   try{ renderImpactoFiscal(); }catch(e){}
 }
@@ -2246,6 +2253,30 @@ function cargarPnl(desde,hasta,lab){
       } else if(tb){ tb.innerHTML='<div class="lbl" style="padding:10px 0">Sin datos en «'+(lab||'')+'».</div>'; }
     }).catch(function(){ if(myReq===_pnlSeq && tb) tb.innerHTML='<div class="lbl" style="padding:10px 0">No se pudo cargar.</div>'; });
 }
+// TRANSPARENCIA: desde/hasta qué fecha hay datos REALES de cada fuente.
+var COBERTURA=null;
+function cargarCobertura(){
+  if(SB_CONFIG.mode!=='api')return;
+  fetch(SB_CONFIG.apiBase+'/v1/cobertura',{headers:authHdr()})
+    .then(function(r){return r.json();})
+    .then(function(d){ COBERTURA=d||null; try{ if(PNL) renderPnl(); }catch(e){} })
+    .catch(function(){});
+}
+function _fCorta(f){ if(!f) return '—'; var s=String(f).slice(0,10), p=s.split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):s; }
+function _coberturaHtml(){
+  if(!COBERTURA) return '';
+  var c=COBERTURA, ppcH=(c.ppc||{}).hasta, setH=(c.settlement||{}).hasta, venH=(c.ventas||{}).hasta, hastaSel=window.PNL_HASTA;
+  var avisos=[];
+  if(hastaSel){
+    if(setH && hastaSel>setH) avisos.push('Las <b>tarifas de Amazon</b> están liquidadas hasta el <b>'+_fCorta(setH)+'</b>. Para ventas posteriores Amazon <b>aún no ha liquidado</b>: la tarifa por unidad se toma de tu liquidación real más reciente de ese producto (si un producto nunca se ha liquidado, no hay dato aún).');
+    if(ppcH && hastaSel>ppcH) avisos.push('El <b>gasto de PPC por día</b> llega hasta el <b>'+_fCorta(ppcH)+'</b>; días posteriores pueden faltar → 🔌 Conexión → «Rellenar PPC».');
+  }
+  var h='<div style="font-size:10.5px;color:var(--mu2);margin-top:8px;line-height:1.6;border-top:1px solid rgba(255,255,255,.06);padding-top:8px">'+
+    '🟢 <b>Datos reales</b>: ventas hasta <b>'+_fCorta(venH)+'</b> · PPC por día hasta <b>'+_fCorta(ppcH)+'</b> · liquidaciones Amazon hasta <b>'+_fCorta(setH)+'</b>.';
+  if(avisos.length) h+='<div style="color:var(--am);margin-top:5px">⚠️ '+avisos.join(' ')+'</div>';
+  h+='</div>';
+  return h;
+}
 // Total del periodo elegido (Ventas + Beneficio neto) → mosaico del filtro maestro,
 // en el hueco junto a «Este año / Año pasado».
 function actualizarMasterTot(){
@@ -2819,7 +2850,7 @@ function aplicarDatos(d){
   try{ mostrarBienvenida(); }catch(e){}   // banner de bienvenida solo si sigue en demo
   var lbl=document.getElementById('prod-periodo'); if(lbl && !lbl.textContent) lbl.textContent='· este mes';
   // En modo API, carga (una vez) la tabla por periodo y el panel "Ventas por país".
-  if(SB_CONFIG.mode==='api' && !window._prodInit){ window._prodInit=true; try{ prodPeriodo('mes'); }catch(e){} }
+  if(SB_CONFIG.mode==='api' && !window._prodInit){ window._prodInit=true; try{ prodPeriodo('mes'); }catch(e){} try{ cargarCobertura(); }catch(e){} }
   // Satisfacción del cliente (motivos de devolución). En demo, ejemplo ilustrativo.
   try{ if(SB_CONFIG.mode==='api'){ cargarYoY(); cargarMensual(); } else { var yb=document.getElementById('yoy-chart'); if(yb)yb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; var mb=document.getElementById('mensual-chart'); if(mb)mb.innerHTML='<div style="color:var(--mu);font-size:12px;padding:16px 4px">Disponible con tus datos reales.</div>'; } }catch(e){}
   try{
@@ -3632,6 +3663,23 @@ async function cargarKeywordsAdmin(){
       box.innerHTML='<div style="color:var(--gn)">✅ Keywords cargadas.</div><div style="color:var(--mu);margin-top:4px">'+(resumen||'—')+'</div><div style="color:var(--mu);margin-top:4px">Míralo en PPC · En vivo → «Keywords y pujas».</div>';
       KW_DATA=null;
     }
+  }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
+  btn.disabled=false;btn.style.opacity=1;
+}
+// Lanza el BACKFILL del gasto de PPC por día (histórico). Admin: usa el login
+// (Bearer) o la clave si la pegas arriba — no hace falta pedirla si eres admin.
+async function rellenarPPC(){
+  var box=document.getElementById('cx-ppcbf-res'), btn=document.getElementById('btn-ppcbf');
+  var key=((document.getElementById('cx-key')||{}).value||SB_CONFIG.apiKey||'').trim();
+  var hdr=authHdr(); if(key && !hdr.Authorization) hdr={'Authorization':'Bearer '+key};
+  if(!hdr.Authorization){ box.innerHTML='<span style="color:var(--am)">Entra con tu cuenta (admin) o pega tu SB_API_KEY arriba.</span>'; return; }
+  btn.disabled=true;btn.style.opacity=.5;
+  box.innerHTML='<span style="color:var(--mu)">⏳ Lanzando el backfill de PPC por día… (sigue en segundo plano varios minutos)</span>';
+  try{
+    var r=await fetch(SB_CONFIG.apiBase+'/v1/ads/ppc-backfill',{headers:hdr});
+    var d=await r.json();
+    if(d && d.lanzado){ box.innerHTML='<div style="color:var(--gn)">✅ Backfill lanzado ('+d.desde+' → '+d.hasta+').</div><div style="color:var(--mu);margin-top:4px">Tarda varios minutos. Cuando acabe, recarga el P&L y el gráfico: el PPC saldrá repartido por días (gasto real).</div>'; }
+    else{ box.innerHTML='<span style="color:var(--rd)">'+((d&&d.error)||'No se pudo lanzar')+'</span>'; }
   }catch(e){ box.innerHTML='<span style="color:var(--rd)">Error: '+e.message+'</span>'; }
   btn.disabled=false;btn.style.opacity=1;
 }
