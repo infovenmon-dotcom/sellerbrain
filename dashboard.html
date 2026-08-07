@@ -544,6 +544,27 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 </div>
 <div class="tiles" id="tiles"></div>
 
+<!-- ===== FILTRO MAESTRO DE PERIODO — gobierna P&L, gráfico, países y productos ===== -->
+<div class="card" id="filtro-maestro" style="margin-bottom:16px">
+  <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:12px;color:var(--mu2);font-weight:700;margin-right:2px">📅 Periodo</span>
+      <button class="chip" data-pp="hoy" onclick="prodPeriodo('hoy')">Hoy</button>
+      <button class="chip" data-pp="ayer" onclick="prodPeriodo('ayer')">Ayer</button>
+      <button class="chip on" data-pp="mes" onclick="prodPeriodo('mes')">Este mes</button>
+      <button class="chip" data-pp="mespas" onclick="prodPeriodo('mespas')">Mes pasado</button>
+      <button class="chip" data-pp="anio" onclick="prodPeriodo('anio')">Este año</button>
+      <button class="chip" data-pp="aniopas" onclick="prodPeriodo('aniopas')">Año pasado</button>
+      <span style="color:var(--mu);font-size:11px">·</span>
+      <input type="date" id="prod-d1" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
+      <input type="date" id="prod-d2" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
+      <button class="chip" data-pp="custom" onclick="prodPeriodo('custom')">Aplicar</button>
+    </div>
+    <div id="master-tot" style="display:flex;gap:22px;align-items:center"></div>
+  </div>
+  <div style="font-size:10.5px;color:var(--mu);margin-top:8px;line-height:1.5">Este filtro gobierna el <b>P&amp;L del periodo</b>, el gráfico <b>Beneficio vs Ventas</b>, <b>Ventas por país</b> y <b>Beneficio por producto</b>. Las 6 tarjetas de arriba son fijas (hoy/ayer/mes/año) para tenerlas siempre a la vista.</div>
+</div>
+
 <!-- ===== 2 GRÁFICOS COMPARATIVA (llenan el hueco bajo las tarjetas) ===== -->
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px" id="grid-comp">
   <div class="card">
@@ -677,18 +698,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <div class="ch">
       <h2><span class="ci">📦</span> Beneficio por producto <span id="prod-periodo" style="font-size:12px;color:var(--mu);font-weight:400"></span></h2>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 8px">
-      <button class="chip" data-pp="hoy" onclick="prodPeriodo('hoy')">Hoy</button>
-      <button class="chip" data-pp="ayer" onclick="prodPeriodo('ayer')">Ayer</button>
-      <button class="chip on" data-pp="mes" onclick="prodPeriodo('mes')">Este mes</button>
-      <button class="chip" data-pp="mespas" onclick="prodPeriodo('mespas')">Mes pasado</button>
-      <button class="chip" data-pp="anio" onclick="prodPeriodo('anio')">Este año</button>
-      <button class="chip" data-pp="aniopas" onclick="prodPeriodo('aniopas')">Año pasado</button>
-      <span style="color:var(--mu);font-size:11px">·</span>
-      <input type="date" id="prod-d1" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
-      <input type="date" id="prod-d2" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
-      <button class="chip" data-pp="custom" onclick="prodPeriodo('custom')">Aplicar</button>
-    </div>
+    <div style="font-size:11px;color:var(--mu);margin:0 0 10px;line-height:1.5">📅 El <b>periodo</b> se elige en el <b>filtro maestro de arriba</b> (afecta a toda la página). Aquí filtras por país y ordenas la tabla.</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px">
       <span style="color:var(--mu);font-size:11px">País:</span>
       <button class="chip on" data-pais="" onclick="prodPais('')">🌍 Todos</button>
@@ -2217,8 +2227,20 @@ function cargarPnl(desde,hasta,lab){
         window.PNL_DESDE=desde; window.PNL_HASTA=hasta;
         window.PNL_LAB=(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
         renderPnl();
+        try{ actualizarMasterTot(); }catch(e){}
       }
     }).catch(function(){});
+}
+// Total del periodo elegido (Ventas + Beneficio neto) junto al filtro maestro.
+function actualizarMasterTot(){
+  var el=document.getElementById('master-tot'); if(!el) return;
+  if(!(window.PNL_REAL&&PNL&&PNL.ventas!=null)){ el.innerHTML=''; return; }
+  var ventas=+PNL.ventas||0;
+  var ben=ventas-(+PNL.iva_rep||0)-(+PNL.prod||0)-(+PNL.fba||0)-(+PNL.com||0)-(+PNL.ppc||0)-(+PNL.dev||0)-(+PNL.alm||0)+(+PNL.otros||0);
+  var mg=ventas>0?ben/ventas*100:0, col=ben>=0?'var(--gn)':'var(--rd)';
+  var per=(PROD_RANGE&&PROD_RANGE.lab)||'';
+  el.innerHTML='<div style="text-align:right"><div style="font-size:9.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px">Ventas · '+per+'</div><div style="font-size:19px;font-weight:800;color:var(--tx)">'+f(ventas,2)+'€</div></div>'+
+    '<div style="text-align:right"><div style="font-size:9.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px">Beneficio neto</div><div style="font-size:19px;font-weight:800;color:'+col+'">'+(ben>=0?'+':'')+f(ben,2)+'€ <span style="font-size:12px;font-weight:600;color:var(--mu2)">('+f(mg,1)+'%)</span></div></div>';
 }
 function prodPais(p){
   PROD_PAIS=p||'';
