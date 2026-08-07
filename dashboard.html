@@ -560,9 +560,8 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <input type="date" id="prod-d2" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
       <button class="chip" data-pp="custom" onclick="prodPeriodo('custom')">Aplicar</button>
     </div>
-    <div id="master-tot" style="display:flex;gap:22px;align-items:center"></div>
   </div>
-  <div style="font-size:10.5px;color:var(--mu);margin-top:8px;line-height:1.5">Este filtro gobierna el <b>P&amp;L del periodo</b>, el gráfico <b>Beneficio vs Ventas</b>, <b>Ventas por país</b> y <b>Beneficio por producto</b>. Las 6 tarjetas de arriba son fijas (hoy/ayer/mes/año) para tenerlas siempre a la vista.</div>
+  <div style="font-size:10.5px;color:var(--mu);margin-top:8px;line-height:1.5">Este filtro gobierna el <b>P&amp;L del periodo</b>, el gráfico <b>Beneficio vs Ventas</b>, <b>Ventas por país</b> y <b>Beneficio por producto</b>. El total del periodo se muestra en el mosaico <b>«Periodo del filtro»</b> de arriba. Las 6 tarjetas son fijas (hoy/ayer/mes/año).</div>
 </div>
 
 <!-- ===== 2 GRÁFICOS COMPARATIVA (llenan el hueco bajo las tarjetas) ===== -->
@@ -1137,7 +1136,14 @@ function renderTiles(){
       '<div class="mgr"><i style="width:'+Math.min(p.mg*3,100)+'%;background:'+mgCol+'"></i></div>'+
     '</div>';
   });
+  // Mosaico del PERIODO DEL FILTRO MAESTRO (rellena el hueco junto a Este año /
+  // Año pasado). Su total se actualiza al cambiar el filtro de arriba.
+  h+='<div class="tile" id="tile-periodo" style="grid-column:span 2;justify-content:center;border:1px dashed rgba(46,230,160,.35);background:rgba(46,230,160,.04)">'+
+     '<div class="per"><span>📅 Periodo del filtro</span><span id="tile-periodo-lab"></span></div>'+
+     '<div id="tile-periodo-body"><div class="lbl" style="padding:10px 0">Elige un periodo en el filtro de abajo…</div></div>'+
+     '</div>';
   document.getElementById('tiles').innerHTML=h;
+  try{ actualizarMasterTot(); }catch(e){}
 }
 function setPer(id){perActivo=id;window.PNL_REAL=false;renderTiles();renderPnl();}
 
@@ -2231,16 +2237,23 @@ function cargarPnl(desde,hasta,lab){
       }
     }).catch(function(){});
 }
-// Total del periodo elegido (Ventas + Beneficio neto) junto al filtro maestro.
+// Total del periodo elegido (Ventas + Beneficio neto) → mosaico del filtro maestro,
+// en el hueco junto a «Este año / Año pasado».
 function actualizarMasterTot(){
-  var el=document.getElementById('master-tot'); if(!el) return;
-  if(!(window.PNL_REAL&&PNL&&PNL.ventas!=null)){ el.innerHTML=''; return; }
+  var body=document.getElementById('tile-periodo-body'); if(!body) return;
+  var lab=document.getElementById('tile-periodo-lab');
+  var per=(PROD_RANGE&&PROD_RANGE.lab)||'';
+  if(lab) lab.textContent=per;
+  if(!(window.PNL_REAL&&PNL&&PNL.ventas!=null)){ body.innerHTML='<div class="lbl" style="padding:10px 0">Elige un periodo en el filtro de abajo…</div>'; return; }
   var ventas=+PNL.ventas||0;
   var ben=ventas-(+PNL.iva_rep||0)-(+PNL.prod||0)-(+PNL.fba||0)-(+PNL.com||0)-(+PNL.ppc||0)-(+PNL.dev||0)-(+PNL.alm||0)+(+PNL.otros||0);
   var mg=ventas>0?ben/ventas*100:0, col=ben>=0?'var(--gn)':'var(--rd)';
-  var per=(PROD_RANGE&&PROD_RANGE.lab)||'';
-  el.innerHTML='<div style="text-align:right"><div style="font-size:9.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px">Ventas · '+per+'</div><div style="font-size:19px;font-weight:800;color:var(--tx)">'+f(ventas,2)+'€</div></div>'+
-    '<div style="text-align:right"><div style="font-size:9.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px">Beneficio neto</div><div style="font-size:19px;font-weight:800;color:'+col+'">'+(ben>=0?'+':'')+f(ben,2)+'€ <span style="font-size:12px;font-weight:600;color:var(--mu2)">('+f(mg,1)+'%)</span></div></div>';
+  body.innerHTML='<div class="ben '+(ben>=0?'pos':'neg')+'">'+(ben>=0?'+':'')+f(ben,2)+'€</div>'+
+    '<div class="lbl">beneficio neto del periodo</div>'+
+    '<div class="rows">'+
+      '<div class="r"><span>Ventas</span><b>'+f(ventas,2)+'€</b></div>'+
+      '<div class="r"><span>Margen</span><b style="color:'+col+'">'+f(mg,1)+'%</b></div>'+
+    '</div>';
 }
 function prodPais(p){
   PROD_PAIS=p||'';

@@ -1,12 +1,17 @@
 -- =====================================================================
--- P&L (cuenta de resultados) para CUALQUIER periodo — mismo criterio que
--- v_pnl_mes pero con rango de fechas. Permite que el "P&L del periodo" del
--- dashboard siga el selector de fechas. Ejecuta en Supabase -> SQL Editor.
+-- P&L (cuenta de resultados) para CUALQUIER periodo.
 --
--- IMPORTANTE: devuelve iva_rep (IVA repercutido = ventas − neto). El
--- dashboard lo RESTA en la cascada del P&L, así el "Beneficio neto" es real
--- (ventas SIN IVA − costes SIN IVA). Si esta columna faltara o fuera 0, el
--- beneficio saldría inflado (casi bruto). Debe coincidir con sql/margen-real.sql.
+-- CLAVE: FBA y comisión salen de v_tarifa_dia = TARIFA REAL POR UNIDAD
+-- (del settlement, €/ud) aplicada a las unidades vendidas; si un SKU aún no
+-- tiene liquidación, estima 15%+15%. Esto RESUELVE EL DESFASE de liquidación:
+-- antes se sumaban los settlements que caían en el periodo, y como Amazon
+-- liquida cada ~2 semanas, un mes reciente (o el año entero sin backfill) salía
+-- con FBA/comisión casi a cero → beneficio inflado. Ahora el P&L usa el MISMO
+-- criterio que las tarjetas (v_periodos) → CUADRAN entre sí.
+--
+-- Devuelve iva_rep (IVA repercutido) que el dashboard resta en la cascada, para
+-- que el beneficio sea real (ventas SIN IVA − costes SIN IVA).
+-- Ejecuta en Supabase → SQL Editor. Requiere v_tarifa_dia (sql/margen-real.sql).
 -- =====================================================================
 
 drop function if exists pnl_periodo(date, date);
@@ -23,10 +28,15 @@ language sql stable as $$
     from v_ventas_dia vd join rango on vd.fecha >= ini and vd.fecha <= fin
     left join costes_producto cp on cp.sku = vd.sku
   ),
+  -- FBA + comisión con TARIFA REAL POR UNIDAD (v_tarifa_dia). Mismo criterio que
+  -- las tarjetas → el P&L cuadra con ellas y no se infla en periodos recientes.
+  t as (
+    select coalesce(sum(fba),0) fba, coalesce(sum(com),0) com
+    from v_tarifa_dia, rango where fecha >= ini and fecha <= fin
+  ),
+  -- Almacenaje, devoluciones y otros: del settlement (menos sensibles al desfase).
   s as (
     select
-      coalesce(-sum(importe) filter (where cubo='fba'),0)/1.21   fba,
-      coalesce(-sum(importe) filter (where cubo='com'),0)/1.21   com,
       coalesce(-sum(importe) filter (where cubo='alm'),0)/1.21   alm,
       coalesce(-sum(importe) filter (where cubo='dev'),0)/1.21   dev,
       coalesce(sum(importe)  filter (where cubo='otros'),0)/1.21 otros
@@ -38,12 +48,12 @@ language sql stable as $$
       coalesce((select -sum(importe)/1.21 from v_settle_clasificado sc, rango r3 where sc.cubo='ppc' and sc.fecha >= r3.ini and sc.fecha <= r3.fin),0)
     ) ppc
   )
-  select round(v.ventas,2), round(cogs.prod,2), round(s.fba,2), round(s.com,2),
+  select round(v.ventas,2), round(cogs.prod,2), round(t.fba,2), round(t.com,2),
          round(p.ppc,2), round(s.dev,2), round(s.alm,2), 0::numeric, round(s.otros,2),
-         round((s.fba + s.com + s.alm + s.dev + abs(s.otros)) * 0.21, 2),
-         round(v.ventas - vn.neto, 2)                     -- IVA repercutido (a Hacienda)
-  from v, vn, cogs, s, p;
+         round((t.fba + t.com + s.alm + s.dev + abs(s.otros)) * 0.21, 2),  -- IVA soportado
+         round(v.ventas - vn.neto, 2)                                       -- IVA repercutido
+  from v, vn, cogs, t, s, p;
 $$;
 
--- Comprobar (la 11ª columna, iva_rep, debe ser > 0 si has vendido):
--- select * from pnl_periodo(date '2026-06-01', date '2026-06-30');
+-- Comprobar (el margen debe parecerse al de la tarjeta del mismo periodo):
+-- select * from pnl_periodo(date_trunc('month',current_date)::date, current_date);

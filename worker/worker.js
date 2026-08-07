@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v114-pnl-desglose'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v115-pnl-cuadra'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -653,7 +653,9 @@ export default {
             if (!r.ok) return json({ error: 'rpc ' + r.status + ': ' + (await r.text()).slice(0, 160), hint: 'Ejecuta sql/pnl-desglose.sql en Supabase', filas: [] }, cors);
             const arr = await r.json();
             const filas = (arr || []).map(x => ({ etiqueta: limpiarConcepto(x.concepto), importe: +x.importe || 0, sub: x.sub || '', lineas: +x.lineas || 0 }));
-            return json({ linea, desde, hasta, filas }, cors);
+            let nota = '';
+            if (linea === 'fba' || linea === 'com') nota = 'Este desglose son los cargos YA LIQUIDADOS (settlement) del periodo. La línea del P&L usa la tarifa REAL por unidad aplicada a las ventas (resuelve el desfase de liquidación), por eso el total puede no coincidir exactamente con la suma de aquí.';
+            return json({ linea, desde, hasta, filas, nota }, cors);
           }
           if (linea === 'ppc') {
             const rows = await selSafe(env, 'ppc_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,gasto', []);
