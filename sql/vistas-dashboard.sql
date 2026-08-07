@@ -294,9 +294,13 @@ with rangos(id, nom, ini, fin, etiqueta, orden) as (
    ('anio',   'Este año',   date_trunc('year',current_date)::date,     current_date + 1,                     to_char(current_date,'YYYY'), 5),
    ('aniopas','Año pasado', (date_trunc('year',current_date)-interval '1 year')::date, date_trunc('year',current_date)::date, to_char(date_trunc('year',current_date)-interval '1 year','YYYY'), 6)
 ),
+-- CANÓNICO: idéntico a v_periodos de margen-real.sql y a pnl_periodo → las
+-- tarjetas y el P&L CUADRAN. Base SIN IVA (neto), FBA+comisión por unidad real
+-- (v_tarifa_dia), PPC = mayor(ppc_dia, settlement), alm/dev/otros del settlement.
 agg as (
   select r.id, r.nom, r.etiqueta, r.orden,
     coalesce((select sum(ventas)  from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) ventas,
+    coalesce((select sum(neto)    from v_neto_dia   n where n.fecha >= r.ini and n.fecha < r.fin),0) neto,
     coalesce((select sum(uds)     from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) uds,
     coalesce((select sum(pedidos) from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) pedidos,
     greatest(
@@ -305,14 +309,14 @@ agg as (
     ) ppc,
     coalesce((select sum(vd.uds*cp.coste) from v_ventas_dia vd left join costes_producto cp on cp.sku=vd.sku
               where vd.fecha >= r.ini and vd.fecha < r.fin),0) cogs,
-    -- tarifas (fba+com+alm+dev+otros) SIN IVA y SIN publicidad (va en ppc aparte)
-    coalesce((select -sum(importe)/1.21 from v_settle_clasificado s where s.cubo not in ('ignorar','ppc') and s.fecha >= r.ini and s.fecha < r.fin),0) tarifas
+    coalesce((select sum(fba+com) from v_tarifa_dia t where t.fecha >= r.ini and t.fecha < r.fin),0)
+    + coalesce((select -sum(importe)/1.21 from v_settle_clasificado s where s.cubo in ('alm','dev','otros') and s.fecha >= r.ini and s.fecha < r.fin),0) tarifas
   from rangos r
 )
 select id, nom, etiqueta as fecha, round(ventas,2) ventas, uds::int, pedidos::int,
        round(ppc,2) ppc,
-       round(ventas - cogs - tarifas - ppc, 2) ben,
-       case when ventas>0 then round((ventas - cogs - tarifas - ppc)/ventas*100,1) else 0 end mg
+       round(neto - cogs - tarifas - ppc, 2) ben,     -- beneficio sobre SIN IVA
+       case when ventas>0 then round((neto - cogs - tarifas - ppc)/ventas*100,1) else 0 end mg
 from agg order by orden;
 
 
