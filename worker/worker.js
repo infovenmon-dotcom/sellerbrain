@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v112-keywords-diag-claro'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v113-terminos-diario'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -3549,8 +3549,11 @@ async function ingestaPPC(env, opts) {
     } catch (e) { resultado.pasos.push({ ['ppc_' + pais + '_error']: e.message }); }
   }
 
-  // 2. Términos de búsqueda (resumen 30 días) — solo lunes UTC o si se fuerza.
-  if (solo === 'terminos' || (!solo && (forzarTerminos || esLunes))) {
+  // 2. Términos de búsqueda (30 días, DAILY) — AHORA A DIARIO: es la fuente del
+  //    rendimiento por keyword del panel, así que se recoge en cada ingesta (no
+  //    solo los lunes). Patrón desacoplado: si el informe no está listo, se
+  //    recoge en la siguiente pasada horaria. Idempotente (PK incluye fecha).
+  if (solo === 'terminos' || !solo) {
     const hastaT = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const desdeT = new Date(Date.now() - 31 * 86400000).toISOString().slice(0, 10);
     for (const [pais, profileId] of Object.entries(perfiles)) {
