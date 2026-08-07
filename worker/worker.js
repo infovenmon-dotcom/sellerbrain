@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v111-keywords-terminos'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v112-keywords-diag-claro'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1137,13 +1137,18 @@ export default {
         const iniDef = new Date(hoy.getTime() - 30 * 86400000).toISOString().slice(0, 10); // 30 días
         const desde = (url.searchParams.get('desde') || iniDef).slice(0, 10);
         const hasta = (url.searchParams.get('hasta') || finDef).slice(0, 10);
-        let datos = [];
+        // Diagnóstico de la fuente: ¿cuántas filas de términos hay en el rango?
+        // (0 → la fuente está vacía; el problema no es la RPC sino que no se ha
+        // recogido ningún término todavía.)
+        let terminos_filas = 0;
+        try { terminos_filas = (await selSafe(env, 'ppc_terminos?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=keyword&limit=30000', [])).length; } catch (_) {}
+        let datos = [], rpc_ok = false, rpc_error = null;
         try {
           const r = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/kw_perf_rango?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta),
             { headers: { apikey: env.SUPABASE_SERVICE_KEY } });
-          if (r.ok) datos = await r.json();
-          else return json({ error: 'rpc ' + r.status, hint: 'Ejecuta sql/ppc-keywords-dia.sql en Supabase', desde, hasta, datos: [] }, cors);
-        } catch (e) { return json({ error: (e && e.message) || String(e), desde, hasta, datos: [] }, cors); }
+          if (r.ok) { datos = await r.json(); rpc_ok = true; }
+          else { rpc_error = 'rpc ' + r.status + ': ' + (await r.text()).slice(0, 200); }
+        } catch (e) { rpc_error = (e && e.message) || String(e); }
         // Normaliza tipos (la RPC devuelve bigint como número) y añade puja num.
         datos = (datos || []).map(d => ({
           keyword_id: d.keyword_id, pais: d.pais, campania_id: d.campania_id,
@@ -1154,7 +1159,7 @@ export default {
           gasto: d.gasto != null ? +d.gasto : 0, ventas: d.ventas != null ? +d.ventas : 0,
           pedidos: +d.pedidos || 0, dias: +d.dias || 0
         }));
-        return json({ datos, desde, hasta }, cors);
+        return json({ datos, desde, hasta, terminos_filas, rpc_ok, rpc_error }, cors);
       }
 
       // --- Ingesta de keywords + rendimiento (admin). En segundo plano (el informe
