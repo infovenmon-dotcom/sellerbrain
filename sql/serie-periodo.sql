@@ -21,8 +21,10 @@ from v_ventas_dia v
 left join v_neto_dia n on n.fecha = v.fecha and n.sku = v.sku
 left join v_fee_sku f on f.sku = v.sku;
 
-create or replace function serie_periodo(desde date, hasta date)
-returns table(fecha date, v numeric, b numeric, p numeric)
+drop function if exists serie_periodo(date, date);
+create function serie_periodo(desde date, hasta date)
+returns table(fecha date, v numeric, b numeric, p numeric,
+              neto numeric, coste numeric, tarifas numeric, gastos numeric)
 language sql stable as $$
   select
     g.dia::date as fecha,
@@ -34,7 +36,12 @@ language sql stable as $$
       - coalesce(sc.t,0)                                             -- almacenaje + devoluciones + otros (settlement)
       - coalesce(pp.p,0)                                             -- PPC = gasto DIARIO real (ppc_dia), NO el recibo del settlement
     , 2) as b,
-    round(coalesce(pp.p,0),2) as p
+    round(coalesce(pp.p,0),2) as p,
+    -- Desglose del día (para el tooltip: de dónde viene la pérdida)
+    round(coalesce(nt.neto,0),2) as neto,                            -- ventas sin IVA
+    round(coalesce(cg.c,0),2)    as coste,                           -- coste de producto
+    round(coalesce(tf.t,0),2)    as tarifas,                         -- FBA + comisión
+    round(coalesce(sc.t,0),2)    as gastos                           -- almacenaje + devoluciones + otros (reembolsos, envíos…)
   from generate_series(desde, hasta, interval '1 day') g(dia)
   left join (select fecha, sum(ventas) v from v_ventas_dia group by fecha) vt on vt.fecha = g.dia::date
   left join (select fecha, sum(neto)   neto from v_neto_dia group by fecha) nt on nt.fecha = g.dia::date

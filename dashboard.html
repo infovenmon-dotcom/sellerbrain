@@ -1989,10 +1989,20 @@ function renderChart(){
     tip.style.display='block';
     tip.style.left=(X(i)/W*rect.width).toFixed(0)+'px';
     tip.style.top=(Math.min(Y(d.v),Y(d.b))/H*rect.height).toFixed(0)+'px';
-    tip.innerHTML='<b>'+(d.fecha?fechaCorta(d.fecha):('día '+(i+1)))+'</b>'+
-      '<div style="color:var(--or)">Ventas '+f(+d.v||0,2)+'€</div>'+
-      '<div style="color:var(--gn)">Beneficio '+f(+d.b||0,2)+'€</div>'+
-      '<div style="color:#b07cd6">PPC '+f(+d.p||0,2)+'€</div>';
+    var cab='<b>'+(d.fecha?fechaCorta(d.fecha):('día '+(i+1)))+'</b>';
+    if(d.neto==null){
+      // Sin desglose (datos antiguos/demo): tooltip simple.
+      tip.innerHTML=cab+'<div style="color:var(--or)">Ventas '+f(+d.v||0,2)+'€</div><div style="color:var(--gn)">Beneficio '+f(+d.b||0,2)+'€</div><div style="color:#b07cd6">PPC '+f(+d.p||0,2)+'€</div>';
+    } else {
+      var neto=+d.neto||0, coste=+d.coste||0, tar=+d.tarifas||0, gas=+d.gastos||0, ppc=+d.p||0, ben=+d.b||0;
+      tip.innerHTML=cab+
+        '<div style="color:var(--or)">Ventas '+f(+d.v||0,2)+'€ <span style="color:var(--mu)">(sin IVA '+f(neto,2)+'€)</span></div>'+
+        (coste?'<div style="color:var(--mu2)">− Coste producto '+f(coste,2)+'€</div>':'')+
+        (tar?'<div style="color:var(--mu2)">− Tarifas Amazon (FBA+comisión) '+f(tar,2)+'€</div>':'')+
+        (gas?'<div style="color:'+(gas>0?'#ff8a8a':'var(--gn)')+'">'+(gas>0?'− ':'+ ')+'Otros (reembolsos/envíos/almacenaje) '+f(Math.abs(gas),2)+'€</div>':'')+
+        (ppc?'<div style="color:#b07cd6">− PPC '+f(ppc,2)+'€</div>':'')+
+        '<div style="border-top:1px solid rgba(255,255,255,.15);margin-top:3px;padding-top:3px;font-weight:700;color:'+(ben>=0?'var(--gn)':'#ff8a8a')+'">= Beneficio '+f(ben,2)+'€</div>';
+    }
   };
   el.onmouseleave=function(){
     ['chart-tip','chart-guide','chart-dot-v','chart-dot-b'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
@@ -2008,7 +2018,7 @@ function cargarSerie(desde,hasta,lab){
     .then(function(r){return r.json();})
     .then(function(d){
       if(myReq!==_serieSeq) return;     // respuesta vieja: ignorar
-      CHART_SERIE=(d.serie||[]).map(function(x){return {fecha:x.fecha,v:+x.v,b:+x.b,p:+x.p};});
+      CHART_SERIE=(d.serie||[]).map(function(x){return {fecha:x.fecha,v:+x.v,b:+x.b,p:+x.p,neto:(x.neto!=null?+x.neto:null),coste:+x.coste||0,tarifas:+x.tarifas||0,gastos:+x.gastos||0};});
       var t=document.getElementById('chart-per'); if(t)t.textContent='· '+(lab||'')+' ('+desde+(desde!==hasta?' → '+hasta:'')+')';
       renderChart();
     })
