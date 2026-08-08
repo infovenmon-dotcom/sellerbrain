@@ -280,43 +280,12 @@ from v, cogs, s, p;
 
 
 -- ---------------------------------------------------------------------
--- 4) v_periodos — tarjetas Hoy / Ayer / Este mes / Mes pasado / Este año
---    / Año pasado. Campos: id, nom, fecha, ventas, uds, pedidos, ppc,
---    ben, mg. ben = ventas - cogs - tarifas(fba+com+alm+dev+otros) - ppc.
+-- 4) v_periodos — tarjetas Hoy / Ayer / Este mes / … / Año pasado.
+--    ⚠️ SE DEFINE EN sql/margen-real.sql (necesita v_tarifa_dia, que también vive
+--    allí). Aquí NO se redefine para no crear una dependencia de orden entre
+--    ficheros (daba "relation v_tarifa_dia does not exist" si este se ejecutaba
+--    antes). Ejecuta SIEMPRE margen-real.sql para tener/actualizar v_periodos.
 -- ---------------------------------------------------------------------
-create or replace view v_periodos as
-with rangos(id, nom, ini, fin, etiqueta, orden) as (
-  values
-   ('hoy',    'Hoy',        current_date,                              current_date + 1,                     to_char(current_date,'DD/MM'), 1),
-   ('ayer',   'Ayer',       current_date - 1,                          current_date,                         to_char(current_date-1,'DD/MM'), 2),
-   ('mes',    'Este mes',   date_trunc('month',current_date)::date,    current_date + 1,                     to_char(current_date,'"1–"DD" "TMMon'), 3),
-   ('mespas', 'Mes pasado', (date_trunc('month',current_date)-interval '1 month')::date, date_trunc('month',current_date)::date, to_char(date_trunc('month',current_date)-interval '1 month','TMMon'), 4),
-   ('anio',   'Este año',   date_trunc('year',current_date)::date,     current_date + 1,                     to_char(current_date,'YYYY'), 5),
-   ('aniopas','Año pasado', (date_trunc('year',current_date)-interval '1 year')::date, date_trunc('year',current_date)::date, to_char(date_trunc('year',current_date)-interval '1 year','YYYY'), 6)
-),
--- CANÓNICO: idéntico a v_periodos de margen-real.sql y a pnl_periodo → las
--- tarjetas y el P&L CUADRAN. Base SIN IVA (neto), FBA+comisión por unidad real
--- (v_tarifa_dia), PPC = mayor(ppc_dia, settlement), alm/dev/otros del settlement.
-agg as (
-  select r.id, r.nom, r.etiqueta, r.orden,
-    coalesce((select sum(ventas)  from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) ventas,
-    coalesce((select sum(neto)    from v_neto_dia   n where n.fecha >= r.ini and n.fecha < r.fin),0) neto,
-    coalesce((select sum(uds)     from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) uds,
-    coalesce((select sum(pedidos) from v_ventas_dia v where v.fecha >= r.ini and v.fecha < r.fin),0) pedidos,
-    -- PPC = gasto DIARIO real (ppc_dia), NO el recibo del settlement (ver nota en
-    -- margen-real.sql y docs/PPC-facturacion.md).
-    coalesce((select sum(gasto) from ppc_dia p where p.fecha >= r.ini and p.fecha < r.fin),0) ppc,
-    coalesce((select sum(vd.uds*cp.coste) from v_ventas_dia vd left join costes_producto cp on cp.sku=vd.sku
-              where vd.fecha >= r.ini and vd.fecha < r.fin),0) cogs,
-    coalesce((select sum(fba+com) from v_tarifa_dia t where t.fecha >= r.ini and t.fecha < r.fin),0)
-    + coalesce((select -sum(importe)/1.21 from v_settle_clasificado s where s.cubo in ('alm','dev','otros') and s.fecha >= r.ini and s.fecha < r.fin),0) tarifas
-  from rangos r
-)
-select id, nom, etiqueta as fecha, round(ventas,2) ventas, uds::int, pedidos::int,
-       round(ppc,2) ppc,
-       round(neto - cogs - tarifas - ppc, 2) ben,     -- beneficio sobre SIN IVA
-       case when ventas>0 then round((neto - cogs - tarifas - ppc)/ventas*100,1) else 0 end mg
-from agg order by orden;
 
 
 -- ---------------------------------------------------------------------
