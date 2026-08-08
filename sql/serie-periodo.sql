@@ -21,6 +21,9 @@ from v_ventas_dia v
 left join v_neto_dia n on n.fecha = v.fecha and n.sku = v.sku
 left join v_fee_sku f on f.sku = v.sku;
 
+-- Soltamos primero la vista que depende de la función (si no, el drop function
+-- falla con "other objects depend on it"). Se recrea al final del fichero.
+drop view if exists v_serie_30d cascade;
 drop function if exists serie_periodo(date, date);
 create function serie_periodo(desde date, hasta date)
 returns table(fecha date, v numeric, b numeric, p numeric,
