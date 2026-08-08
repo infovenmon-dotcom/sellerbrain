@@ -14,6 +14,18 @@
 -- Ejecuta en Supabase → SQL Editor. Requiere v_tarifa_dia (sql/margen-real.sql).
 -- =====================================================================
 
+-- Dependencia: TARIFA REAL POR UNIDAD por día (fba+com). Se crea aquí también
+-- (idempotente) para que este fichero funcione aunque no hayas corrido antes
+-- margen-real.sql. Necesita v_ventas_dia, v_neto_dia y v_fee_sku (ya existentes).
+create or replace view v_tarifa_dia as
+select
+  v.fecha, v.sku, v.uds, coalesce(n.neto,0) as ventas,
+  case when f.uds_liq > 0 then round(v.uds * f.fba / f.uds_liq, 2) else round(coalesce(n.neto,0) * 0.15, 2) end as fba,
+  case when f.uds_liq > 0 then round(v.uds * f.com / f.uds_liq, 2) else round(coalesce(n.neto,0) * 0.15, 2) end as com
+from v_ventas_dia v
+left join v_neto_dia n on n.fecha = v.fecha and n.sku = v.sku
+left join v_fee_sku f on f.sku = v.sku;
+
 drop function if exists pnl_periodo(date, date);
 create function pnl_periodo(desde date, hasta date)
 returns table(ventas numeric, prod numeric, fba numeric, com numeric,
