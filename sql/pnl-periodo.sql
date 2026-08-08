@@ -26,14 +26,16 @@ from v_ventas_dia v
 left join v_neto_dia n on n.fecha = v.fecha and n.sku = v.sku
 left join v_fee_sku f on f.sku = v.sku;
 
-drop function if exists pnl_periodo(date, date);
+drop function if exists pnl_periodo(date, date) cascade;
 create function pnl_periodo(desde date, hasta date)
 returns table(ventas numeric, prod numeric, fba numeric, com numeric,
               ppc numeric, dev numeric, alm numeric, iva numeric,
-              otros numeric, iva_sop numeric, iva_rep numeric)
+              otros numeric, iva_sop numeric, iva_rep numeric,
+              uds numeric, pedidos numeric)
 language sql stable as $$
   with rango as (select desde ini, hasta fin),
   v  as (select coalesce(sum(ventas),0) ventas from v_ventas_dia, rango where fecha >= ini and fecha <= fin),
+  u  as (select coalesce(sum(uds),0) uds, coalesce(sum(pedidos),0) pedidos from v_ventas_dia, rango where fecha >= ini and fecha <= fin),
   vn as (select coalesce(sum(neto),0)   neto   from v_neto_dia,   rango where fecha >= ini and fecha <= fin),
   cogs as (
     select coalesce(sum(vd.uds*cp.coste),0) prod
@@ -63,8 +65,9 @@ language sql stable as $$
   select round(v.ventas,2), round(cogs.prod,2), round(t.fba,2), round(t.com,2),
          round(p.ppc,2), round(s.dev,2), round(s.alm,2), 0::numeric, round(s.otros,2),
          round((t.fba + t.com + s.alm + s.dev + abs(s.otros)) * 0.21, 2),  -- IVA soportado
-         round(v.ventas - vn.neto, 2)                                       -- IVA repercutido
-  from v, vn, cogs, t, s, p;
+         round(v.ventas - vn.neto, 2),                                     -- IVA repercutido
+         round(u.uds,0), round(u.pedidos,0)                                -- unidades y pedidos
+  from v, vn, cogs, t, s, p, u;
 $$;
 
 -- Comprobar (el margen debe parecerse al de la tarjeta del mismo periodo):

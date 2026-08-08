@@ -2298,11 +2298,16 @@ function actualizarMasterTot(){
   var ventas=+PNL.ventas||0;
   var ben=ventas-(+PNL.iva_rep||0)-(+PNL.prod||0)-(+PNL.fba||0)-(+PNL.com||0)-(+PNL.ppc||0)-(+PNL.dev||0)-(+PNL.alm||0)+(+PNL.otros||0);
   var mg=ventas>0?ben/ventas*100:0, col=ben>=0?'var(--gn)':'var(--rd)';
+  var mgCol=mg>=20?'var(--gn)':mg>=10?'var(--am)':'var(--rd)';
+  var uds=(PNL.uds!=null?+PNL.uds:null), ped=(PNL.pedidos!=null?+PNL.pedidos:null), ppc=+PNL.ppc||0;
+  // Mismas filas que las 6 tarjetas: Ventas · Pedidos/Uds · PPC · Margen.
   body.innerHTML='<div class="ben '+(ben>=0?'pos':'neg')+'">'+(ben>=0?'+':'')+f(ben,2)+'€</div>'+
     '<div class="lbl">beneficio neto del periodo</div>'+
     '<div class="rows">'+
       '<div class="r"><span>Ventas</span><b>'+f(ventas,2)+'€</b></div>'+
-      '<div class="r"><span>Margen</span><b style="color:'+col+'">'+f(mg,1)+'%</b></div>'+
+      '<div class="r"><span>Pedidos / Uds</span><b>'+(ped!=null?ped:'—')+' / '+(uds!=null?uds:'—')+'</b></div>'+
+      '<div class="r"><span>PPC</span><b style="color:#B983D6">-'+f(ppc,2)+'€</b></div>'+
+      '<div class="r"><span>Margen</span><b style="color:'+mgCol+'">'+f(mg,1)+'%</b></div>'+
     '</div>';
 }
 function prodPais(p){
