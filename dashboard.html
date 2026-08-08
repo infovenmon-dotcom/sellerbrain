@@ -2306,17 +2306,24 @@ function actualizarMasterTot(){
   if(!(window.PNL_REAL&&PNL&&PNL.ventas!=null)){ body.innerHTML='<div class="lbl" style="padding:10px 0">Elige un periodo en el filtro de abajo…</div>'; return; }
   var ventas=+PNL.ventas||0;
   var ben=ventas-(+PNL.iva_rep||0)-(+PNL.prod||0)-(+PNL.fba||0)-(+PNL.com||0)-(+PNL.ppc||0)-(+PNL.dev||0)-(+PNL.alm||0)+(+PNL.otros||0);
-  var mg=ventas>0?ben/ventas*100:0, col=ben>=0?'var(--gn)':'var(--rd)';
+  var mg=ventas>0?ben/ventas*100:0;
   var mgCol=mg>=20?'var(--gn)':mg>=10?'var(--am)':'var(--rd)';
-  var uds=(PNL.uds!=null?+PNL.uds:null), ped=(PNL.pedidos!=null?+PNL.pedidos:null), ppc=+PNL.ppc||0;
-  // Mismas filas que las 6 tarjetas: Ventas · Pedidos/Uds · PPC · Margen.
-  body.innerHTML='<div class="ben '+(ben>=0?'pos':'neg')+'">'+(ben>=0?'+':'')+f(ben,2)+'€</div>'+
-    '<div class="lbl">beneficio neto del periodo</div>'+
-    '<div class="rows">'+
-      '<div class="r"><span>Ventas</span><b>'+f(ventas,2)+'€</b></div>'+
-      '<div class="r"><span>Pedidos / Uds</span><b>'+(ped!=null?ped:'—')+' / '+(uds!=null?uds:'—')+'</b></div>'+
-      '<div class="r"><span>PPC</span><b style="color:#B983D6">-'+f(ppc,2)+'€</b></div>'+
-      '<div class="r"><span>Margen</span><b style="color:'+mgCol+'">'+f(mg,1)+'%</b></div>'+
+  var benCol=ben>=0?'var(--gn)':'var(--rd)', ppc=+PNL.ppc||0;
+  // Unidades/pedidos: del P&L (pnl_periodo) si está; si no, se suman de «Ventas por
+  // país» (mismo periodo) como respaldo, para no salir «—».
+  var uds=(PNL.uds!=null?+PNL.uds:null), ped=(PNL.pedidos!=null?+PNL.pedidos:null);
+  if((uds==null||ped==null) && window.VP_PAISES && window.VP_PAISES.length){
+    var su=0,sp=0; window.VP_PAISES.forEach(function(x){ su+=+x.uds||0; sp+=+x.pedidos||0; });
+    if(uds==null) uds=su; if(ped==null) ped=sp;
+  }
+  function kpi(t,v,c){ return '<div><div style="font-size:9.5px;color:var(--mu);text-transform:uppercase;letter-spacing:.5px">'+t+'</div><div style="font-size:15px;font-weight:700'+(c?';color:'+c:'')+'">'+v+'</div></div>'; }
+  body.innerHTML=
+    '<div style="font-size:26px;font-weight:800;color:'+benCol+';line-height:1.1">'+(ben>=0?'+':'')+f(ben,2)+'€</div>'+
+    '<div style="font-size:11px;color:var(--mu);margin:2px 0 12px">beneficio neto del periodo · margen <b style="color:'+mgCol+'">'+f(mg,1)+'%</b></div>'+
+    '<div style="display:flex;gap:26px;flex-wrap:wrap">'+
+      kpi('Ventas', f(ventas,2)+'€')+
+      kpi('Pedidos / Uds', (ped!=null?ped:'—')+' / '+(uds!=null?uds:'—'))+
+      kpi('PPC', '-'+f(ppc,2)+'€', '#B983D6')+
     '</div>';
 }
 function prodPais(p){
@@ -2383,7 +2390,7 @@ function cargarVentasPais(){
     .then(function(x){return x.json();})
     .then(function(d){
       var tot=(d.total&&d.total.ventas)||0, paises=d.paises||[];
-      window.VP_PAISES=paises; window.VP_TOTAL=tot; try{renderImpactoFiscal();}catch(e){}
+      window.VP_PAISES=paises; window.VP_TOTAL=tot; try{renderImpactoFiscal();}catch(e){} try{actualizarMasterTot();}catch(e){}
       document.getElementById('vp-total').textContent='Total: '+f(tot,2)+'€';
       renderMapaVentas(paises);
       if(!paises.length){lista.innerHTML='<div style="color:var(--mu);font-size:12px">Sin ventas en este periodo.</div>';return;}
