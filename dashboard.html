@@ -704,9 +704,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px">
       <span style="color:var(--mu);font-size:11px">País:</span>
       <button class="chip on" data-pais="" onclick="prodPais('')">🌍 Todos</button>
-      <button class="chip" data-pais="ES" onclick="prodPais('ES')">🇪🇸 ES</button>
-      <button class="chip" data-pais="FR" onclick="prodPais('FR')">🇫🇷 FR</button>
-      <button class="chip" data-pais="IT" onclick="prodPais('IT')">🇮🇹 IT</button>
+      <span id="prod-pais-btns"></span>
       <span style="flex:1"></span>
       <button class="chip on" onclick="togglecostes()">💰 Cargar costes</button>
     </div>
@@ -2331,6 +2329,16 @@ function prodPais(p){
   document.querySelectorAll('[data-pais]').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-pais')===PROD_PAIS);});
   refetchProductos();
 }
+// Botones de país DINÁMICOS: salen automáticamente los países donde de verdad
+// vendes (de «Ventas por país»), no una lista fija. Solo códigos de 2 letras
+// (ES, FR, IT, DE, BE, IE…); se ignoran OTROS/NON-AMAZON y similares.
+function renderPaisFiltros(){
+  var cont=document.getElementById('prod-pais-btns'); if(!cont) return;
+  var paises=(window.VP_PAISES||[]).map(function(x){return x.pais;}).filter(function(p){return p && /^[A-Z]{2}$/.test(p);});
+  cont.innerHTML=paises.map(function(p){
+    return '<button class="chip'+(PROD_PAIS===p?' on':'')+'" data-pais="'+p+'" onclick="prodPais(\''+p+'\')" style="margin-left:4px">'+(BANDERA[p]||'🏳️')+' '+p+'</button>';
+  }).join('');
+}
 function refetchProductos(){
   var r=PROD_RANGE, lab=r.lab+(PROD_PAIS?' · '+PROD_PAIS:'');
   var lbl=document.getElementById('prod-periodo');
@@ -2390,7 +2398,7 @@ function cargarVentasPais(){
     .then(function(x){return x.json();})
     .then(function(d){
       var tot=(d.total&&d.total.ventas)||0, paises=d.paises||[];
-      window.VP_PAISES=paises; window.VP_TOTAL=tot; try{renderImpactoFiscal();}catch(e){} try{actualizarMasterTot();}catch(e){}
+      window.VP_PAISES=paises; window.VP_TOTAL=tot; try{renderImpactoFiscal();}catch(e){} try{actualizarMasterTot();}catch(e){} try{renderPaisFiltros();}catch(e){}
       document.getElementById('vp-total').textContent='Total: '+f(tot,2)+'€';
       renderMapaVentas(paises);
       if(!paises.length){lista.innerHTML='<div style="color:var(--mu);font-size:12px">Sin ventas en este periodo.</div>';return;}
@@ -3302,12 +3310,13 @@ function pintarDetalle(p,d){
   var _dfmt=function(s){s=String(s||'').slice(0,10);var q=s.split('-');return q.length===3?(q[2]+'/'+q[1]+'/'+q[0]):s;};
   var fechasOps=(d.lineas||[]).map(function(l){return String(l.fecha||'').slice(0,10);}).filter(Boolean).sort();
   var rangoOps=fechasOps.length?(_dfmt(fechasOps[0])+' → '+_dfmt(fechasOps[fechasOps.length-1])):'—';
+  var nOps=(d.lineas||[]).length;
   var introReal=res.length?('<div style="font-size:11.5px;color:var(--mu2);background:rgba(74,158,222,.08);border:1px solid rgba(74,158,222,.3);border-radius:10px;padding:9px 12px;margin:14px 0 8px;line-height:1.55">'+
-    '🔎 <b>De dónde salen estos datos:</b> son las <b>operaciones REALES de tu liquidación de Amazon</b> (settlement) de este producto — no un cálculo nuestro, son los apuntes exactos de tu cuenta.<br>'+
-    '📅 <b>Periodo:</b> cubren <b>'+rangoOps+'</b> — <b>todo lo que Amazon ya ha liquidado</b> (no el periodo del filtro de arriba).<br>'+
-    '⏳ Por eso no cuadra con la cabecera: de las <b>'+(p.uds||0)+' uds</b> vendidas en el periodo elegido, Amazon solo ha <b>liquidado '+udsLiq+'</b> hasta ahora; del resto aún no hay liquidación (desfase de ~2 semanas).'+
+    '🔎 <b>De dónde salen:</b> son las <b>operaciones REALES de tu liquidación de Amazon</b> (settlement) — tus apuntes exactos, no un cálculo nuestro.<br>'+
+    '📅 <b>Aquí ves las últimas '+nOps+' líneas</b> liquidadas ('+rangoOps+')'+(nOps>=150?' — hay más atrás en tu cuenta de Amazon':'')+'. Es lo más reciente que Amazon ha liquidado, <b>no</b> el periodo del filtro de arriba (por eso las fechas cambian según lo que haya entrado).'+
+    (udsLiq?('<br>💡 La <b>tarifa por unidad</b> (arriba) se calcula sobre <b>todo tu histórico liquidado ('+udsLiq+' uds)</b> y se aplica a las '+(p.uds||0)+' uds del periodo. Las ventas del periodo aún no están todas liquidadas (Amazon liquida por quincenas), por eso los números de arriba (periodo) y los de aquí (liquidado) no coinciden.'):'')+
     '</div>'):'';
-  var tblRes=res.length?(introReal+'<div style="font-weight:700;margin:6px 0 6px">💸 Operaciones de Amazon por concepto <span style="color:var(--mu);font-weight:400;font-size:11px">· liquidado '+rangoOps+'</span></div>'+
+  var tblRes=res.length?(introReal+'<div style="font-weight:700;margin:6px 0 6px">💸 Operaciones de Amazon por concepto <span style="color:var(--mu);font-weight:400;font-size:11px">· últimas '+nOps+' líneas · '+rangoOps+'</span></div>'+
     '<div style="overflow-x:auto"><table class="tbl" style="font-size:12px"><thead><tr><th>Concepto</th><th>Nº</th><th>Total</th></tr></thead><tbody>'+
     res.map(function(x){return '<tr><td>'+conceptoBonito(x.concepto)+'</td><td>'+x.n+'</td><td style="color:'+(x.total<0?'var(--rd)':'var(--gn)')+'">'+(x.total>=0?'+':'')+f(x.total,2)+'€</td></tr>';}).join('')+
     '</tbody></table></div>'):'';
