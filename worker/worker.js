@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v116-ppc-real-backfill'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v117-nombres-fees-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -462,7 +462,19 @@ export default {
           porConcepto[l.concepto].n++; porConcepto[l.concepto].total += +l.importe || 0;
         }
         const resumen = Object.values(porConcepto).map(x => ({ ...x, total: +x.total.toFixed(2) })).sort((a, b) => a.total - b.total);
-        return json({ sku, fee: (fee || [])[0] || null, resumen, lineas }, cors);
+        // Desglose de tarifa REAL por PAÍS (v_fee_sku_pais): FBA/ud, comisión/ud e
+        // IVA del país. Para comparar con lo que cobra Amazon en cada mercado.
+        let feesPais = [];
+        try {
+          const fp = await selSafe(env, 'v_fee_sku_pais?sku=eq.' + encodeURIComponent(sku) + '&select=pais,uds_liq,fba,com', []);
+          feesPais = (fp || []).filter(r => (+r.uds_liq || 0) > 0).map(r => {
+            const u = +r.uds_liq || 0;
+            const fbaU = +(((+r.fba || 0)) / u).toFixed(2);
+            const comU = +(((+r.com || 0)) / u).toFixed(2);
+            return { pais: r.pais, uds_liq: u, fba_ud: fbaU, com_ud: comU, total_ud: +(fbaU + comU).toFixed(2), iva_pct: Math.round((ivaPais(r.pais) - 1) * 100) };
+          }).sort((a, b) => b.uds_liq - a.uds_liq);
+        } catch (_) {}
+        return json({ sku, fee: (fee || [])[0] || null, resumen, lineas, feesPais }, cors);
       }
 
       // --- Tabla "Beneficio por producto" para CUALQUIER periodo (selector) ---
@@ -1279,6 +1291,32 @@ export default {
         const desde = (url.searchParams.get('desde') || '').slice(0, 10) || new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
         ctx.waitUntil(ingestaPPCrango(env, desde, hasta, { pais }).catch(() => {}));
         return json({ ok: true, lanzado: true, desde, hasta, nota: 'Rellenando el gasto de PPC por día en segundo plano (varios minutos según el rango). Recarga el P&L en un rato.' }, cors);
+      }
+
+      // --- BACKFILL de NOMBRES (admin). Rellena productos_catalogo.nombre de los
+      //     SKU que salen como código (sin nombre) usando la API de Listings de
+      //     Amazon (busca en ES, y si no, en FR/IT/DE/NL/BE). En segundo plano. ---
+      if (url.pathname === '/v1/catalogo-nombres') {
+        const sellerId = env.SPAPI_SELLER_ID || '';
+        if (!sellerId) return json({ error: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors);
+        ctx.waitUntil((async () => {
+          let cat = [];
+          try { cat = await selSafe(env, 'productos_catalogo?select=sku,nombre,asin&limit=3000', []); } catch (_) {}
+          const faltan = (cat || []).filter(c => { const n = (c.nombre || '').trim(); const s = (c.sku || '').trim(); return s && (!n || n === s); }).slice(0, 40);
+          const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
+          for (const c of faltan) {
+            let nombre = '', asin = c.asin || '';
+            for (const mkt of mkts) {
+              try {
+                const r = await getListingEstado(env, sellerId, c.sku, mkt, undefined);
+                if (r && r.itemName) { nombre = r.itemName; if (!asin && r.asin) asin = r.asin; break; }
+                if (r && r.asin && !asin) asin = r.asin;
+              } catch (_) {}
+            }
+            if (nombre) { try { await upsertSupabase(env, 'productos_catalogo', [{ seller: 'venmon', sku: c.sku, nombre: nombre.slice(0, 300), asin }]); } catch (_) {} }
+          }
+        })().catch(() => {}));
+        return json({ ok: true, lanzado: true, nota: 'Rellenando los nombres que faltan desde Amazon (en segundo plano, ~1-2 min). Si quedan más, vuelve a pulsarlo.' }, cors);
       }
 
       // --- EJECUCIÓN vía Ads API: cambiar la PUJA de una keyword (SP keywords v3).
@@ -2313,7 +2351,7 @@ async function getListingEstado(env, sellerId, sku, mkt, ctx) {
   const errs = issues.filter(i => (i.severity || '').toUpperCase() === 'ERROR').map(i => i.message);
   const warns = issues.filter(i => (i.severity || '').toUpperCase() === 'WARNING').map(i => i.message);
   const motivo = (errs.length ? errs : warns).slice(0, 2).join(' · ').slice(0, 300);
-  return { estado: buyable ? 'activo' : 'inactivo', motivo, asin };
+  return { estado: buyable ? 'activo' : 'inactivo', motivo, asin, itemName: (sum.itemName || '').slice(0, 300) };
 }
 
 async function ingestaListingsPais(env, ctx, opts) {
@@ -4247,12 +4285,20 @@ function agregarPedidos(filas, fecha) {
 function catalogoDePedidos(filas) {
   const cat = {};
   for (const r of filas) {
-    const sku = r['sku'] || '';
+    const sku = (r['sku'] || '').trim();
+    if (!sku) continue;
     const nombre = (r['product-name'] || '').trim();
-    if (!sku || cat[sku]) continue;
-    cat[sku] = { sku, asin: (r['asin'] || '').trim(), nombre: nombre.slice(0, 300) };
+    const asin = (r['asin'] || '').trim();
+    if (!cat[sku]) cat[sku] = { sku, asin, nombre: nombre.slice(0, 300) };
+    else {
+      // Rellena huecos con CUALQUIER fila que traiga el dato (no solo la primera).
+      if (!cat[sku].nombre && nombre) cat[sku].nombre = nombre.slice(0, 300);
+      if (!cat[sku].asin && asin) cat[sku].asin = asin;
+    }
   }
-  return Object.values(cat);
+  // Solo devolvemos los que tienen NOMBRE: así el upsert (merge-duplicates, que
+  // sobrescribe columnas) nunca pisa un nombre bueno con uno vacío.
+  return Object.values(cat).filter(x => x.nombre);
 }
 
 // Guarda devoluciones tolerando el constraint real de la tabla: si choca
