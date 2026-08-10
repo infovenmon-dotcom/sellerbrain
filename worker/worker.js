@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v117-nombres-fees-pais'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v118-login-vale-admin'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -203,7 +203,10 @@ export default {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
           // un miembro normal, solo los endpoints de lectura (MIEMBRO_OK).
-          const payload = await verificarJWT(env, auth);
+          // Aceptamos el JWT venga por la CABECERA (auth) o por ?key= (algunos
+          // botones admin antiguos lo mandan así) → así el login vale para todo y
+          // no salta el «sesión caducada» que llevaba al formulario de la clave.
+          const payload = (await verificarJWT(env, auth)) || (key && key !== auth ? await verificarJWT(env, key) : null);
           if (payload) {
             const admins = String(env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
             if (admins.length && admins.includes(String(payload.email || '').toLowerCase())) ok = true;   // dueño = admin
