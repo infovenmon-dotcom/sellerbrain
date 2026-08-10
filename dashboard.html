@@ -3295,9 +3295,19 @@ function pintarDetalle(p,d){
     (perU!=null?('Tarifa real de Amazon por unidad <b>(sin IVA, ya lo desgravas)</b>: <b style="color:var(--or2)">'+f(perU,2)+'€/ud</b> — FBA '+f((+fee.fba/fee.uds_liq),2)+'€ + comisión '+f((+fee.com/fee.uds_liq),2)+'€. Se aplica a las '+p.uds+' uds del periodo. <span style="color:var(--mu)">(Las operaciones de abajo son los importes de Amazon CON IVA.)</span>'):
     'Aún no hay tarifas liquidadas de Amazon para este SKU → se estima al 30%. Cuando Amazon liquide, saldrá la real.')+
     '<div style="margin-top:6px"><button class="chip on" onclick="editarCoste(\''+p.sku.replace(/'/g,"")+'\')">✏️ Editar coste de compra</button></div></div>';
-  // Resumen por tipo de operación (todas las líneas del settlement)
+  // Resumen por tipo de operación (todas las líneas del settlement).
+  // Rango de fechas real que cubren esas operaciones (de las propias líneas).
   var res=(d.resumen||[]);
-  var tblRes=res.length?('<div style="font-weight:700;margin:6px 0 6px">💸 Resumen de operaciones de Amazon (todo el histórico)</div>'+
+  var udsLiq=(fee&&fee.uds_liq)?+fee.uds_liq:0;
+  var _dfmt=function(s){s=String(s||'').slice(0,10);var q=s.split('-');return q.length===3?(q[2]+'/'+q[1]+'/'+q[0]):s;};
+  var fechasOps=(d.lineas||[]).map(function(l){return String(l.fecha||'').slice(0,10);}).filter(Boolean).sort();
+  var rangoOps=fechasOps.length?(_dfmt(fechasOps[0])+' → '+_dfmt(fechasOps[fechasOps.length-1])):'—';
+  var introReal=res.length?('<div style="font-size:11.5px;color:var(--mu2);background:rgba(74,158,222,.08);border:1px solid rgba(74,158,222,.3);border-radius:10px;padding:9px 12px;margin:14px 0 8px;line-height:1.55">'+
+    '🔎 <b>De dónde salen estos datos:</b> son las <b>operaciones REALES de tu liquidación de Amazon</b> (settlement) de este producto — no un cálculo nuestro, son los apuntes exactos de tu cuenta.<br>'+
+    '📅 <b>Periodo:</b> cubren <b>'+rangoOps+'</b> — <b>todo lo que Amazon ya ha liquidado</b> (no el periodo del filtro de arriba).<br>'+
+    '⏳ Por eso no cuadra con la cabecera: de las <b>'+(p.uds||0)+' uds</b> vendidas en el periodo elegido, Amazon solo ha <b>liquidado '+udsLiq+'</b> hasta ahora; del resto aún no hay liquidación (desfase de ~2 semanas).'+
+    '</div>'):'';
+  var tblRes=res.length?(introReal+'<div style="font-weight:700;margin:6px 0 6px">💸 Operaciones de Amazon por concepto <span style="color:var(--mu);font-weight:400;font-size:11px">· liquidado '+rangoOps+'</span></div>'+
     '<div style="overflow-x:auto"><table class="tbl" style="font-size:12px"><thead><tr><th>Concepto</th><th>Nº</th><th>Total</th></tr></thead><tbody>'+
     res.map(function(x){return '<tr><td>'+conceptoBonito(x.concepto)+'</td><td>'+x.n+'</td><td style="color:'+(x.total<0?'var(--rd)':'var(--gn)')+'">'+(x.total>=0?'+':'')+f(x.total,2)+'€</td></tr>';}).join('')+
     '</tbody></table></div>'):'';
