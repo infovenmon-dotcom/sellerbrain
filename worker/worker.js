@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v118-login-vale-admin'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v119-stock-ventadia-nombres'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -974,16 +974,17 @@ export default {
         const inv = {}; let snapMax = null;
         try { for (const r of (await selectSupabase(env, 'inventario?select=sku,disponible,entrante,reservado,snapshot'))) { inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0, res: +r.reservado || 0 }; if (r.snapshot && (!snapMax || r.snapshot > snapMax)) snapMax = r.snapshot; } } catch (_) {}
         const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-        const vel = {};
-        try { for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds', []))) { const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0); } } catch (_) {}
+        const vel = {}, rev = {};                                // uds y ventas (€) por SKU en los últimos 30 días
+        try { for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds,ventas', []))) { const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0); rev[s] = (rev[s] || 0) + (+r.ventas || 0); } } catch (_) {}
         const cat = {};
         try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre'))) cat[c.sku] = c.nombre; } catch (_) {}
         const skus = new Set([...Object.keys(inv), ...Object.keys(vel)]);
         const datos = [...skus].filter(s => !/^amzn\.gr\./i.test(s)).map(s => {
           const disp = (inv[s] && inv[s].disp) || 0, ent = (inv[s] && inv[s].ent) || 0, res = (inv[s] && inv[s].res) || 0;
           const v = (vel[s] || 0) / 30;                          // uds/día (media 30 días)
+          const ventaDia = +((rev[s] || 0) / 30).toFixed(2);     // venta media diaria (€/día), mismo periodo que 'vel'
           const dias = v > 0 ? Math.floor(disp / v) : null;      // cobertura; null = sin ventas
-          return { sku: s, nombre: cat[s] || s, disponible: disp, entrante: ent, reservado: res, vel: +v.toFixed(2), dias };
+          return { sku: s, nombre: cat[s] || s, disponible: disp, entrante: ent, reservado: res, vel: +v.toFixed(2), ventaDia, dias };
         }).sort((a, b) => (a.dias == null ? 99999 : a.dias) - (b.dias == null ? 99999 : b.dias));
         return json({ datos, actualizado: snapMax }, cors);
       }
@@ -1308,18 +1309,39 @@ export default {
           const faltan = (cat || []).filter(c => { const n = (c.nombre || '').trim(); const s = (c.sku || '').trim(); return s && (!n || n === s); }).slice(0, 40);
           const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
           for (const c of faltan) {
-            let nombre = '', asin = c.asin || '';
+            let nombre = '', asin = c.asin || '', imagen = '';
+            // 1) Listings por SKU: coge el nombre y, muy importante, el ASIN aunque no venga nombre.
             for (const mkt of mkts) {
               try {
                 const r = await getListingEstado(env, sellerId, c.sku, mkt, undefined);
-                if (r && r.itemName) { nombre = r.itemName; if (!asin && r.asin) asin = r.asin; break; }
                 if (r && r.asin && !asin) asin = r.asin;
+                if (r && r.itemName) { nombre = r.itemName; break; }
               } catch (_) {}
             }
-            if (nombre) { try { await upsertSupabase(env, 'productos_catalogo', [{ seller: 'venmon', sku: c.sku, nombre: nombre.slice(0, 300), asin }]); } catch (_) {} }
+            // 2) Si sigue sin nombre pero ya tenemos ASIN → Catálogo por ASIN: título real + imagen.
+            //    Funciona aunque el listing esté inactivo (misma fuente que las miniaturas).
+            if ((!nombre || !imagen) && asin) {
+              for (const mkt of mkts) {
+                try {
+                  const item = await getCatalogoItem(env, asin, mkt);
+                  const t = (item && item.summaries && item.summaries[0] && item.summaries[0].itemName) || '';
+                  const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
+                  const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
+                  if (t && !nombre) nombre = t;
+                  if (main && main.link && !imagen) imagen = main.link;
+                  if (nombre && imagen) break;
+                } catch (_) {}
+              }
+            }
+            // Guarda solo los campos con valor: nunca pisa un dato bueno con uno vacío.
+            const fila = { seller: 'venmon', sku: c.sku };
+            if (nombre) fila.nombre = nombre.slice(0, 300);
+            if (asin) fila.asin = asin;
+            if (imagen) fila.imagen = imagen;
+            if (nombre || asin || imagen) { try { await upsertSupabase(env, 'productos_catalogo', [fila]); } catch (_) {} }
           }
         })().catch(() => {}));
-        return json({ ok: true, lanzado: true, nota: 'Rellenando los nombres que faltan desde Amazon (en segundo plano, ~1-2 min). Si quedan más, vuelve a pulsarlo.' }, cors);
+        return json({ ok: true, lanzado: true, nota: 'Rellenando nombres, ASIN e imágenes que faltan desde Amazon (Listings + Catálogo, en segundo plano ~1-2 min). Si quedan más, vuelve a pulsarlo; luego pulsa "Rellenar imágenes" para el resto.' }, cors);
       }
 
       // --- EJECUCIÓN vía Ads API: cambiar la PUJA de una keyword (SP keywords v3).
