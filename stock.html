@@ -118,7 +118,7 @@ td:first-child{text-align:left;font-weight:600;white-space:normal}
     </tr></thead>
     <tbody id="stk-tabla"></tbody>
   </table></div>
-  <div style="margin-top:9px;font-size:11px;color:var(--mu)">Plazo total = <b>fabricación</b> (columna 🏭 Fab. de cada producto, o el valor por defecto) + transporte (🚢/🚆/✈️) + <b>~7 días</b> de recepción en Amazon. "Pide antes de" = hoy + (cobertura − plazo total). Si ya vas tarde, en rojo verás <b>cuántos días te quedarías sin stock</b> (🔴 X d sin stock). La <b>cobertura</b> cuenta también tu stock en <b>🏠 En almacén/casa</b> como si ya estuviera en Amazon (lo puedes enviar); esas filas llevan un <b>*</b> junto a la cobertura. En <b>🏠 En almacén/casa</b> apunta el stock que tienes sin enviar a Amazon y en <b>🏭 Fab.</b> los días de tu proveedor para ESE producto (ambos a mano, se guardan solos). La cabecera queda fija al desplazarte.<br><b>Stock</b> = unidades <b>disponibles para vender ahora</b> (fulfillable). Las <b>reservadas</b> (+N res., pedidos en curso o traslados entre centros) no cuentan aquí; por eso el <b>Libro Mayor</b> del detector de sobrecostes (saldo del almacén a fecha de ayer) puede mostrar más unidades que este stock disponible.</div>
+  <div style="margin-top:9px;font-size:11px;color:var(--mu)">Plazo total = <b>fabricación</b> (columna 🏭 Fab. de cada producto, o el valor por defecto) + transporte (🚢/🚆/✈️) + <b>~7 días</b> de recepción en Amazon. "Pide antes de" = hoy + (cobertura − plazo total). Si ya vas tarde, en rojo verás cuándo <b>llegaría</b> el producto si pides hoy, <b>cuántos días te quedarías sin stock</b> y las <b>ventas perdidas estimadas</b> en € (días sin stock × venta media diaria del producto). La <b>cobertura</b> cuenta también tu stock en <b>🏠 En almacén/casa</b> como si ya estuviera en Amazon (lo puedes enviar); esas filas llevan un <b>*</b> junto a la cobertura. En <b>🏠 En almacén/casa</b> apunta el stock que tienes sin enviar a Amazon y en <b>🏭 Fab.</b> los días de tu proveedor para ESE producto (ambos a mano, se guardan solos). La cabecera queda fija al desplazarte.<br><b>Stock</b> = unidades <b>disponibles para vender ahora</b> (fulfillable). Las <b>reservadas</b> (+N res., pedidos en curso o traslados entre centros) no cuentan aquí; por eso el <b>Libro Mayor</b> del detector de sobrecostes (saldo del almacén a fecha de ayer) puede mostrar más unidades que este stock disponible.</div>
 </div>
 
 <!-- PASO 1 -->
@@ -457,12 +457,20 @@ function descargarCSV(){
 // ===== Conectado: stock real + fecha límite de pedido por método =====
 var STK={base:'',tok:'',datos:[]};
 function stkEsc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function stkFechaLimite(dias, lead){
+function stkFechaLimite(dias, lead, vel, ventaDia){
   if(dias==null) return {txt:'—', col:'var(--mu)'};
   var margen = dias - lead;               // días de aquí a la fecha límite de pedido
-  // Si ya vas tarde, no basta "ya tarde": di cuántos días te quedarías SIN stock
-  // = lo que tarda en llegar (lead) menos lo que te dura la cobertura (dias) = -margen.
-  if(margen < 0) return {txt:'🔴 '+Math.round(-margen)+' d sin stock', col:'#ff5c5c'};
+  // Si ya vas tarde: no basta "ya tarde". Di cuándo llegaría el producto si pides HOY
+  // (hoy + plazo), cuántos días te quedarías SIN stock (= plazo − cobertura = -margen)
+  // y cuánto supone en ventas perdidas (días sin stock × venta media diaria del producto).
+  if(margen < 0){
+    var sin = Math.round(-margen);                       // días sin stock
+    var llega = new Date(); llega.setDate(llega.getDate()+Math.round(lead)); // llegaría si pides hoy
+    var eur = (ventaDia>0) ? sin*ventaDia : null;        // ventas perdidas estimadas (€)
+    var txt = '<span style="font-size:11px;line-height:1.35;display:inline-block">🔴 ya tarde<br>llega '+fechaCorta(llega)+
+              '<br>−'+sin+' d sin stock'+(eur!=null?('<br>≈ −'+f(eur,0)+'€'):'')+'</span>';
+    return {txt:txt, col:'#ff5c5c'};
+  }
   var d=new Date(); d.setDate(d.getDate()+Math.round(margen));
   var col = margen<=7 ? '#ff5c5c' : margen<=21 ? '#f5b23e' : 'var(--tx)';
   return {txt: fechaCorta(d), col:col};
@@ -508,7 +516,7 @@ function stkRender(){
     var cob = dEf==null ? 'sin ventas' : (Math.round(dEf)+'d'+(propioTiene?' *':''));
     var colCob = dEf==null?'var(--mu)':(dEf<=15?'#ff5c5c':dEf<=30?'#f5b23e':'#2ee6a0');
     var L=leads(p);
-    var b=stkFechaLimite(dEf,L.lb), t=stkFechaLimite(dEf,L.lt), a=stkFechaLimite(dEf,L.la);
+    var b=stkFechaLimite(dEf,L.lb,p.vel,p.ventaDia), t=stkFechaLimite(dEf,L.lt,p.vel,p.ventaDia), a=stkFechaLimite(dEf,L.la,p.vel,p.ventaDia);
     var sku=p.sku||'', skuA=stkEsc(sku).replace(/"/g,'&quot;');
     var propio=(PROPIO[sku]!==undefined?PROPIO[sku]:0);   // stock tuyo (almacén/casa), compartido con la tabla manual
     var fabV=(FABSKU[sku]!==undefined&&FABSKU[sku]!=='')?FABSKU[sku]:'';
