@@ -508,7 +508,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
 
       <div class="card">
         <div class="ch" style="justify-content:space-between;align-items:center">
-          <h2><span class="ci">🔬</span> Rendimiento de búsquedas (SQP) <span style="font-size:10px;color:var(--am);font-weight:400">· beta</span></h2>
+          <h2><span class="ci">🔬</span> Rendimiento de búsquedas (SQP) <span style="font-size:10px;color:var(--am);font-weight:400">· beta</span> <span id="ppc-sqp-campnota" style="font-size:10px;color:var(--mu2);font-weight:400;display:none">· no se filtra por campaña (es a nivel de búsqueda de Amazon)</span></h2>
           <span id="sqp-act" style="font-size:11px;color:var(--mu)"></span>
         </div>
         <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Por cada búsqueda del mercado (Brand Analytics): su <b>volumen</b> y <b>tu cuota</b> en cada paso del embudo — impresiones → clics → compras. Donde tengas <b>mucho volumen pero poca cuota de compra</b> hay oportunidad (o amenaza) que el PPC solo no ve.</div>
@@ -533,7 +533,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
   </div>
 
   <div class="card" style="margin-top:14px">
-    <div class="ch"><h2><span class="ci">🚦</span> Rentabilidad por producto <span style="font-size:11px;color:var(--mu);font-weight:400">· ACoS real vs break-even (verde = rentable, rojo = pierde dinero)</span> <span id="ppc-rentab-nota" style="font-size:10px;color:var(--am);font-weight:400;display:none">· resumen del periodo (aún no varía por día)</span></h2></div>
+    <div class="ch"><h2><span class="ci">🚦</span> Rentabilidad por producto <span style="font-size:11px;color:var(--mu);font-weight:400">· ACoS real vs break-even (verde = rentable, rojo = pierde dinero)</span> <span id="ppc-rentab-nota" style="font-size:10px;color:var(--am);font-weight:400;display:none">· resumen del periodo (aún no varía por día)</span> <span id="ppc-rentab-campnota" style="font-size:10px;color:var(--mu2);font-weight:400;display:none">· no se filtra por campaña (es por producto: mezcla venta orgánica + PPC)</span></h2></div>
     <div style="overflow-x:auto"><table class="tbl">
       <thead><tr><th>Producto</th><th>Gasto PPC</th><th title="Conversión de la publicidad: pedidos ÷ clics">CVR</th><th>ACoS real</th><th>Break-even</th><th>Veredicto</th></tr></thead>
       <tbody id="ppc-rentab"></tbody>
@@ -1392,7 +1392,8 @@ function renderPlacement(){
   var el=document.getElementById('ppc-placement'); if(!el) return;
   var datos=(PLAC_DATA||[]).slice();
   if(PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
-  if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Aún no hay datos de placement. Se cargan a diario (o desde 🔌 Conexión → «Cargar placement»).</div>'; return; }
+  if(PPC_CAMP!=='all') datos=datos.filter(function(x){return (x.campania||'')===PPC_CAMP;});   // filtro maestro de campaña
+  if(!datos.length){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">'+(PPC_CAMP!=='all'?'Sin datos de placement para esta campaña.':'Aún no hay datos de placement. Se cargan a diario (o desde 🔌 Conexión → «Cargar placement»).')+'</div>'; return; }
   var by={};
   datos.forEach(function(x){ var k=x.placement||'?'; if(!by[k])by[k]={g:0,v:0,c:0,p:0}; by[k].g+=+x.gasto||0; by[k].v+=+x.ventas_ppc||0; by[k].c+=+x.clics||0; by[k].p+=+x.pedidos_ppc||0; });
   var ks=Object.keys(by).sort(function(a,b){return by[b].g-by[a].g;});
@@ -1509,6 +1510,7 @@ function renderRentabCamp(){
   var el=document.getElementById('ppc-rentab-camp'); if(!el) return;
   var camps=(PPC_DATA&&PPC_DATA.campanas)||[];
   if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') camps=camps.filter(function(c){return (c.pais||'')===PPC_PAIS;});
+  if(typeof PPC_CAMP!=='undefined' && PPC_CAMP!=='all') camps=camps.filter(function(c){return (c.nombre||'')===PPC_CAMP;});   // filtro maestro de campaña
   if(!camps.length){ el.innerHTML='<div style="color:var(--mu);font-size:13px">Sin campañas con datos.</div>'; return; }
   var obj=acosObj();
   var lim={}; (PPC_LIMIT||[]).forEach(function(l){ lim[(l.pais||'')+'|'+(l.campania_id||'')]=l; });
@@ -1562,6 +1564,7 @@ function renderPlanPujas(){
   var esAdmin=!!(SB_CONFIG&&SB_CONFIG.apiKey);
   var datos=PLAN_PUJAS.slice();
   if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  if(typeof PPC_CAMP!=='undefined' && PPC_CAMP!=='all') datos=datos.filter(function(x){return (_campNombre(x.campania_id)||'')===PPC_CAMP;});   // filtro maestro de campaña
   var btnTodas=document.getElementById('plan-aplicar-todas');
   if(!datos.length){ el.innerHTML='<div style="color:var(--gn);font-size:13px">👍 Nada que bajar: ninguna keyword está por encima de su objetivo de rentabilidad (o faltan datos/rendimiento). Recuerda cargar keywords y el mapa producto↔campaña.</div>'; if(btnTodas)btnTodas.style.display='none'; return; }
   if(btnTodas) btnTodas.style.display=esAdmin?'inline-block':'none';
@@ -1589,6 +1592,7 @@ function renderPlanPujas(){
 function aplicarTodasPlan(){
   var datos=PLAN_PUJAS.slice();
   if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  if(typeof PPC_CAMP!=='undefined' && PPC_CAMP!=='all') datos=datos.filter(function(x){return (_campNombre(x.campania_id)||'')===PPC_CAMP;});   // filtro maestro de campaña
   if(!datos.length) return;
   if(!confirm('Aplicar '+datos.length+' bajadas de puja en Amazon (una a una)?\n\nSolo bajan, nunca suben. Cambia tus campañas REALES.')) return;
   var key=(SB_CONFIG.apiKey||'').trim();
@@ -1633,6 +1637,7 @@ function renderKeywords(){
   var ai=document.getElementById('kw-acos'); if(ai && !ai.value) ai.value=acosObj();
   var datos=(KW_DATA||[]).slice();
   if(PPC_PAIS!=='all') datos=datos.filter(function(x){return (x.pais||'')===PPC_PAIS;});
+  if(PPC_CAMP!=='all') datos=datos.filter(function(x){return ((x.campania||_campNombre(x.campania_id))||'')===PPC_CAMP;});   // filtro maestro de campaña
   // Solo activas: oculta keywords pausadas y las de campañas apagadas (estado
   // de campaña desconocido → NO se oculta, para no perder keywords reales).
   var soloAct=document.getElementById('kw-solo-activas'); soloAct=soloAct?soloAct.checked:true;
@@ -4173,6 +4178,8 @@ function ppcSetObj(nombre,val){
 function _iso(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 // ¿la fecha ISO cae dentro del rango activo? (sin rango → siempre sí)
 function ppcEnRango(f){ if(!PPC_RANGO) return true; return f && f>=PPC_RANGO.desde && f<=PPC_RANGO.hasta; }
+// Filtro maestro de campaña: ¿pasa esta campaña (por nombre)? 'all' = todas.
+function ppcCampOK(nombre){ return PPC_CAMP==='all' || (nombre||'')===PPC_CAMP; }
 // ¿el backend ya guarda términos/rentabilidad por día? (filas con `fecha`)
 function ppcEsDiario(){ return (PPC_DATA&&PPC_DATA.terminos||[]).some(function(t){return t.fecha;}); }
 // Campañas agregadas por (país·nombre) SOLO dentro del rango activo. Usa el detalle
@@ -4185,6 +4192,7 @@ function campanasRango(){
   raw.forEach(function(c){
     if(!ppcEnRango(c.fecha)) return;
     if(PPC_PAIS!=='all' && (c.pais||'')!==PPC_PAIS) return;   // filtro maestro de país
+    if(!ppcCampOK(c.nombre)) return;                          // filtro maestro de campaña
     var k=c.pais+'·'+c.nombre;
     if(!by[k]) by[k]={pais:c.pais,nombre:c.nombre,campania_id:c.campania_id||'',gasto:0,clics:0,ventas_ppc:0,pedidos_ppc:0};
     if(!by[k].campania_id && c.campania_id) by[k].campania_id=c.campania_id;
@@ -4221,9 +4229,15 @@ function filtrarPPCPais(code){
   PPC_PAIS=code;   // filtro maestro: país aplica a toda la pantalla de PPC
   _ppcRerender();
 }
-function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; dibujarPPCChart(); }
+// SQP y Rentabilidad por producto no tienen dimensión de campaña: al filtrar por una
+// campaña concreta mostramos una nota en vez de cifras engañosas (siguen siendo globales).
+function _ppcCampNota(){
+  var on = (typeof PPC_CAMP!=='undefined' && PPC_CAMP!=='all');
+  ['ppc-sqp-campnota','ppc-rentab-campnota'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display = on?'inline':'none'; });
+}
+function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; _ppcRerender(); }   // filtro maestro: campaña aplica a toda la pantalla de PPC
 // ---- Controles del filtro maestro de fechas ----
-function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} }
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} try{ if(PLAN_PUJAS&&PLAN_PUJAS.length) renderPlanPujas(); }catch(e){} try{ if(typeof SQP_DATA!=='undefined'&&SQP_DATA) renderSQP(); }catch(e){} try{ _ppcCampNota(); }catch(e){} }
 function ppcPreset(p){
   var hoy=new Date();
   if(p==='30d'){ PPC_RANGO=null; }
@@ -4581,6 +4595,7 @@ function renderPPC(fuente){
 function terminosRango(){
   var raw=(PPC_DATA&&PPC_DATA.terminos)||[];
   if(PPC_PAIS!=='all') raw=raw.filter(function(t){return (t.pais||'')===PPC_PAIS;});   // filtro maestro de país
+  if(PPC_CAMP!=='all') raw=raw.filter(function(t){return (t.campania||'')===PPC_CAMP;});   // filtro maestro de campaña
   var esDiario = raw.some(function(t){return t.fecha;});
   var nota=document.getElementById('ppc-terminos-nota');
   if(nota) nota.style.display = (PPC_RANGO && !esDiario) ? 'inline' : 'none';
@@ -4606,8 +4621,8 @@ function renderPPCTerminos(){
     // Umbral de confianza: solo se negativiza con datos suficientes (≥15 clics y 0 ventas).
     // Con pocos clics el dato es frágil → "Techo de puja" (no negativizar aún) y NO cuenta al € recuperable.
     var NEGC=15;
-    if(clics>=NEGC&&ped===0){ver='Negativizar';pill='rd';acciones.push({t:'Negativiza «'+t.termino+'»',p:clics+' clics · 0 pedidos en 30 días',v:gasto,term:t.termino,camp:t.campana||t.keyword||''});recuperable+=gasto;}
-    else if(clics>=5&&ped===0){ver='Techo de puja';pill='am';acciones.push({t:'Pon techo de puja a «'+t.termino+'»',p:clics+' clics · 0 pedidos — dato aún frágil, no negativices todavía',v:gasto,soft:true,term:t.termino,camp:t.campana||t.keyword||''});}
+    if(clics>=NEGC&&ped===0){ver='Negativizar';pill='rd';acciones.push({t:'Negativiza «'+t.termino+'»',p:clics+' clics · 0 pedidos en 30 días',v:gasto,term:t.termino,camp:t.campania||t.keyword||''});recuperable+=gasto;}
+    else if(clics>=5&&ped===0){ver='Techo de puja';pill='am';acciones.push({t:'Pon techo de puja a «'+t.termino+'»',p:clics+' clics · 0 pedidos — dato aún frágil, no negativices todavía',v:gasto,soft:true,term:t.termino,camp:t.campania||t.keyword||''});}
     else if(ven>0&&a>be){ver='Bajar puja';pill='am';}
     else if(ven>0&&a<=be*0.7&&ped>=2){ver='Escalar';pill='gn';}
     else if(clics>0&&clics<5&&ped===0){ver='Datos insuf.';pill='mu';}
