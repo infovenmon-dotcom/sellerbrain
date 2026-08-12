@@ -180,10 +180,8 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <a id="nav-resenas" onclick="cambiarVista('resenas')"><span class="ic">⭐</span> Pedir reseña</a>
     <div class="sep">Planificación</div>
     <a id="nav-stock" onclick="cambiarVista('stock')"><span class="ic">📦</span> Stock y reposición</a>
-    <a id="nav-kw" onclick="cambiarVista('kw')"><span class="ic">🔑</span> Keywords</a>
-    <a id="nav-titulos" onclick="cambiarVista('titulos')"><span class="ic">🏷️</span> Títulos SEO</a>
-    <a id="nav-rufus" onclick="cambiarVista('rufus')"><span class="ic">🤖</span> Rufus · Atributos IA</a>
-    <a id="nav-generador" onclick="cambiarVista('generador')"><span class="ic">✨</span> Generador de listing IA</a>
+    <a id="nav-estkw" onclick="cambiarVista('estkw')"><span class="ic">🔑</span> Keywords y auditoría</a>
+    <a id="nav-estlist" onclick="cambiarVista('estlist')"><span class="ic">✨</span> Generador de listing</a>
     <a id="nav-nichos" onclick="cambiarVista('nichos')"><span class="ic">🔎</span> Investigación de marca</a>
     <a id="nav-calc" onclick="cambiarVista('calc')"><span class="ic">🧮</span> Calculadora EU / USA</a>
     <a id="nav-epr" onclick="cambiarVista('epr')"><span class="ic">♻️</span> Cumplimiento UE · EPR + GPSR</a>
@@ -2212,7 +2210,7 @@ function renderTit75(){
         '<div style="text-align:right;flex-shrink:0"><div style="font-weight:800;font-family:Syne,sans-serif;color:'+(exceso>40?'var(--rd)':'var(--am)')+'">'+p.len+'</div><div style="font-size:10.5px;color:var(--mu)">+'+exceso+' de más</div></div>'+
       '</div>';
     }).join('')+
-    '<div style="margin-top:10px"><button class="chip on" onclick="cambiarVista(\'titulos\')">🏷️ Abrir generador de títulos</button></div>';
+    '<div style="margin-top:10px"><button class="chip on" onclick="cambiarVista(\'estlist\');toolSub(\'estlist\',1)">🏷️ Abrir generador de títulos</button></div>';
 }
 function toggleTit75(){
   var b=document.getElementById('tit75'), c=document.getElementById('tit75-caret');
@@ -4328,6 +4326,16 @@ var TOOL_SRC = {
   ppccalc: { src:'portal.html?embed=1&tab=ppc',    title:'PPC · Calculadora' },
   horas:   { src:'ppc-horas.html',                 title:'PPC · Horas (dayparting)' },
   fba:     { src:'portal.html?embed=1&tab=fba',    title:'Dimensiones y categoría' },
+  // --- Dos herramientas fusionadas (cada una agrupa sus antiguas pestañas) ---
+  estkw:   { src:'portal.html?embed=1&tab=kw',     title:'Keywords y auditoría', subtabs:[
+              {k:'analisis', t:'🔑 Análisis de keywords', src:'portal.html?embed=1&tab=kw'},
+              {k:'auditoria',t:'🤖 Auditoría COSMO / Rufus', src:'rufus.html'}
+            ]},
+  estlist: { src:'generador.html',                 title:'Generador de listing', subtabs:[
+              {k:'generar', t:'✨ Generar con IA', src:'generador.html'},
+              {k:'titulo',  t:'🏷️ Validar título (reglas de Amazon)', src:'titulos.html'}
+            ]},
+  // Claves antiguas: se mantienen como alias para no romper enlaces internos.
   kw:      { src:'portal.html?embed=1&tab=kw',     title:'Keywords' },
   titulos: { src:'titulos.html',                   title:'Títulos SEO · Generador que cumple las reglas de Amazon' },
   rufus:   { src:'rufus.html',                     title:'Rufus · Auditor de atributos para la IA de Amazon' },
@@ -4345,6 +4353,18 @@ var TOOL_SRC = {
 };
 // Secciones aún no construidas → aviso "en desarrollo":
 var SOON = {};
+
+// --- Sub-pestañas de las herramientas fusionadas (reutiliza la barra tool-chips) ---
+var TOOL_SUB={};   // recuerda la sub-pestaña activa de cada herramienta
+// Chips originales de la calculadora de margen (EU/USA), para restaurarlos al volver a ella.
+var CALC_CHIPS_HTML='<span class="chip on" id="chip-eu" onclick="calcRegion(\'eu\')" style="cursor:pointer">🇪🇺 Europa</span><span class="chip" id="chip-usa" onclick="calcRegion(\'usa\')" style="cursor:pointer">🇺🇸 USA</span>';
+function toolSub(v,idx){
+  var meta=TOOL_SRC[v]; if(!meta||!meta.subtabs) return;
+  TOOL_SUB[v]=idx;
+  var f=document.getElementById('if-tool');
+  f.src=meta.subtabs[idx].src; f.setAttribute('data-key',v);
+  meta.subtabs.forEach(function(s,i){ var c=document.getElementById('subtab-'+v+'-'+i); if(c) c.classList.toggle('on', i===idx); });
+}
 
 // Barra lateral plegable: en escritorio pliega/despliega (y lo recuerda);
 // en móvil abre/cierra el menú deslizante.
@@ -4386,10 +4406,18 @@ function cambiarVista(v){
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} try{ mostrarBienvenida(); }catch(e){} }   // refresca la capa fiscal y el banner de bienvenida
   if(TOOL_SRC[v]){
-    var meta=TOOL_SRC[v], f=document.getElementById('if-tool');
-    if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
+    var meta=TOOL_SRC[v], f=document.getElementById('if-tool'), chipsEl=document.getElementById('tool-chips');
+    if(meta.subtabs){
+      var cur=TOOL_SUB[v]||0;
+      chipsEl.innerHTML=meta.subtabs.map(function(s,i){ return '<span class="chip'+(i===cur?' on':'')+'" id="subtab-'+v+'-'+i+'" onclick="toolSub(\''+v+'\','+i+')" style="cursor:pointer">'+s.t+'</span>'; }).join('');
+      chipsEl.style.display='flex';
+      if(f.getAttribute('data-key')!==v){ f.src=meta.subtabs[cur].src; f.setAttribute('data-key',v); }
+    } else {
+      if(meta.chips){ chipsEl.innerHTML=CALC_CHIPS_HTML; chipsEl.style.display='flex'; }
+      else chipsEl.style.display='none';
+      if(f.getAttribute('data-key')!==v){ f.src=meta.src; f.setAttribute('data-key',v); }
+    }
     document.getElementById('tool-title').textContent=meta.title;
-    document.getElementById('tool-chips').style.display=meta.chips?'flex':'none';
   }
   if(SOON[v]) document.getElementById('soon-title').textContent=SOON[v];
   // En móvil, cerrar la barra al elegir
