@@ -62,6 +62,11 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
 <!-- 1 · PRODUCTO -->
 <div class="card">
   <div class="ct"><span class="ci">1️⃣</span> Datos del producto</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px">
+    <button class="btn-sec" id="g-btn-prod" onclick="traerProductosGen()">📦 Traer mi producto (catálogo real)</button>
+    <select class="n" id="g-sel-prod" onchange="elegirProductoGen()" style="max-width:340px;display:none"><option value="">— elige tu producto —</option></select>
+    <span id="g-prod-msg" style="font-size:12px;color:var(--mu)"></span>
+  </div>
   <div class="grid">
     <div><label class="f">Producto *</label><input class="n" id="g-producto" placeholder="Ej: Botella térmica de acero"></div>
     <div><label class="f">Tipo de producto</label><input class="n" id="g-tipo" placeholder="Ej: Botella térmica"></div>
@@ -117,6 +122,53 @@ function apiBase(){ return (localStorage.getItem('sb_api_base')||'https://seller
 function apiCred(){ try{ return localStorage.getItem('sb_api_key')||sessionStorage.getItem('fba_token')||''; }catch(e){ return ''; } }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 var KEYWORDS=[];
+
+// --- Reglas de título de Amazon (mismas que "Títulos SEO"): 75 car., sin símbolos
+//     prohibidos ni lenguaje promocional. Desde el 27 jul 2026 son obligatorias. ---
+var G_BANNED=['!','$','?','_','{','}','^','¬','¦','~','#','*','%','€','@'];
+var G_PROMO=['oferta','ofertas','rebaja','descuento','envío gratis','envio gratis','gratis','el mejor','la mejor',
+  'mejor precio','más vendido','mas vendido','superventas','100%','garantía','garantia','barato','barata',
+  'calidad premium','best seller','bestseller','free shipping','sale','oferta especial','liquidación','promoción'];
+function gTituloReglas(t){
+  t=String(t||''); var avisos=[], len=t.length, low=t.toLowerCase();
+  if(len>75) avisos.push('se pasa de 75 ('+len+')');
+  var sim=G_BANNED.filter(function(c){return t.indexOf(c)>-1;});
+  if(sim.length) avisos.push('símbolo prohibido '+sim.join(' '));
+  var pro=G_PROMO.filter(function(w){return low.indexOf(w)>-1;});
+  if(pro.length) avisos.push('promocional: '+pro[0]);
+  if(/(.)\1\1/.test(low)) avisos.push('carácter repetido');
+  return {ok:avisos.length===0, avisos:avisos, len:len};
+}
+
+// --- Traer el catálogo REAL del vendedor y prellenar el formulario (datos reales) ---
+var GEN_PRODS=[];
+function traerProductosGen(){
+  var b=document.getElementById('g-btn-prod'), msg=document.getElementById('g-prod-msg');
+  var cred=apiCred();
+  if(!cred){ msg.style.color='var(--am)'; msg.textContent='Inicia sesión para traer tu catálogo real.'; return; }
+  b.textContent='⏳ Trayendo…'; b.disabled=true; msg.textContent='';
+  var hoy=new Date(), d1=new Date(Date.UTC(hoy.getUTCFullYear(),hoy.getUTCMonth(),1)).toISOString().slice(0,10), d2=hoy.toISOString().slice(0,10);
+  fetch(apiBase()+'/v1/productos?desde='+d1+'&hasta='+d2,{headers:{'Authorization':'Bearer '+cred}})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      GEN_PRODS=(d.productos||[]);
+      var sel=document.getElementById('g-sel-prod');
+      sel.innerHTML='<option value="">— elige tu producto —</option>'+GEN_PRODS.map(function(p,i){ return '<option value="'+i+'">'+esc(p.nom||p.sku).slice(0,90)+'</option>'; }).join('');
+      sel.style.display=GEN_PRODS.length?'inline-block':'none';
+      b.textContent='✅ '+GEN_PRODS.length+' productos'; b.disabled=false;
+      msg.style.color='var(--mu)';
+      msg.textContent=GEN_PRODS.length?'Elige uno y se rellenan los datos con tu ficha real.':'Conectado, pero sin productos con ventas este mes. Rellena a mano.';
+    })
+    .catch(function(err){ b.textContent='📦 Traer mi producto (catálogo real)'; b.disabled=false; msg.style.color='var(--am)'; msg.textContent='No pude traer el catálogo ('+err.message+'). Puedes rellenar a mano.'; });
+}
+function elegirProductoGen(){
+  var i=document.getElementById('g-sel-prod').value; if(i==='') return;
+  var p=GEN_PRODS[+i]; if(!p) return;
+  var nom=(p.nom||'').trim();
+  var g=document.getElementById('g-producto'); if(g && nom) g.value=nom;   // nombre real del catálogo
+  if(nom){ var w=nom.split(/\s+/)[0]; var mk=document.getElementById('g-marca'); if(mk && !mk.value && w) mk.value=w; }
+  var msg=document.getElementById('g-prod-msg'); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Cargado desde tu catálogo: «'+nom.slice(0,60)+'». Completa lo que falte y genera.'; }
+}
 
 // --- Parser CSV sencillo (soporta comillas) ---
 function parseCSV(text){
@@ -192,7 +244,16 @@ function render(d, uso){
 
   // Títulos
   var tits=(d.titulos||[]);
-  h+=bloque('Títulos (3 opciones)', tits.map(function(t,i){ return '<div class="blt">'+(i+1)+'. '+esc(t)+' <span style="color:var(--mu);font-size:10px">('+String(t).length+' car.)</span> <button class="cp" onclick="copiar(this.getAttribute(\'data-t\'))" data-t="'+esc(t).replace(/"/g,'&quot;')+'">📋</button></div>'; }).join(''), null);
+  h+=bloque('Títulos (3 opciones)', tits.map(function(t,i){
+    var v=gTituloReglas(t);   // valida las reglas de Amazon (75 car., símbolos, promocional)
+    var lenCol = v.len>75 ? '#ff5c5c' : (v.len>68 ? 'var(--am)' : 'var(--gn)');
+    var badge = v.ok
+      ? '<span style="color:var(--gn);font-size:10px">✓ cumple reglas</span>'
+      : '<span style="color:#ff5c5c;font-size:10px" title="'+esc(v.avisos.join(' · '))+'">✕ '+esc(v.avisos[0])+'</span>';
+    return '<div class="blt">'+(i+1)+'. '+esc(t)+
+      ' <span style="color:'+lenCol+';font-size:10px">('+v.len+'/75 car.)</span> '+badge+
+      ' <button class="cp" onclick="copiar(this.getAttribute(\'data-t\'))" data-t="'+esc(t).replace(/"/g,'&quot;')+'">📋</button></div>';
+  }).join(''), null);
 
   // Bullets
   var bs=(d.bullets||[]);
