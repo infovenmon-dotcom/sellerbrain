@@ -291,7 +291,8 @@ function generar(){
       btn.disabled=false; st.textContent='';
       if(d.falta_apikey){ err.innerHTML='⚠️ Falta la clave de IA. Pon <b>ANTHROPIC_API_KEY</b> en Cloudflare (Worker → Variables).'; err.style.display='block'; return; }
       if(d.error==='no_autorizado'){ err.innerHTML='🔑 Tu sesión no está reconocida como admin. Añade tu email de login a <b>ADMIN_EMAILS</b> en Cloudflare (una vez) y tu login ya podrá generar sin pegar ninguna clave.'; err.style.display='block'; return; }
-      if(!d.ok||!d.data){ err.innerHTML='No se pudo generar: '+esc(d.error||'')+(d.crudo?'<div style="margin-top:6px;color:var(--mu)">'+esc(d.crudo).slice(0,400)+'</div>':''); err.style.display='block'; return; }
+      if(d.error==='ia_sin_texto'){ err.innerHTML='⚠️ La IA respondió sin texto. '+esc(d.nota||'')+'<div style="margin-top:4px;color:var(--mu);font-size:11px">modelo: '+esc(d.modelo||'?')+' · stop: '+esc(d.stop||'?')+'</div>'; err.style.display='block'; return; }
+      if(!d.ok||!d.data){ err.innerHTML='No se pudo generar: '+esc(d.error||'')+'<div style="margin-top:4px;color:var(--mu);font-size:11px">modelo: '+esc(d.modelo||'?')+' · stop: '+esc(d.stop||'?')+' · largo: '+(d.len||0)+'</div>'+(d.crudo?'<div style="margin-top:6px;color:var(--mu);font-size:11px;white-space:pre-wrap;max-height:160px;overflow:auto;border:1px solid var(--bd2);border-radius:8px;padding:8px">'+esc(String(d.crudo).slice(-800))+'</div>':''); err.style.display='block'; return; }
       render(d.data, d.uso);
     })
     .catch(function(e){ btn.disabled=false; st.textContent=''; err.textContent='Error: '+e.message; err.style.display='block'; });

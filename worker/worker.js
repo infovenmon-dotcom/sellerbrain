@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v127-listing-tokens'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v128-listing-parse-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -992,8 +992,14 @@ export default {
         // imagen, A+/Q&A, COSMO, backend) es largo; con 5000 el JSON se cortaba a medias.
         const r = await llamarClaude(env, SYSTEM_LISTING, buildPromptListing(b), 16000);
         if (r.error) return json({ ok: false, error: r.error }, cors);
-        let data = null; try { data = JSON.parse(extraerJSON(r.texto)); } catch (_) {}
-        if (!data) return json({ ok: false, error: 'respuesta_no_json', crudo: (r.texto || '').slice(-1500) }, cors);
+        // La IA no devolvió texto → normalmente es acceso al modelo o clave.
+        if (!(r.texto || '').trim()) return json({ ok: false, error: 'ia_sin_texto', stop: r.stop || '', modelo: r.modelo || '',
+          nota: 'La IA respondió sin texto. Comprueba que tu ANTHROPIC_API_KEY tenga acceso al modelo «' + (env.LISTING_MODEL || 'claude-sonnet-5') + '» (o pon LISTING_MODEL en Cloudflare con un modelo válido de tu cuenta).' }, cors);
+        const crudo0 = extraerJSON(r.texto);
+        let data = null;
+        try { data = JSON.parse(crudo0); } catch (_) {}
+        if (!data) { try { data = JSON.parse(crudo0.replace(/[\x00-\x1F]+/g, ' ')); } catch (_) {} }   // arregla saltos de línea crudos dentro de los textos
+        if (!data) return json({ ok: false, error: 'respuesta_no_json', stop: r.stop || '', modelo: r.modelo || '', len: (r.texto || '').length, crudo: (r.texto || '').slice(-1500) }, cors);
         return json({ ok: true, data, uso: r.uso || null }, cors);
       }
 
@@ -2578,7 +2584,7 @@ async function llamarClaude(env, system, userText, maxTokens) {
   let j = null; try { j = await r.json(); } catch (_) {}
   if (!r || !r.ok) return { error: (j && j.error && j.error.message) || ('HTTP ' + (r ? r.status : '0')) };
   const txt = (j && j.content && j.content[0] && j.content[0].text) || '';
-  return { texto: txt, uso: (j && j.usage) || null };
+  return { texto: txt, uso: (j && j.usage) || null, stop: (j && j.stop_reason) || '', modelo: (j && j.model) || '' };
 }
 // Extrae el objeto JSON de la respuesta (quita ```json … ``` si viene con vallas).
 function extraerJSON(s) {
