@@ -207,7 +207,9 @@ function traerProductos(){
 }
 var IMG_COUNT=0, IMG_EVALUADO=false, _fichaSeq=0;
 // Caché de ficha por SKU (compartida con el Generador): evita repetir consultas a Amazon.
-function _fichaOK(d){ return !!(d && (d.title || (d.bullets&&d.bullets.length) || d.description || d.imagen || (d.imagenes&&d.imagenes.length))); }
+// Vale SOLO si trae contenido real (bullets/descripción/imágenes); el título solo no cuenta,
+// para que una respuesta incompleta de Amazon no se cachee ni bloquee la próxima carga.
+function _fichaOK(d){ return !!(d && ((d.bullets&&d.bullets.length) || d.description || (d.imagenes&&d.imagenes.length))); }
 function _fichaCache(sku){ try{ var o=JSON.parse(localStorage.getItem('sb_ficha_'+sku)||'null'); if(o&&o.d&&(Date.now()-(o.t||0)<86400000)&&_fichaOK(o.d)) return o.d; }catch(e){} return null; }
 function _fichaGuardar(sku,d){ try{ if(_fichaOK(d)) localStorage.setItem('sb_ficha_'+sku, JSON.stringify({t:Date.now(),d:d})); }catch(e){} }
 function _aplicarFicha(d){

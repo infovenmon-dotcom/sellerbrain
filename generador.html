@@ -185,7 +185,10 @@ function traerProductosGen(){
 }
 // Caché de ficha por SKU (compartida con la Auditoría): evita volver a molestar a Amazon
 // —que limita tras varias consultas— y hace que ambas pantallas usen el MISMO dato.
-function _fichaOK(d){ return !!(d && (d.title || (d.bullets&&d.bullets.length) || d.description || d.imagen || (d.imagenes&&d.imagenes.length))); }
+// Una ficha vale (para cachear/servir) SOLO si trae contenido real: bullets, descripción
+// o imágenes. El título solo NO cuenta — así una respuesta incompleta de Amazon (cuando
+// limita) no se cachea ni bloquea la próxima carga.
+function _fichaOK(d){ return !!(d && ((d.bullets&&d.bullets.length) || d.description || (d.imagenes&&d.imagenes.length))); }
 function _fichaCache(sku){ try{ var o=JSON.parse(localStorage.getItem('sb_ficha_'+sku)||'null'); if(o&&o.d&&(Date.now()-(o.t||0)<86400000)&&_fichaOK(o.d)) return o.d; }catch(e){} return null; }
 function _fichaGuardar(sku,d){ try{ if(_fichaOK(d)) localStorage.setItem('sb_ficha_'+sku, JSON.stringify({t:Date.now(),d:d})); }catch(e){} }
 function elegirProductoGen(){
