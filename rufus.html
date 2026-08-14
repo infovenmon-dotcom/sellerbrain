@@ -108,6 +108,7 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
   <input class="n" id="f-tit" placeholder="Título del producto" oninput="analizar()" style="margin-bottom:10px">
   <label class="f">Viñetas + descripción (pega todo)</label>
   <textarea class="n" id="f-desc" rows="6" placeholder="Pega aquí las 5 viñetas y la descripción. Incluye material, medidas, usos, ocasión, audiencia, certificaciones, compatibilidad..." oninput="analizar()"></textarea>
+  <div id="f-imgs" style="display:none;margin-top:10px"></div>
   <div class="err" id="err-prod"></div>
   <div style="margin-top:12px"><button class="btn" onclick="analizar(true)">🤖 Auditar COSMO + Rufus</button></div>
 </div>
@@ -204,8 +205,46 @@ function traerProductos(){
     })
     .catch(function(err){ b.textContent='📥 Traer mis productos'; b.disabled=false; e.textContent='No pude traer los productos ('+err.message+'). Pega el contenido a mano.'; e.style.display='block'; });
 }
-function elegirProducto(){ var i=document.getElementById('sel-prod').value; if(i==='')return; var p=PRODS[+i]; if(!p)return;
-  document.getElementById('f-tit').value=p.nom||''; analizar(); }
+var IMG_COUNT=0;
+function elegirProducto(){
+  var i=document.getElementById('sel-prod').value; if(i==='')return;
+  var p=PRODS[+i]; if(!p)return;
+  document.getElementById('f-tit').value=p.nom||'';
+  var sku=(p.sku||'').trim(), cred=apiCred(), msg=document.getElementById('err-prod');
+  if(sku && cred){
+    if(msg){ msg.style.display='block'; msg.style.color='var(--mu)'; msg.textContent='⏳ Trayendo tu ficha completa de Amazon (título, viñetas, descripción, TODAS las imágenes)…'; }
+    fetch(apiBase()+'/v1/listing-actual?sku='+encodeURIComponent(sku),{headers:{'Authorization':'Bearer '+cred}})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        d=d||{};
+        if(d.title) document.getElementById('f-tit').value=d.title;
+        var partes=[];
+        if(d.bullets&&d.bullets.length) partes.push(d.bullets.join('\n'));
+        if(d.description) partes.push(d.description);
+        if(partes.length) document.getElementById('f-desc').value=partes.join('\n\n');
+        pintarImagenesFicha(d.imagenes||[]);
+        if(msg){
+          if((d.bullets&&d.bullets.length)||d.description){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha completa cargada ('+((d.imagenes||[]).length)+' imágenes). Auditando…'; }
+          else { msg.style.color='var(--am)'; msg.textContent='Traído el título e imágenes; no encontré viñetas/descripción publicadas para este SKU — pégalas a mano para una auditoría más precisa.'; }
+        }
+        analizar();
+      })
+      .catch(function(){ if(msg){ msg.style.color='var(--am)'; msg.textContent='No pude traer la ficha completa; pega el contenido a mano.'; } analizar(); });
+  } else { pintarImagenesFicha([]); analizar(); }
+}
+// Muestra TODAS las imágenes de la ficha y evalúa su cobertura (Rufus/COSMO también leen imágenes).
+function pintarImagenesFicha(imgs){
+  var box=document.getElementById('f-imgs'); if(!box) return;
+  IMG_COUNT=(imgs&&imgs.length)||0;
+  if(!IMG_COUNT){ box.style.display='none'; box.innerHTML=''; return; }
+  var n=IMG_COUNT, col=n>=7?'var(--gn)':n>=5?'#f5b23e':'#ff6b6b';
+  var tip=n>=7?'Cobertura de imágenes excelente.':n>=5?'Bien, pero Amazon permite hasta 7-9: añade estilo de vida, infografía y detalle.':'Pocas imágenes: sube a 7+ (principal, usos, medidas, infografía, lifestyle). Rufus y COSMO también leen las imágenes.';
+  box.style.display='block';
+  box.innerHTML='<div style="font-size:12px;margin-bottom:6px;color:'+col+'">🖼️ <b>'+n+' imágenes</b> en tu ficha — '+tip+'</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+imgs.map(function(im){
+      return '<img src="'+im.link+'" title="'+((im.variant||'')+' '+(im.width||'')+'x'+(im.height||'')).trim()+'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--bd2)" onerror="this.style.display=\'none\'">';
+    }).join('')+'</div>';
+}
 
 function contarMedibles(txt){ var m=txt.match(/\b\d+[.,]?\d*\s?(ml|l|litros?|cl|cm|mm|m|g|gr|kg|oz|w|watios?|voltios?|v|mah|h|horas?|min|d[ií]as?|a[ñn]os?|pulgadas?|"|%|€|uds|piezas)\b/gi); return m?m.length:0; }
 

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v122-ficha-actual-generador'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v123-terminos-dia-imagenes'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -536,7 +536,12 @@ export default {
       if (url.pathname === '/v1/ppc/terminos') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase();
         const filtro = pais ? 'pais=eq.' + pais + '&' : '';
-        const filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=hasta.desc,gasto.desc&limit=8000');
+        let filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=hasta.desc,gasto.desc&limit=20000');
+        // SOLO filas diarias reales (desde = hasta = un día). Excluye los "resúmenes"
+        // antiguos (una fila con el total de varios días) que inflaban los rangos cortos.
+        // Si NO hay ninguna fila diaria todavía, devolvemos lo que haya (no dejar el panel vacío).
+        const diarias = (filas || []).filter(f => f && f.desde != null && f.hasta != null && String(f.desde) === String(f.hasta));
+        if (diarias.length) filas = diarias;
         return json({ datos: filas }, cors);
       }
 
@@ -1001,7 +1006,7 @@ export default {
         let asin = (url.searchParams.get('asin') || '').trim();
         if (!asin) { try { const c = await selSafe(env, 'productos_catalogo?sku=eq.' + encodeURIComponent(sku0) + '&select=asin&limit=1', []); asin = (c[0] && c[0].asin) || ''; } catch (_) {} }
         const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
-        let title = '', bullets = [], description = '', imagen = '';
+        let title = '', bullets = [], description = '', imagen = '', imagenes = [];
         const firstVal = (a) => (Array.isArray(a) && a[0] && a[0].value != null) ? String(a[0].value) : '';
         const token = await lwaToken(env, 'spapi', ctx);
         for (const mkt of mkts) {
@@ -1020,17 +1025,26 @@ export default {
             if (title && bullets.length) break;
           } catch (_) {}
         }
-        // Imagen (y título de respaldo) del catálogo por ASIN.
+        // Imágenes (TODAS) y título de respaldo del catálogo por ASIN.
         if (asin) {
           try {
             const item = await getCatalogoItem(env, asin, MARKETPLACES.ES);
             const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
             const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
             if (main && main.link) imagen = main.link;
+            // Todas las imágenes: MAIN primero, luego el resto; sin duplicados; solo las grandes.
+            const vistas = new Set();
+            const ordenadas = imgs.slice().sort((a, b) => (a.variant === 'MAIN' ? -1 : b.variant === 'MAIN' ? 1 : 0));
+            for (const im of ordenadas) {
+              if (!im || !im.link || vistas.has(im.link)) continue;
+              if ((im.width || 0) < 100 && (im.height || 0) < 100) continue;   // descarta miniaturas
+              vistas.add(im.link);
+              imagenes.push({ variant: im.variant || '', link: im.link, width: im.width || 0, height: im.height || 0 });
+            }
             if (!title && item && item.summaries && item.summaries[0]) title = item.summaries[0].itemName || '';
           } catch (_) {}
         }
-        return json({ sku: sku0, asin, title, bullets, description, imagen }, cors);
+        return json({ sku: sku0, asin, title, bullets, description, imagen, imagenes }, cors);
       }
 
       // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
