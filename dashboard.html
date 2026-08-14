@@ -449,7 +449,10 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <div class="card">
         <div class="ch">
           <h2><span class="ci">🔤</span> Términos de búsqueda <span style="font-weight:400;color:var(--mu)">· 30 días</span> <span id="ppc-terminos-nota" style="font-size:10px;color:var(--am);font-weight:400;display:none">· resumen del periodo (aún no varía por día)</span></h2>
-          <span style="font-size:11px;color:var(--mu)" title="ACoS objetivo = cuánto de cada venta aceptas gastar en anuncios. MÁS BAJO = más rentable cada venta, pero muy bajo pierdes volumen. Ponlo POR DEBAJO de tu margen (break-even). Se recuerda entre sesiones.">ACoS objetivo: <input type="number" id="ppc-be" min="1" max="100" oninput="guardarAcosObj(this.value)" style="width:44px;padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px">%</span>
+          <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--mu)" title="Ordena la tabla de mayor a menor por el dato que elijas.">Ordenar por: <select id="ppc-term-orden" onchange="renderPPCTerminos()" style="padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px"><option value="gasto">Gasto</option><option value="clics">Clics</option><option value="pedidos_ppc">Pedidos</option><option value="ventas_ppc">Ventas</option><option value="acos">ACoS</option></select></span>
+            <span style="font-size:11px;color:var(--mu)" title="ACoS objetivo = cuánto de cada venta aceptas gastar en anuncios. MÁS BAJO = más rentable cada venta, pero muy bajo pierdes volumen. Ponlo POR DEBAJO de tu margen (break-even). Se recuerda entre sesiones.">ACoS objetivo: <input type="number" id="ppc-be" min="1" max="100" oninput="guardarAcosObj(this.value)" style="width:44px;padding:3px 6px;background:#111;border:1px solid var(--bd2);border-radius:6px;color:var(--tx);font-size:11px">%</span>
+          </span>
         </div>
         <div style="overflow-x:auto">
         <table class="tbl">
@@ -1129,6 +1132,8 @@ function renderTiles(){
   var h='';
   (PERIODOS||[]).forEach(function(p){
     var mgCol=p.mg>=20?'var(--gn)':p.mg>=10?'var(--am)':'var(--rd)';
+    var tacos=(p.ventas>0)?(p.ppc/p.ventas*100):null;   // TACoS = publicidad ÷ ventas totales
+    var tacCol=(tacos==null)?'var(--mu)':(tacos<=10?'var(--gn)':tacos<=15?'var(--am)':'var(--rd)');
     h+='<div class="tile'+(p.id===perActivo?' on':'')+'" onclick="setPer(\''+p.id+'\')">'+
       '<div class="per"><span>'+p.nom+'</span><span>'+p.fecha+'</span></div>'+
       '<div class="ben '+(p.ben>=0?'pos':'neg')+'">'+(p.ben>=0?'+':'')+f(p.ben,2)+'€</div>'+
@@ -1138,6 +1143,7 @@ function renderTiles(){
         '<div class="r"><span>Pedidos / Uds</span><b>'+p.pedidos+' / '+p.uds+'</b></div>'+
         '<div class="r"><span>PPC</span><b style="color:#B983D6">-'+f(p.ppc,2)+'€</b></div>'+
         '<div class="r"><span>Margen</span><b style="color:'+mgCol+'">'+f(p.mg,1)+'%</b></div>'+
+        '<div class="r" title="TACoS = gasto en anuncios ÷ ventas totales. Menos es mejor."><span>TACoS</span><b style="color:'+tacCol+'">'+(tacos!=null?f(tacos,1)+'%':'—')+'</b></div>'+
       '</div>'+
       '<div class="mgr"><i style="width:'+Math.min(p.mg*3,100)+'%;background:'+mgCol+'"></i></div>'+
     '</div>';
@@ -4599,8 +4605,12 @@ function renderPPC(fuente){
       fEl.style.display='flex';
     } else { fEl.innerHTML=''; fEl.style.display='none'; PPC_PAIS='all'; }
   }
-  // Selector de campaña sobre el gráfico (Todas + cada campaña con gasto)
-  var camps=[]; (d.campanas_dia||[]).forEach(function(x){ if(x.nombre && camps.indexOf(x.nombre)<0) camps.push(x.nombre); });
+  // Selector de campaña sobre el gráfico (Todas + cada campaña con gasto).
+  // Respeta el país seleccionado: si hay un país activo, solo salen SUS campañas.
+  var camps=[]; (d.campanas_dia||[]).forEach(function(x){
+    if(PPC_PAIS!=='all' && (x.pais||'')!==PPC_PAIS) return;
+    if(x.nombre && camps.indexOf(x.nombre)<0) camps.push(x.nombre);
+  });
   camps.sort();
   var cEl=document.getElementById('ppc-camp-filtro');
   if(cEl){
@@ -4664,7 +4674,14 @@ function renderPPCTerminos(){
   var beEl=document.getElementById('ppc-be'); if(beEl && !beEl.value) beEl.value=acosObj();   // recuerda tu ACoS objetivo
   var be=(+ (beEl&&beEl.value) || acosObj())/100;
   var acciones=[],recuperable=0;
-  document.getElementById('ppc-terminos').innerHTML=terminosRango().slice(0,40).map(function(t){
+  // Orden elegido por el usuario (de más a menos). ACoS = gasto ÷ ventas.
+  var orden=(document.getElementById('ppc-term-orden')||{}).value||'gasto';
+  var filas=terminosRango().slice();
+  filas.sort(function(a,b){
+    if(orden==='acos'){ var aa=(+a.ventas_ppc>0?+a.gasto/+a.ventas_ppc:1e9), bb=(+b.ventas_ppc>0?+b.gasto/+b.ventas_ppc:1e9); return bb-aa; }
+    return (+b[orden]||0)-(+a[orden]||0);
+  });
+  document.getElementById('ppc-terminos').innerHTML=filas.slice(0,40).map(function(t){
     var gasto=+t.gasto,clics=+t.clics,ped=+(t.pedidos_ppc||0),ven=+(t.ventas_ppc||0);
     var a=ven>0?gasto/ven:999;
     var ver,pill;
