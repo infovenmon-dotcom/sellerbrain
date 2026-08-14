@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v130-listing-multibloque'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v131-titulos-75car'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2647,7 +2647,7 @@ LOS 15 ATRIBUTOS COSMO (el listing debe responder todos, repartidos entre títul
 1 used_for_func (función principal) · 2 used_for_eve (evento/actividad) · 3 used_for_aud (audiencia por función) · 4 capable_of (capacidad concreta) · 5 used_to (tarea específica) · 6 used_as (uso alternativo) · 7 is_a (tipo de producto) · 8 used_on (temporada/momento) · 9 used_in_loc (ubicación/entorno) · 10 used_in_body (parte del cuerpo) · 11 used_with (compatibilidad/complemento) · 12 used_by (quién lo usa) · 13 xInterested_in (interés del comprador) · 14 xIs_a (identidad de la audiencia) · 15 xWant (resultado buscado).
 
 REGLAS POR ELEMENTO:
-- TÍTULO: 3 opciones, ≤200 caracteres, lo crítico en los primeros 80 (tipo de producto + beneficio + caso de uso). Estructura: producto + característica con DATO medible + contexto/ocasión + audiencia + beneficio, como frase natural. Keyword principal cuanto antes. Sin stuffing.
+- TÍTULO: 3 opciones. REGLA DURA DE AMAZON (obligatoria desde el 27-jul-2026, NO la incumplas): MÁXIMO 75 caracteres cada título (cuenta los espacios); si te pasas, recórtalo. Empieza SIEMPRE por la marca. Sin símbolos prohibidos (! $ ? _ { } ^ ¬ ¦ ~ # * % € @). Sin lenguaje promocional (nada de "oferta", "gratis", "el mejor", "garantía", "100%", "barato", "premium", "más vendido"…). Sin poner en MAYÚSCULAS palabras enteras y sin repetir un carácter 3+ veces. Estructura dentro de esos 75 car.: marca + tipo de producto + 1 dato medible clave + caso de uso o audiencia. Keyword principal cuanto antes. Prioriza que quepa lo esencial: si no cabe todo, quédate con marca + producto + beneficio principal.
 - BULLETS: exactamente 5, con roles fijos: (1) diferenciador principal con especificación nombrada [capable_of]; (2) materiales, seguridad y certificaciones como entidades nombradas [is_a, used_in_body]; (3) caso de uso + audiencia explícita [used_for_eve, used_by, xIs_a]; (4) compatibilidad y dimensiones exactas [used_with]; (5) contenido de la caja + garantía + resultado esperado [xWant]. Empieza cada bullet con una etiqueta en MAYÚSCULAS + beneficio desarrollado, un dato medible por bullet, beneficio antes que característica, sin repetir frases.
 - DESCRIPCIÓN: 1500-2000 caracteres, 4 párrafos, sin repetir los bullets: (1) propuesta de valor en prosa; (2) 2-3 escenarios de uso con contexto; (3) neutralización de objeciones reales de reseñas; (4) marca, origen, certificaciones y garantía. Usa puentes semánticos (característica → beneficio directo → beneficio inferible).
 - IMÁGENES: 7 conceptos (principal fondo blanco; lifestyle con demográfico visible; infografía con datos; dimensiones/comparativa; uso alternativo; materiales/certificaciones; contenido de la caja/resultado). Por cada una da un brief y el texto overlay (frases nominales legibles por OCR, coherentes con el copy).
