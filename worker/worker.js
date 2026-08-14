@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v128-listing-parse-diag'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v129-listing-diag-error'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -992,14 +992,18 @@ export default {
         // imagen, A+/Q&A, COSMO, backend) es largo; con 5000 el JSON se cortaba a medias.
         const r = await llamarClaude(env, SYSTEM_LISTING, buildPromptListing(b), 16000);
         if (r.error) return json({ ok: false, error: r.error }, cors);
+        const raw = String(r.texto || '');
+        const diag = 'stop=' + (r.stop || '?') + ' · len=' + raw.length + ' · modelo=' + (r.modelo || '?');
         // La IA no devolvió texto → normalmente es acceso al modelo o clave.
-        if (!(r.texto || '').trim()) return json({ ok: false, error: 'ia_sin_texto', stop: r.stop || '', modelo: r.modelo || '',
+        if (!raw.trim()) return json({ ok: false, error: 'ia_sin_texto · ' + diag, stop: r.stop || '', modelo: r.modelo || '',
           nota: 'La IA respondió sin texto. Comprueba que tu ANTHROPIC_API_KEY tenga acceso al modelo «' + (env.LISTING_MODEL || 'claude-sonnet-5') + '» (o pon LISTING_MODEL en Cloudflare con un modelo válido de tu cuenta).' }, cors);
-        const crudo0 = extraerJSON(r.texto);
+        // Parseo robusto: quita vallas ```json, extrae el objeto y prueba varias reparaciones.
+        let s = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        const base = extraerJSON(s);
+        const intentos = [base, base.replace(/[\x00-\x1F]+/g, ' '), base.replace(/[\x00-\x1F]+/g, ' ').replace(/,(\s*[}\]])/g, '$1')];
         let data = null;
-        try { data = JSON.parse(crudo0); } catch (_) {}
-        if (!data) { try { data = JSON.parse(crudo0.replace(/[\x00-\x1F]+/g, ' ')); } catch (_) {} }   // arregla saltos de línea crudos dentro de los textos
-        if (!data) return json({ ok: false, error: 'respuesta_no_json', stop: r.stop || '', modelo: r.modelo || '', len: (r.texto || '').length, crudo: (r.texto || '').slice(-1500) }, cors);
+        for (const cand of intentos) { try { data = JSON.parse(cand); break; } catch (_) {} }
+        if (!data) return json({ ok: false, error: 'respuesta_no_json · ' + diag, stop: r.stop || '', modelo: r.modelo || '', len: raw.length, crudo: raw.slice(-1500) }, cors);
         return json({ ok: true, data, uso: r.uso || null }, cors);
       }
 
