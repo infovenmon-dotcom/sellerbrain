@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v126-ficha-cache-servidor'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v127-listing-tokens'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -988,10 +988,12 @@ export default {
         if (!env.ANTHROPIC_API_KEY) return json({ ok: false, falta_apikey: true,
           nota: 'Falta la clave de IA. Pon ANTHROPIC_API_KEY en Cloudflare (Worker → Variables) para usar el generador.' }, cors);
         let b; try { b = await request.json(); } catch (_) { b = {}; }
-        const r = await llamarClaude(env, SYSTEM_LISTING, buildPromptListing(b), 5000);
+        // 16000 tokens: el listing completo (3 títulos, 5 bullets, descripción, 7 briefs de
+        // imagen, A+/Q&A, COSMO, backend) es largo; con 5000 el JSON se cortaba a medias.
+        const r = await llamarClaude(env, SYSTEM_LISTING, buildPromptListing(b), 16000);
         if (r.error) return json({ ok: false, error: r.error }, cors);
         let data = null; try { data = JSON.parse(extraerJSON(r.texto)); } catch (_) {}
-        if (!data) return json({ ok: false, error: 'respuesta_no_json', crudo: (r.texto || '').slice(0, 2000) }, cors);
+        if (!data) return json({ ok: false, error: 'respuesta_no_json', crudo: (r.texto || '').slice(-1500) }, cors);
         return json({ ok: true, data, uso: r.uso || null }, cors);
       }
 
