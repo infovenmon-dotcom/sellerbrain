@@ -205,7 +205,7 @@ function traerProductos(){
     })
     .catch(function(err){ b.textContent='📥 Traer mis productos'; b.disabled=false; e.textContent='No pude traer los productos ('+err.message+'). Pega el contenido a mano.'; e.style.display='block'; });
 }
-var IMG_COUNT=0;
+var IMG_COUNT=0, IMG_EVALUADO=false;
 function elegirProducto(){
   var i=document.getElementById('sel-prod').value; if(i==='')return;
   var p=PRODS[+i]; if(!p)return;
@@ -235,6 +235,7 @@ function elegirProducto(){
 // Muestra TODAS las imágenes de la ficha y evalúa su cobertura (Rufus/COSMO también leen imágenes).
 function pintarImagenesFicha(imgs){
   var box=document.getElementById('f-imgs'); if(!box) return;
+  IMG_EVALUADO=true;   // se ha traído la ficha → las imágenes se pueden evaluar en el score
   IMG_COUNT=(imgs&&imgs.length)||0;
   if(!IMG_COUNT){ box.style.display='none'; box.innerHTML=''; return; }
   var n=IMG_COUNT, col=n>=7?'var(--gn)':n>=5?'#f5b23e':'#ff6b6b';
@@ -288,9 +289,16 @@ function analizar(force){
   pen.push({ok:!vago, t:'Vaguedad', okTxt:'Los usos van acompañados de concreción.', noTxt:'Usas "ideal/perfecto para" sin concretar. Cambia "ideal para cocinar" por "para meal-prep de 4 raciones".'});
   var rating=parseFloat((document.getElementById('f-rating').value||'').replace(',','.'));
   if(!isNaN(rating)) pen.push({ok:rating>=4.0, t:'Rating ≥ 4,0', okTxt:'Rating '+rating.toFixed(1)+' ⭐ — dentro del umbral de recomendación.', noTxt:'Rating '+rating.toFixed(1)+' ⭐: por debajo de 4,0 Rufus prácticamente te excluye. Prioriza reseñas y calidad.'});
-  document.getElementById('pens').innerHTML=pen.map(function(p){
-    return '<div class="q"><span class="ico">'+(p.ok?'✅':'⛔')+'</span><span><b>'+p.t+'</b> '+(p.ok?'<span class="pill gn">ok</span>':'<span class="pill rd">a corregir</span>')+'<small style="color:var(--mu);display:block;font-size:11px;margin-top:1px">'+(p.ok?p.okTxt:p.noTxt)+'</small></span></div>';
-  }).join('');
+  // Imágenes: Rufus y COSMO también leen las imágenes. Cuenta si se ha traído la ficha.
+  if(IMG_EVALUADO) pen.push({ok:IMG_COUNT>=6, t:'Imágenes ('+IMG_COUNT+')',
+    okTxt:IMG_COUNT+' imágenes — buena cobertura visual. Rufus responde también leyendo las imágenes.',
+    noTxt:(IMG_COUNT||'0')+' imágen(es): sube a 7+ (principal, usos/beneficios, medidas, infografía, estilo de vida). Las imágenes influyen en cómo Rufus y COSMO entienden tu producto.'});
+  var penOk=pen.filter(function(p){return p.ok;}).length;
+  document.getElementById('pens').innerHTML=
+    '<div style="font-size:12.5px;margin-bottom:8px"><b style="color:'+(penOk===pen.length?'var(--gn)':penOk>=pen.length-1?'var(--am)':'var(--rd)')+'">'+penOk+'/'+pen.length+'</b> señales de Rufus correctas'+(IMG_EVALUADO?' (incluye imágenes)':'')+'</div>'+
+    pen.map(function(p){
+      return '<div class="q"><span class="ico">'+(p.ok?'✅':'⛔')+'</span><span><b>'+p.t+'</b> '+(p.ok?'<span class="pill gn">ok</span>':'<span class="pill rd">a corregir</span>')+'<small style="color:var(--mu);display:block;font-size:11px;margin-top:1px">'+(p.ok?p.okTxt:p.noTxt)+'</small></span></div>';
+    }).join('');
 
   // 3) Los 7 tipos de pregunta de Rufus (mapeados a la cobertura COSMO)
   var tipos=[
