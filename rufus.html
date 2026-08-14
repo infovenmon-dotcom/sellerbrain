@@ -205,32 +205,47 @@ function traerProductos(){
     })
     .catch(function(err){ b.textContent='📥 Traer mis productos'; b.disabled=false; e.textContent='No pude traer los productos ('+err.message+'). Pega el contenido a mano.'; e.style.display='block'; });
 }
-var IMG_COUNT=0, IMG_EVALUADO=false;
+var IMG_COUNT=0, IMG_EVALUADO=false, _fichaSeq=0;
 function elegirProducto(){
   var i=document.getElementById('sel-prod').value; if(i==='')return;
   var p=PRODS[+i]; if(!p)return;
+  var seq=++_fichaSeq;   // guardia anti-carrera: si eliges otro producto, la respuesta vieja se descarta
+  // 1) Muestra YA el resultado con el título (aunque la ficha completa tarde o falle → nunca se queda en blanco).
   document.getElementById('f-tit').value=p.nom||'';
+  document.getElementById('f-desc').value='';                 // limpia la descripción del producto anterior
+  IMG_EVALUADO=false; IMG_COUNT=0;
+  var ib=document.getElementById('f-imgs'); if(ib){ ib.style.display='none'; ib.innerHTML=''; }
+  analizar();
   var sku=(p.sku||'').trim(), cred=apiCred(), msg=document.getElementById('err-prod');
-  if(sku && cred){
-    if(msg){ msg.style.display='block'; msg.style.color='var(--mu)'; msg.textContent='⏳ Trayendo tu ficha completa de Amazon (título, viñetas, descripción, TODAS las imágenes)…'; }
-    fetch(apiBase()+'/v1/listing-actual?sku='+encodeURIComponent(sku),{headers:{'Authorization':'Bearer '+cred}})
-      .then(function(r){return r.json();})
-      .then(function(d){
-        d=d||{};
-        if(d.title) document.getElementById('f-tit').value=d.title;
-        var partes=[];
-        if(d.bullets&&d.bullets.length) partes.push(d.bullets.join('\n'));
-        if(d.description) partes.push(d.description);
-        if(partes.length) document.getElementById('f-desc').value=partes.join('\n\n');
-        pintarImagenesFicha(d.imagenes||[]);
-        if(msg){
-          if((d.bullets&&d.bullets.length)||d.description){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha completa cargada ('+((d.imagenes||[]).length)+' imágenes). Auditando…'; }
-          else { msg.style.color='var(--am)'; msg.textContent='Traído el título e imágenes; no encontré viñetas/descripción publicadas para este SKU — pégalas a mano para una auditoría más precisa.'; }
-        }
-        analizar();
-      })
-      .catch(function(){ if(msg){ msg.style.color='var(--am)'; msg.textContent='No pude traer la ficha completa; pega el contenido a mano.'; } analizar(); });
-  } else { pintarImagenesFicha([]); analizar(); }
+  if(!(sku && cred)){ return; }
+  if(msg){ msg.style.display='block'; msg.style.color='var(--mu)'; msg.textContent='⏳ Trayendo tu ficha completa de Amazon (viñetas, descripción, TODAS las imágenes)…'; }
+  // 2) Trae la ficha completa con timeout de seguridad (que nunca se cuelgue).
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var to=setTimeout(function(){ if(ctrl){ try{ctrl.abort();}catch(_){} } },25000);
+  fetch(apiBase()+'/v1/listing-actual?sku='+encodeURIComponent(sku),{headers:{'Authorization':'Bearer '+cred}, signal:ctrl?ctrl.signal:undefined})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      clearTimeout(to);
+      if(seq!==_fichaSeq) return;                              // llegó tarde: hay una selección más nueva
+      d=d||{};
+      if(d.title) document.getElementById('f-tit').value=d.title;
+      var partes=[];
+      if(d.bullets&&d.bullets.length) partes.push(d.bullets.join('\n'));
+      if(d.description) partes.push(d.description);
+      document.getElementById('f-desc').value=partes.join('\n\n');   // vacío si no hay → correcto
+      pintarImagenesFicha(d.imagenes||[]);
+      if(msg){
+        if(partes.length){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha completa cargada ('+((d.imagenes||[]).length)+' imágenes).'; }
+        else { msg.style.color='var(--am)'; msg.textContent='Traído el título e imágenes; no encontré viñetas/descripción publicadas para este SKU — pégalas a mano para afinar.'; }
+      }
+      analizar();
+    })
+    .catch(function(){
+      clearTimeout(to);
+      if(seq!==_fichaSeq) return;
+      if(msg){ msg.style.color='var(--am)'; msg.textContent='No pude traer la ficha completa (Amazon iba lento). El título ya está auditado; pega viñetas/descripción a mano o reintenta.'; }
+      // El resultado con el título ya está en pantalla desde el paso 1 → nunca se queda en blanco.
+    });
 }
 // Muestra TODAS las imágenes de la ficha y evalúa su cobertura (Rufus/COSMO también leen imágenes).
 function pintarImagenesFicha(imgs){
