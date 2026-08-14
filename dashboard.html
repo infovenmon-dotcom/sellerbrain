@@ -616,6 +616,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <span><i style="background:var(--gn)"></i> Beneficio neto</span>
       <span><i style="background:#9B59B6"></i> Gasto PPC</span>
     </div>
+    <div id="tacos-trend" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)"></div>
   </div>
 
   <!-- P&L -->
@@ -1968,13 +1969,51 @@ function fechaCorta(s){ // 'YYYY-MM-DD' -> 'D MMM'
   var M=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   var p=String(s).slice(0,10).split('-'); if(p.length<3)return s;
   return (+p[2])+' '+(M[(+p[1])-1]||'')+(''); }
+// TACoS a lo largo del tiempo = gasto en anuncios ÷ ventas TOTALES, por día.
+// Verde si mejora (baja) respecto a la primera mitad del periodo — con ACoS/TACoS,
+// menos es mejor. Usa la MISMA serie diaria que el gráfico (ventas y PPC reales).
+function renderTacosTrend(S){
+  var el=document.getElementById('tacos-trend'); if(!el) return;
+  if(!S || S.length<2){ el.innerHTML=''; return; }
+  var totV=0, totP=0, serie=[];
+  S.forEach(function(d){ var v=+d.v||0, p=+d.p||0; totV+=v; totP+=p; serie.push(v>0?(p/v*100):null); });
+  if(totV<=0){ el.innerHTML='<div style="font-size:11px;color:var(--mu)">TACoS: aún sin ventas en el periodo.</div>'; return; }
+  var tacos=totP/totV*100;
+  // Mitades del periodo para ver la dirección (2ª mitad vs 1ª mitad).
+  var h=Math.floor(S.length/2), v1=0,p1=0,v2=0,p2=0;
+  S.forEach(function(d,i){ var v=+d.v||0,p=+d.p||0; if(i<h){v1+=v;p1+=p;}else{v2+=v;p2+=p;} });
+  var t1=v1>0?p1/v1*100:null, t2=v2>0?p2/v2*100:null;
+  var delta=(t1!=null&&t2!=null)?(t2-t1):null;   // <0 = mejora (baja)
+  var mejora=(delta!=null&&delta<0);
+  var col=(delta==null)?'var(--mu)':(mejora?'var(--gn)':'var(--rd)');
+  var flecha=(delta==null)?'':(mejora?'▼':'▲');
+  var dTxt=(delta==null)?'':(' '+flecha+' '+f(Math.abs(delta),1)+' pts vs. inicio del periodo'+(mejora?' (mejora)':' (empeora)'));
+  // Mini-sparkline de TACoS diario.
+  var W=640,H=44,pad=4, n=serie.length;
+  var vals=serie.map(function(x){return x==null?0:x;});
+  var maxT=Math.max.apply(null,vals.concat([1]))||1;
+  function X(i){return pad+i*(W-2*pad)/Math.max(1,n-1);}
+  function Y(v){return H-pad-(v/maxT)*(H-2*pad);}
+  var line=serie.map(function(x,i){return (x==null)?null:(X(i).toFixed(1)+','+Y(x).toFixed(1));}).filter(Boolean).join(' ');
+  var spark='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:44px;display:block">'+
+    '<polyline points="'+line+'" fill="none" stroke="'+col+'" stroke-width="2"/></svg>';
+  el.innerHTML=
+    '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px">'+
+      '<span style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">TACoS · tendencia</span>'+
+      '<span style="font-size:20px;font-weight:800;color:'+col+'">'+f(tacos,1)+'%</span>'+
+      '<span style="font-size:11px;color:'+col+'">'+dTxt+'</span>'+
+      '<span style="flex:1"></span>'+
+      '<span style="font-size:10.5px;color:var(--mu)" title="TACoS = gasto en anuncios ÷ ventas totales. Menos es mejor.">gasto anuncios ÷ ventas totales</span>'+
+    '</div>'+spark;
+}
 function renderChart(){
   var W=640,H=170,pad=6;
   var el=document.getElementById('chart');
   // CHART_SERIE===null → aún no se pidió periodo (usa 30 días por defecto).
   // CHART_SERIE=[] → se pidió un periodo pero el backend no dio datos (no engañar).
   var S = (CHART_SERIE===null) ? SERIE30 : CHART_SERIE;
-  if(!S || !S.length){ el.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin datos para este periodo. (Revisa que el Worker esté en v18 y que hayas ejecutado sql/serie-periodo.sql.)</div>'; return; }
+  if(!S || !S.length){ el.innerHTML='<div style="color:var(--mu);font-size:12px;padding:20px 4px">Sin datos para este periodo. (Revisa que el Worker esté en v18 y que hayas ejecutado sql/serie-periodo.sql.)</div>'; try{ renderTacosTrend(S); }catch(e){} return; }
+  try{ renderTacosTrend(S); }catch(e){}
   var n=S.length;
   var maxV=Math.max.apply(null,S.map(function(d){return Math.max(+d.v||0,+d.b||0);}))||1;
   function X(i){return pad+i*(W-2*pad)/Math.max(1,n-1);}
