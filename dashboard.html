@@ -152,6 +152,10 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
   .side.open{transform:none}
   .burger{display:block;background:none;border:1px solid var(--bd2);color:var(--tx);border-radius:8px;padding:6px 10px;font-size:15px;cursor:pointer}
 }
+/* Campos de fecha: calendario nativo VISIBLE en tema oscuro y clicable en toda su área */
+input[type="date"]{ color-scheme:dark; cursor:pointer; min-width:130px; }
+input[type="date"]::-webkit-calendar-picker-indicator{ cursor:pointer; opacity:.85; filter:invert(.6) sepia(1) saturate(4) hue-rotate(-15deg); }
+input[type="date"]:hover::-webkit-calendar-picker-indicator{ opacity:1; }
 </style>
 </head>
 <body>
@@ -4821,6 +4825,14 @@ function renderPPCTerminos(){
       '<div style="text-align:right;font-size:12px"><span style="color:#B983D6">'+f(x.g,2)+'€</span> · ACoS <b style="color:'+(a<=25?'var(--gn)':a<=40?'var(--am)':'var(--rd)')+'">'+f(a,1)+'%</b></div></div>';
   }).join('')||'<div style="font-size:12px;color:var(--mu)">Pendiente de datos por país.</div>';
 }
+// Al pulsar en cualquier parte de un campo de fecha, abre el calendario nativo
+// (día/mes/año). Antes solo se abría pulsando el iconito, que en oscuro se veía mal.
+document.addEventListener('click', function(e){
+  var t=e.target;
+  if(t && t.tagName==='INPUT' && t.type==='date' && typeof t.showPicker==='function'){
+    try{ t.showPicker(); }catch(_){}
+  }
+}, true);
 </script>
 </body>
 </html>
