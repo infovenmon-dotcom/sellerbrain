@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v119-stock-ventadia-nombres'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v120-beneficio-real-articulo'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -3948,12 +3948,16 @@ async function productosPeriodo(env, desde, hasta, pais) {
     if (acos_real != null && breakeven != null) {
       ppc_estado = acos_real <= acos_obj ? 'gn' : acos_real <= breakeven ? 'am' : 'rd';
     }
+    // BENEFICIO REAL por artículo = beneficio (antes de ads) − gasto de publicidad de ESE SKU.
+    // Es lo que pidió David: el beneficio por producto al 100% (ya descontada su publicidad).
+    const ben_ppc = +(ben - ppcGasto).toFixed(2);
+    const mg_ppc = p.ventas > 0 ? +(ben_ppc / p.ventas * 100).toFixed(1) : 0;
     const c = cat[p.sku] || {};
     return {
       nom: (c.nombre || p.sku), sku: p.sku, emoji: '📦', imagen: c.imagen || null,
       uds: p.uds, ventas: +p.ventas.toFixed(2),
       coste: costeTot, comision: com, fba, devol: dev, amazon,
-      real, ppc: ppcGasto, ppc_ventas: pp ? +(pp.ventas || 0).toFixed(2) : 0, acos_real, cvr, ppc_clics: ppcClics, ppc_estado, ben, mg, breakeven, acos_obj,
+      real, ppc: ppcGasto, ppc_ventas: pp ? +(pp.ventas || 0).toFixed(2) : 0, acos_real, cvr, ppc_clics: ppcClics, ppc_estado, ben, mg, ben_ppc, mg_ppc, breakeven, acos_obj,
       devol_uds: devSku[p.sku] || 0, pct_devol: p.uds > 0 ? +((devSku[p.sku] || 0) / p.uds * 100).toFixed(1) : null,
       trend: dias10.map(d => p.dias[d] || 0),
       estado: nocoste ? 'am' : (mg < 0 ? 'rd' : mg < 15 ? 'am' : 'gn'),

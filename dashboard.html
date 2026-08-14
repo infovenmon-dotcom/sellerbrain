@@ -716,8 +716,8 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
       <span style="color:var(--mu);font-size:11px">Ordenar por:</span>
       <select id="prod-orden" onchange="renderProds()" style="padding:5px 8px;background:#111;border:1px solid var(--bd2);border-radius:7px;color:var(--tx);font-size:11px">
         <option value="ventas">Ventas</option>
-        <option value="mg">Margen %</option>
-        <option value="ben">Beneficio €</option>
+        <option value="mg">Margen % (real)</option>
+        <option value="ben">Beneficio real €</option>
         <option value="coste">Coste</option>
         <option value="uds">Unidades</option>
         <option value="acos_real">ACoS real</option>
@@ -748,7 +748,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
     <div style="overflow-x:auto">
     <table class="tbl">
       <thead><tr>
-        <th>Producto</th><th>Uds</th><th>Ventas</th><th>Coste</th><th>Amazon</th><th>Benef.</th><th>Margen</th><th title="% de devolución del periodo (devoluciones ÷ unidades vendidas)">% Dev</th><th title="ACoS real de la publicidad (30d) frente al ACoS de equilibrio (break-even): el máximo que puedes gastar sin perder dinero. Verde = rentable, rojo = en pérdida.">ACoS real / máx.</th><th>Estado</th>
+        <th>Producto</th><th>Uds</th><th>Ventas</th><th>Coste</th><th>Amazon</th><th title="Gasto de publicidad (PPC) de este producto — ventana de ~30 días (informe Advertised Product).">PPC</th><th title="Beneficio REAL por artículo: el beneficio del periodo menos la publicidad de este producto. Es el beneficio al 100% ya con los anuncios descontados.">Benef. real</th><th title="Margen sobre ventas ya con la publicidad descontada.">Margen</th><th title="% de devolución del periodo (devoluciones ÷ unidades vendidas)">% Dev</th><th title="ACoS real de la publicidad (30d) frente al ACoS de equilibrio (break-even): el máximo que puedes gastar sin perder dinero. Verde = rentable, rojo = en pérdida.">ACoS real / máx.</th><th>Estado</th>
       </tr></thead>
       <tbody id="prods"></tbody>
     </table>
@@ -2153,17 +2153,24 @@ function renderProds(){
   var campo=(document.getElementById('prod-orden')||{}).value||'ventas';
   var filtro=(document.getElementById('prod-filtro')||{}).value||'';
   var lista=(PRODUCTOS||[]).slice();
-  // Filtro por estado de margen / coste
+  // Beneficio y margen REALES por artículo (ya con la publicidad del producto descontada).
+  lista.forEach(function(p){
+    var ppcP=+p.ppc||0;
+    p._benReal=(p.ben_ppc!=null)?+p.ben_ppc:(+p.ben-ppcP);
+    p._mgReal=(p.mg_ppc!=null)?+p.mg_ppc:(p.ventas>0?p._benReal/p.ventas*100:0);
+  });
+  // Filtro por estado de margen / coste (margen REAL, con PPC descontado)
   lista=lista.filter(function(p){
-    var mg=+p.mg||0;
+    var mg=+p._mgReal||0;
     if(filtro==='pierde')   return mg<0;
     if(filtro==='bajo')     return mg>=0 && mg<15;
     if(filtro==='sincoste') return !(p.coste>0);
     return true;
   });
-  // Orden por el campo elegido (asc/desc)
+  // Orden por el campo elegido (asc/desc). 'ben'/'mg' ordenan por el valor REAL.
+  var campoReal = campo==='ben' ? '_benReal' : campo==='mg' ? '_mgReal' : campo;
   lista.sort(function(a,b){
-    var va=+a[campo]||0, vb=+b[campo]||0;
+    var va=+a[campoReal]||0, vb=+b[campoReal]||0;
     return PROD_DIR==='asc' ? va-vb : vb-va;
   });
   var cnt=document.getElementById('prod-count');
@@ -2176,14 +2183,18 @@ function renderProds(){
     // desglose de "Amazon" (comisión + FBA + devoluciones) en el tooltip
     var det='Comisión '+f(p.comision||0,2)+'€ · FBA '+f(p.fba||0,2)+'€'+((p.devol)?' · Devol '+f(p.devol,2)+'€':'')+(p.real?'':' (estimado, aún sin liquidar)');
     var pmed=p.uds>0?(p.ventas/p.uds):0;
+    var ppcP=+p.ppc||0;                                   // gasto publicidad del producto (~30d)
+    var benReal=+p._benReal||0, mgReal=+p._mgReal||0;     // beneficio/margen reales (PPC descontado)
+    var benTip='Beneficio del periodo '+f(p.ben,2)+'€ − PPC del producto '+f(ppcP,2)+'€ = '+f(benReal,2)+'€ (real, con anuncios descontados). PPC en ventana de ~30 días.';
     h+='<tr data-sku="'+String(p.sku).replace(/"/g,'&quot;')+'" title="Precio medio '+f(pmed,2)+'€/ud · '+det+'">'+
       '<td><div class="prod"><div class="img">'+img+'</div><div><div class="nm">'+p.nom+'</div><div class="sku">'+p.sku+(coste?'':' · sin coste')+' <a href="https://sellercentral.amazon.es/skucentral?mSku='+encodeURIComponent(p.sku)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Abrir este producto en Seller Central" style="color:#4A9EDE;text-decoration:none">↗ Amazon</a></div></div></div></td>'+
       '<td>'+p.uds+'</td>'+
       '<td>'+f(p.ventas,2)+'€</td>'+
       '<td style="color:'+(coste>0?'#2EE6A0':'var(--mu)')+'">'+(coste>0?'-'+f(coste,2)+'€':'—')+'</td>'+
       '<td style="color:#F5A623" title="'+det+'">-'+f(amazon,2)+'€'+(p.real?'':' *')+'</td>'+
-      '<td style="font-weight:700;color:'+(p.ben>=0?'var(--gn)':'var(--rd)')+'">'+(p.ben>=0?'+':'')+f(p.ben,2)+'€</td>'+
-      '<td style="color:'+(p.mg>=15?'var(--gn)':p.mg>=0?'var(--am)':'var(--rd)')+'">'+f(p.mg,1)+'%</td>'+
+      '<td style="color:#B983D6" title="Gasto de publicidad de este producto (~30 días).">'+(ppcP>0?'-'+f(ppcP,2)+'€':'—')+'</td>'+
+      '<td style="font-weight:700;color:'+(benReal>=0?'var(--gn)':'var(--rd)')+'" title="'+benTip+'">'+(benReal>=0?'+':'')+f(benReal,2)+'€</td>'+
+      '<td style="color:'+(mgReal>=15?'var(--gn)':mgReal>=0?'var(--am)':'var(--rd)')+'" title="Margen real (con PPC descontado)">'+f(mgReal,1)+'%</td>'+
       '<td style="color:'+(p.pct_devol>=10?'var(--rd)':p.pct_devol>=5?'var(--am)':'var(--mu)')+'" title="'+(p.devol_uds||0)+' devol · '+(p.uds||0)+' uds vendidas">'+(p.pct_devol!=null?f(p.pct_devol,1)+'%':'—')+'</td>'+
       '<td title="ACoS real de la publicidad de este producto (30d) vs break-even.'+(p.acos_obj!=null?' Objetivo (deja ~10% margen): '+f(p.acos_obj,1)+'%':'')+(p.ppc>0?' · Gasto PPC 30d: '+f(p.ppc,2)+'€':'')+'" style="font-weight:600">'+
         ((p.acos_real!=null)?'<span style="color:'+(p.ppc_estado==='gn'?'var(--gn)':p.ppc_estado==='am'?'var(--am)':'var(--rd)')+'">'+f(p.acos_real,1)+'%</span> <span style="color:var(--mu);font-weight:400">/ </span>':'')+
@@ -2191,7 +2202,7 @@ function renderProds(){
       '<td><span class="pill '+p.estado+'">'+p.txt+'</span></td>'+
     '</tr>';
   });
-  document.getElementById('prods').innerHTML = h || '<tr><td colspan="10" style="color:var(--mu);padding:12px">Ningún producto cumple ese filtro.</td></tr>';
+  document.getElementById('prods').innerHTML = h || '<tr><td colspan="11" style="color:var(--mu);padding:12px">Ningún producto cumple ese filtro.</td></tr>';
   renderTit75();
 }
 
@@ -2353,12 +2364,12 @@ function refetchProductos(){
   var lbl=document.getElementById('prod-periodo');
   if(lbl)lbl.textContent='· '+lab+' ('+r.desde+(r.desde!==r.hasta?' → '+r.hasta:'')+')';
   var prods=document.getElementById('prods');
-  prods.innerHTML='<tr><td colspan="10" style="color:var(--mu);padding:12px">Cargando '+lab+'…</td></tr>';
+  prods.innerHTML='<tr><td colspan="11" style="color:var(--mu);padding:12px">Cargando '+lab+'…</td></tr>';
   fetch(SB_CONFIG.apiBase+'/v1/productos?desde='+r.desde+'&hasta='+r.hasta+(PROD_PAIS?'&pais='+PROD_PAIS:''),{headers:authHdr()})
     .then(function(x){return x.json();})
     .then(function(d){PRODUCTOS=d.productos||[];renderProds();
-      if(!PRODUCTOS.length)prods.innerHTML='<tr><td colspan="10" style="color:var(--mu);padding:12px">Sin ventas en «'+lab+'».</td></tr>';})
-    .catch(function(e){prods.innerHTML='<tr><td colspan="10" style="color:var(--rd);padding:12px">Error: '+e.message+'</td></tr>';});
+      if(!PRODUCTOS.length)prods.innerHTML='<tr><td colspan="11" style="color:var(--mu);padding:12px">Sin ventas en «'+lab+'».</td></tr>';})
+    .catch(function(e){prods.innerHTML='<tr><td colspan="11" style="color:var(--rd);padding:12px">Error: '+e.message+'</td></tr>';});
 }
 /* Mapa REAL de Europa (fronteras): carga assets/europa.json y colorea cada
    país por sus ventas, con tooltip al pasar el ratón. */
