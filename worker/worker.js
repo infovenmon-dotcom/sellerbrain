@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v125-ficha-imagenes-prompt'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v126-ficha-cache-servidor'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -999,22 +999,45 @@ export default {
       //     Amazon, para que el Generador parta de tu ficha real y solo la mejore.
       //     ?sku=XXX (busca el ASIN en el catálogo si no se pasa). ---
       if (url.pathname === '/v1/listing-actual') {
-        const sellerId = env.SPAPI_SELLER_ID || '';
-        if (!sellerId) return json({ error: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors);
         const sku0 = (url.searchParams.get('sku') || '').trim();
         if (!sku0) return json({ error: 'falta_sku' }, cors, 400);
-        let asin = (url.searchParams.get('asin') || '').trim();
+        const force = url.searchParams.get('force') === '1';
+        const tieneContenido = f => !!(f && ((f.bullets && f.bullets.length) || f.description || (f.imagenes && f.imagenes.length)));
+
+        // 0) CACHÉ DE SERVIDOR: si ya la tenemos y no se fuerza, la devolvemos SIN tocar Amazon.
+        let cachedFicha = null;
+        try {
+          const rows = await selSafe(env, 'fichas_actuales?sku=eq.' + encodeURIComponent(sku0) + '&limit=1', []);
+          const c = rows && rows[0];
+          if (c) cachedFicha = {
+            sku: sku0, asin: c.asin || '', title: c.title || '',
+            bullets: Array.isArray(c.bullets) ? c.bullets : [], description: c.description || '',
+            imagen: c.imagen || '', imagenes: Array.isArray(c.imagenes) ? c.imagenes : [], cacheado: true
+          };
+        } catch (_) {}
+        if (!force && tieneContenido(cachedFicha)) return json(cachedFicha, cors);
+
+        const sellerId = env.SPAPI_SELLER_ID || '';
+        if (!sellerId) return json(cachedFicha || { error: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors);
+
+        let asin = (url.searchParams.get('asin') || '').trim() || (cachedFicha && cachedFicha.asin) || '';
         if (!asin) { try { const c = await selSafe(env, 'productos_catalogo?sku=eq.' + encodeURIComponent(sku0) + '&select=asin&limit=1', []); asin = (c[0] && c[0].asin) || ''; } catch (_) {} }
-        const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
+
+        // Menos llamadas: solo ES/FR/IT y se PARA en cuanto encuentra el producto (los bullets,
+        // si vendes sobre un ASIN existente, vienen del catálogo, no de tu Listings).
+        const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT];
         let title = '', bullets = [], description = '', imagen = '', imagenes = [];
+        const diag = { listings: [], catalog: '' };
         const firstVal = (a) => (Array.isArray(a) && a[0] && a[0].value != null) ? String(a[0].value) : '';
-        const token = await lwaToken(env, 'spapi', ctx);
+        let token = ''; try { token = await lwaToken(env, 'spapi', ctx); } catch (e) { diag.token = 'err'; }
         for (const mkt of mkts) {
           try {
             const path = '/listings/2021-08-01/items/' + encodeURIComponent(sellerId) + '/' + encodeURIComponent(sku0) +
               '?marketplaceIds=' + encodeURIComponent(mkt) + '&includedData=summaries,attributes';
             const r = await fetch(SPAPI_HOST + path, { headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' } });
-            if (!r.ok) continue;
+            diag.listings.push(mkt.slice(-4) + ':' + r.status);
+            if (r.status === 404) continue;          // no está en este mercado → prueba el siguiente
+            if (!r.ok) break;                         // 429/403 → no sigas martilleando a Amazon
             const j = await r.json();
             const sum = (j.summaries && j.summaries[0]) || {};
             if (!asin && sum.asin) asin = sum.asin;
@@ -1022,35 +1045,41 @@ export default {
             if (!title) title = sum.itemName || firstVal(at.item_name);
             if (!bullets.length && Array.isArray(at.bullet_point)) bullets = at.bullet_point.map(x => x && x.value).filter(Boolean).slice(0, 5);
             if (!description) description = firstVal(at.product_description);
-            if (title && bullets.length) break;
-          } catch (_) {}
+            break;                                    // producto encontrado → no consultes más mercados
+          } catch (_) { diag.listings.push('err'); }
         }
-        // Imágenes (TODAS) y título de respaldo del catálogo por ASIN.
+        // Catálogo (1 llamada): imágenes + bullets/descripción de respaldo del ASIN.
         if (asin) {
           try {
             const item = await getCatalogoItem(env, asin, MARKETPLACES.ES);
+            diag.catalog = item ? 'ok' : 'vacio';
             const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
             const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
             if (main && main.link) imagen = main.link;
-            // Bullets/descripción/título del CATÁLOGO (cuando vendes sobre un ASIN existente,
-            // tu Listings no tiene atributos propios: el contenido vive en el catálogo).
             const cat = (item && item.attributes) || {};
             if (!title) title = firstVal(cat.item_name);
             if (!bullets.length && Array.isArray(cat.bullet_point)) bullets = cat.bullet_point.map(x => x && x.value).filter(Boolean).slice(0, 5);
             if (!description) description = firstVal(cat.product_description);
-            // Todas las imágenes: MAIN primero, luego el resto; sin duplicados; solo las grandes.
             const vistas = new Set();
             const ordenadas = imgs.slice().sort((a, b) => (a.variant === 'MAIN' ? -1 : b.variant === 'MAIN' ? 1 : 0));
             for (const im of ordenadas) {
               if (!im || !im.link || vistas.has(im.link)) continue;
-              if ((im.width || 0) < 100 && (im.height || 0) < 100) continue;   // descarta miniaturas
+              if ((im.width || 0) < 100 && (im.height || 0) < 100) continue;
               vistas.add(im.link);
               imagenes.push({ variant: im.variant || '', link: im.link, width: im.width || 0, height: im.height || 0 });
             }
             if (!title && item && item.summaries && item.summaries[0]) title = item.summaries[0].itemName || '';
-          } catch (_) {}
+          } catch (e) { diag.catalog = 'err:' + ((e && e.message) || '').slice(0, 60); }
+        } else { diag.catalog = 'sin_asin'; }
+
+        const ficha = { sku: sku0, asin, title, bullets, description, imagen, imagenes };
+        // Amazon no dio nada pero teníamos caché → servimos la caché (no dejamos al usuario en blanco).
+        if (!tieneContenido(ficha) && tieneContenido(cachedFicha)) return json({ ...cachedFicha, _diag: diag }, cors);
+        // Guarda en caché de servidor si hay contenido (para no volver a pedir a Amazon).
+        if (tieneContenido(ficha)) {
+          try { await upsertSupabase(env, 'fichas_actuales', [{ seller: 'venmon', sku: sku0, asin, title: (title || '').slice(0, 500), bullets, description: (description || '').slice(0, 4000), imagen, imagenes, actualizado: new Date().toISOString() }]); } catch (_) {}
         }
-        return json({ sku: sku0, asin, title, bullets, description, imagen, imagenes }, cors);
+        return json({ ...ficha, _diag: diag }, cors);
       }
 
       // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
