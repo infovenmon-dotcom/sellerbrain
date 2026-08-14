@@ -183,41 +183,49 @@ function traerProductosGen(){
     })
     .catch(function(err){ b.textContent='📦 Traer mi producto (catálogo real)'; b.disabled=false; msg.style.color='var(--am)'; msg.textContent='No pude traer el catálogo ('+err.message+'). Puedes rellenar a mano.'; });
 }
+// Caché de ficha por SKU (compartida con la Auditoría): evita volver a molestar a Amazon
+// —que limita tras varias consultas— y hace que ambas pantallas usen el MISMO dato.
+function _fichaOK(d){ return !!(d && (d.title || (d.bullets&&d.bullets.length) || d.description || d.imagen || (d.imagenes&&d.imagenes.length))); }
+function _fichaCache(sku){ try{ var o=JSON.parse(localStorage.getItem('sb_ficha_'+sku)||'null'); if(o&&o.d&&(Date.now()-(o.t||0)<86400000)&&_fichaOK(o.d)) return o.d; }catch(e){} return null; }
+function _fichaGuardar(sku,d){ try{ if(_fichaOK(d)) localStorage.setItem('sb_ficha_'+sku, JSON.stringify({t:Date.now(),d:d})); }catch(e){} }
 function elegirProductoGen(){
   var i=document.getElementById('g-sel-prod').value; if(i==='') return;
   var p=GEN_PRODS[+i]; if(!p) return;
   var nom=(p.nom||'').trim();
   var g=document.getElementById('g-producto'); if(g && nom) g.value=nom;   // nombre real del catálogo
   if(nom){ var w=nom.split(/\s+/)[0]; var mk=document.getElementById('g-marca'); if(mk && !mk.value && w) mk.value=w; }
-  var msg=document.getElementById('g-prod-msg'); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Cargado desde tu catálogo: «'+nom.slice(0,60)+'». Trayendo tu ficha actual…'; }
-  // Trae la FICHA ACTUAL (título + bullets + descripción + imagen) de Amazon para que la IA la mejore.
-  LISTING_ACTUAL=null;
+  var msg=document.getElementById('g-prod-msg'), box=document.getElementById('g-ficha-actual');
   var sku=(p.sku||'').trim(), cred=apiCred();
-  var box=document.getElementById('g-ficha-actual');
-  if(sku && cred){
-    if(box){ box.style.display='block'; box.innerHTML='<span style="color:var(--mu);font-size:12px">⏳ Trayendo tu ficha actual de Amazon (título, bullets, descripción, imagen)…</span>'; }
-    fetch(apiBase()+'/v1/listing-actual?sku='+encodeURIComponent(sku),{headers:{'Authorization':'Bearer '+cred}})
-      .then(function(r){return r.json();})
-      .then(function(d){ LISTING_ACTUAL=(d&&(d.title||(d.bullets&&d.bullets.length)||d.description||d.imagen))?d:null; pintarFichaActual(LISTING_ACTUAL); if(msg&&LISTING_ACTUAL){ msg.textContent='✔ Ficha actual cargada. La IA la mejorará (no parte de cero).'; } else if(msg){ msg.textContent='✔ Título cargado. (No encontré bullets/descripción publicados para este SKU.)'; } })
-      .catch(function(){ if(box) box.style.display='none'; if(msg) msg.textContent='✔ Título cargado (no pude traer la ficha completa ahora).'; });
-  } else if(box){ box.style.display='none'; }
+  LISTING_ACTUAL=null;
+  if(!sku || !cred){ if(box) box.style.display='none'; if(msg){ msg.style.color='var(--mu)'; msg.textContent='✔ Título cargado.'; } return; }
+  // 1) Caché: si ya trajimos esta ficha (aquí o en la Auditoría), la reutilizamos al instante.
+  var cache=_fichaCache(sku);
+  if(cache){ LISTING_ACTUAL=cache; pintarFichaActual(cache); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha cargada ('+((cache.imagenes||[]).length)+' imágenes, de tu caché). La IA la mejorará.'; } return; }
+  if(box){ box.style.display='block'; box.innerHTML='<span style="color:var(--mu);font-size:12px">⏳ Trayendo tu ficha actual de Amazon (título, bullets, descripción, TODAS las imágenes)…</span>'; }
+  if(msg){ msg.style.color='var(--mu)'; msg.textContent='⏳ Trayendo tu ficha actual…'; }
+  fetch(apiBase()+'/v1/listing-actual?sku='+encodeURIComponent(sku),{headers:{'Authorization':'Bearer '+cred}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      d=d||{};
+      if(_fichaOK(d)){ LISTING_ACTUAL=d; _fichaGuardar(sku,d); pintarFichaActual(d); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha actual cargada ('+((d.imagenes||[]).length)+' imágenes). La IA la mejorará (no parte de cero).'; } }
+      else { LISTING_ACTUAL=null; if(box) box.style.display='none'; if(msg){ msg.style.color='var(--am)'; msg.textContent='✔ Título cargado. (Amazon no devolvió la ficha ahora — reintenta en un momento o rellena a mano.)'; } }
+    })
+    .catch(function(){ if(box) box.style.display='none'; if(msg){ msg.style.color='var(--am)'; msg.textContent='✔ Título cargado (no pude traer la ficha completa ahora).'; } });
 }
 function pintarFichaActual(d){
   var box=document.getElementById('g-ficha-actual'); if(!box) return;
   if(!d){ box.style.display='none'; box.innerHTML=''; return; }
   var bl=(d.bullets||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
+  var imgs=(d.imagenes&&d.imagenes.length)?d.imagenes:(d.imagen?[{link:d.imagen}]:[]);
+  var imgHtml=imgs.length?('<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+imgs.map(function(im){return '<img src="'+esc(im.link)+'" title="'+esc(im.variant||'')+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--bd2)" onerror="this.style.display=\'none\'">';}).join('')+'</div>'):'';
   box.style.display='block';
   box.innerHTML=
     '<div style="border:1px solid var(--bd2);border-radius:10px;padding:12px;background:#0e0e0e">'+
-      '<div style="font-size:11px;color:var(--or2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📋 Tu ficha actual en Amazon — la IA la mejorará</div>'+
-      '<div style="display:flex;gap:12px;flex-wrap:wrap">'+
-        (d.imagen?'<img src="'+esc(d.imagen)+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">':'')+
-        '<div style="flex:1;min-width:220px">'+
-          '<div style="font-size:12px;color:var(--mu)">Título</div><div style="font-size:13px;margin-bottom:6px">'+esc(d.title||'(sin título)')+'</div>'+
-          (bl?('<div style="font-size:12px;color:var(--mu)">Bullets</div><ul style="margin:2px 0 6px 16px;font-size:12.5px;color:var(--mu2)">'+bl+'</ul>'):'')+
-          (d.description?('<div style="font-size:12px;color:var(--mu)">Descripción</div><div style="font-size:12px;color:var(--mu2)">'+esc(d.description.slice(0,300))+(d.description.length>300?'…':'')+'</div>'):'')+
-        '</div>'+
-      '</div>'+
+      '<div style="font-size:11px;color:var(--or2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📋 Tu ficha actual en Amazon ('+imgs.length+' imágenes) — la IA la mejorará</div>'+
+      imgHtml+
+      '<div style="font-size:12px;color:var(--mu)">Título</div><div style="font-size:13px;margin-bottom:6px">'+esc(d.title||'(sin título)')+'</div>'+
+      (bl?('<div style="font-size:12px;color:var(--mu)">Bullets</div><ul style="margin:2px 0 6px 16px;font-size:12.5px;color:var(--mu2)">'+bl+'</ul>'):'')+
+      (d.description?('<div style="font-size:12px;color:var(--mu)">Descripción</div><div style="font-size:12px;color:var(--mu2)">'+esc(d.description.slice(0,300))+(d.description.length>300?'…':'')+'</div>'):'')+
     '</div>';
 }
 

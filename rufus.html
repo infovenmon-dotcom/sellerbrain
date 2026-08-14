@@ -206,6 +206,18 @@ function traerProductos(){
     .catch(function(err){ b.textContent='📥 Traer mis productos'; b.disabled=false; e.textContent='No pude traer los productos ('+err.message+'). Pega el contenido a mano.'; e.style.display='block'; });
 }
 var IMG_COUNT=0, IMG_EVALUADO=false, _fichaSeq=0;
+// Caché de ficha por SKU (compartida con el Generador): evita repetir consultas a Amazon.
+function _fichaOK(d){ return !!(d && (d.title || (d.bullets&&d.bullets.length) || d.description || d.imagen || (d.imagenes&&d.imagenes.length))); }
+function _fichaCache(sku){ try{ var o=JSON.parse(localStorage.getItem('sb_ficha_'+sku)||'null'); if(o&&o.d&&(Date.now()-(o.t||0)<86400000)&&_fichaOK(o.d)) return o.d; }catch(e){} return null; }
+function _fichaGuardar(sku,d){ try{ if(_fichaOK(d)) localStorage.setItem('sb_ficha_'+sku, JSON.stringify({t:Date.now(),d:d})); }catch(e){} }
+function _aplicarFicha(d){
+  if(d.title) document.getElementById('f-tit').value=d.title;
+  var partes=[];
+  if(d.bullets&&d.bullets.length) partes.push(d.bullets.join('\n'));
+  if(d.description) partes.push(d.description);
+  document.getElementById('f-desc').value=partes.join('\n\n');
+  pintarImagenesFicha(d.imagenes||[]);
+}
 function elegirProducto(){
   var i=document.getElementById('sel-prod').value; if(i==='')return;
   var p=PRODS[+i]; if(!p)return;
@@ -218,6 +230,9 @@ function elegirProducto(){
   analizar();
   var sku=(p.sku||'').trim(), cred=apiCred(), msg=document.getElementById('err-prod');
   if(!(sku && cred)){ return; }
+  // Caché: si ya trajimos esta ficha (aquí o en el Generador), la reutilizamos sin llamar a Amazon.
+  var cache=_fichaCache(sku);
+  if(cache){ _aplicarFicha(cache); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha cargada ('+((cache.imagenes||[]).length)+' imágenes, de tu caché). Auditando…'; } analizar(); return; }
   if(msg){ msg.style.display='block'; msg.style.color='var(--mu)'; msg.textContent='⏳ Trayendo tu ficha completa de Amazon (viñetas, descripción, TODAS las imágenes)…'; }
   // 2) Trae la ficha completa con timeout de seguridad (que nunca se cuelgue).
   var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
@@ -228,14 +243,11 @@ function elegirProducto(){
       clearTimeout(to);
       if(seq!==_fichaSeq) return;                              // llegó tarde: hay una selección más nueva
       d=d||{};
-      if(d.title) document.getElementById('f-tit').value=d.title;
-      var partes=[];
-      if(d.bullets&&d.bullets.length) partes.push(d.bullets.join('\n'));
-      if(d.description) partes.push(d.description);
-      document.getElementById('f-desc').value=partes.join('\n\n');   // vacío si no hay → correcto
-      pintarImagenesFicha(d.imagenes||[]);
+      _aplicarFicha(d);
+      _fichaGuardar(sku,d);                                    // guarda en caché (compartida con el Generador)
+      var hayTexto=(d.bullets&&d.bullets.length)||d.description;
       if(msg){
-        if(partes.length){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha completa cargada ('+((d.imagenes||[]).length)+' imágenes).'; }
+        if(hayTexto){ msg.style.color='var(--gn)'; msg.textContent='✔ Ficha completa cargada ('+((d.imagenes||[]).length)+' imágenes).'; }
         else { msg.style.color='var(--am)'; msg.textContent='Traído el título e imágenes; no encontré viñetas/descripción publicadas para este SKU — pégalas a mano para afinar.'; }
       }
       analizar();

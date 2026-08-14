@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v124-ficha-catalogo-bullets'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v125-ficha-imagenes-prompt'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -2567,7 +2567,8 @@ function buildPromptListing(b) {
     ('\nFICHA ACTUAL EN AMAZON (MEJÓRALA — conserva lo que funcione, corrige lo flojo y potencia con las keywords; no empieces de cero):\n' +
       'Título actual: ' + (la.title || '(sin título)') + '\n' +
       'Bullets actuales:\n' + ((la.bullets || []).map(x => '- ' + x).join('\n') || '(ninguno)') + '\n' +
-      'Descripción actual: ' + ((la.description || '(ninguna)').slice(0, 1500))) : '';
+      'Descripción actual: ' + ((la.description || '(ninguna)').slice(0, 1500)) + '\n' +
+      'Imágenes actuales: ' + ((la.imagenes && la.imagenes.length) ? (la.imagenes.length + ' (variantes: ' + la.imagenes.map(x => (x && x.variant) || '').filter(Boolean).slice(0, 12).join(', ') + '). Ten en cuenta lo que YA está cubierto visualmente al proponer los 7 briefs de imagen.') : '(sin datos de imágenes)')) : '';
   return [
     'PRODUCTO: ' + (b.producto || ''),
     'TIPO DE PRODUCTO: ' + (b.tipo || ''),
