@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v129-listing-diag-error'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v130-listing-multibloque'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -993,7 +993,7 @@ export default {
         const r = await llamarClaude(env, SYSTEM_LISTING, buildPromptListing(b), 16000);
         if (r.error) return json({ ok: false, error: r.error }, cors);
         const raw = String(r.texto || '');
-        const diag = 'stop=' + (r.stop || '?') + ' · len=' + raw.length + ' · modelo=' + (r.modelo || '?');
+        const diag = 'stop=' + (r.stop || '?') + ' · len=' + raw.length + ' · bloques=' + (r.bloques != null ? r.bloques : '?') + ' · modelo=' + (r.modelo || '?');
         // La IA no devolvió texto → normalmente es acceso al modelo o clave.
         if (!raw.trim()) return json({ ok: false, error: 'ia_sin_texto · ' + diag, stop: r.stop || '', modelo: r.modelo || '',
           nota: 'La IA respondió sin texto. Comprueba que tu ANTHROPIC_API_KEY tenga acceso al modelo «' + (env.LISTING_MODEL || 'claude-sonnet-5') + '» (o pon LISTING_MODEL en Cloudflare con un modelo válido de tu cuenta).' }, cors);
@@ -2587,8 +2587,14 @@ async function llamarClaude(env, system, userText, maxTokens) {
   } catch (e) { return { error: 'red: ' + (e.message || '') }; }
   let j = null; try { j = await r.json(); } catch (_) {}
   if (!r || !r.ok) return { error: (j && j.error && j.error.message) || ('HTTP ' + (r ? r.status : '0')) };
-  const txt = (j && j.content && j.content[0] && j.content[0].text) || '';
-  return { texto: txt, uso: (j && j.usage) || null, stop: (j && j.stop_reason) || '', modelo: (j && j.model) || '' };
+  // Junta el texto de TODOS los bloques de tipo "text" (no solo el primero): si el
+  // modelo devuelve el contenido troceado o precedido de otro bloque, content[0].text
+  // sería vacío y saldría "largo: 0" pese a haberse gastado tokens.
+  let txt = '';
+  if (j && Array.isArray(j.content)) {
+    txt = j.content.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('');
+  }
+  return { texto: txt, uso: (j && j.usage) || null, stop: (j && j.stop_reason) || '', modelo: (j && j.model) || '', bloques: (j && Array.isArray(j.content)) ? j.content.length : 0 };
 }
 // Extrae el objeto JSON de la respuesta (quita ```json … ``` si viene con vallas).
 function extraerJSON(s) {
