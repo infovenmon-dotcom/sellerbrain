@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v123-terminos-dia-imagenes'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v124-ficha-catalogo-bullets'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -1032,6 +1032,12 @@ export default {
             const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
             const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
             if (main && main.link) imagen = main.link;
+            // Bullets/descripción/título del CATÁLOGO (cuando vendes sobre un ASIN existente,
+            // tu Listings no tiene atributos propios: el contenido vive en el catálogo).
+            const cat = (item && item.attributes) || {};
+            if (!title) title = firstVal(cat.item_name);
+            if (!bullets.length && Array.isArray(cat.bullet_point)) bullets = cat.bullet_point.map(x => x && x.value).filter(Boolean).slice(0, 5);
+            if (!description) description = firstVal(cat.product_description);
             // Todas las imágenes: MAIN primero, luego el resto; sin duplicados; solo las grandes.
             const vistas = new Set();
             const ordenadas = imgs.slice().sort((a, b) => (a.variant === 'MAIN' ? -1 : b.variant === 'MAIN' ? 1 : 0));
@@ -4567,7 +4573,7 @@ async function traerImagenesCatalogo(env) {
 
 async function getCatalogoItem(env, asin, marketplaceId) {
   return spapiCall(env, '/catalog/2022-04-01/items/' + encodeURIComponent(asin) +
-    '?marketplaceIds=' + marketplaceId + '&includedData=images,summaries');
+    '?marketplaceIds=' + marketplaceId + '&includedData=images,summaries,attributes');
 }
 
 // Rellena el histórico de UN tipo en UN rango. Lo llama el navegador mes a mes.
