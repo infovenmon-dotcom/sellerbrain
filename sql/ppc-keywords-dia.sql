@@ -60,6 +60,10 @@ returns table (
       from ppc_terminos t
      where t.fecha >= desde and t.fecha <= hasta
        and coalesce(t.keyword,'') <> ''
+       -- SOLO filas DIARIAS reales (desde = hasta = un día). Excluye los "resúmenes"
+       -- antiguos (una fila con el total de varios días estampada en un solo día),
+       -- que hacían que un rango corto mostrara cifras de un mes entero.
+       and t.desde::text = t.hasta::text
      group by t.pais, t.campania, t.keyword, upper(coalesce(t.tipo,''))
   )
   select
