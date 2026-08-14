@@ -67,6 +67,7 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
     <select class="n" id="g-sel-prod" onchange="elegirProductoGen()" style="max-width:340px;display:none"><option value="">— elige tu producto —</option></select>
     <span id="g-prod-msg" style="font-size:12px;color:var(--mu)"></span>
   </div>
+  <div id="g-ficha-actual" style="display:none;margin:0 0 12px"></div>
   <div class="grid">
     <div><label class="f">Producto *</label><input class="n" id="g-producto" placeholder="Ej: Botella térmica de acero"></div>
     <div><label class="f">Tipo de producto</label><input class="n" id="g-tipo" placeholder="Ej: Botella térmica"></div>
@@ -162,6 +163,7 @@ function gTituloReglas(t){
 
 // --- Traer el catálogo REAL del vendedor y prellenar el formulario (datos reales) ---
 var GEN_PRODS=[];
+var LISTING_ACTUAL=null;   // ficha actual (título/bullets/descr/imagen) del producto elegido
 function traerProductosGen(){
   var b=document.getElementById('g-btn-prod'), msg=document.getElementById('g-prod-msg');
   var cred=apiCred();
@@ -187,7 +189,36 @@ function elegirProductoGen(){
   var nom=(p.nom||'').trim();
   var g=document.getElementById('g-producto'); if(g && nom) g.value=nom;   // nombre real del catálogo
   if(nom){ var w=nom.split(/\s+/)[0]; var mk=document.getElementById('g-marca'); if(mk && !mk.value && w) mk.value=w; }
-  var msg=document.getElementById('g-prod-msg'); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Cargado desde tu catálogo: «'+nom.slice(0,60)+'». Completa lo que falte y genera.'; }
+  var msg=document.getElementById('g-prod-msg'); if(msg){ msg.style.color='var(--gn)'; msg.textContent='✔ Cargado desde tu catálogo: «'+nom.slice(0,60)+'». Trayendo tu ficha actual…'; }
+  // Trae la FICHA ACTUAL (título + bullets + descripción + imagen) de Amazon para que la IA la mejore.
+  LISTING_ACTUAL=null;
+  var sku=(p.sku||'').trim(), cred=apiCred();
+  var box=document.getElementById('g-ficha-actual');
+  if(sku && cred){
+    if(box){ box.style.display='block'; box.innerHTML='<span style="color:var(--mu);font-size:12px">⏳ Trayendo tu ficha actual de Amazon (título, bullets, descripción, imagen)…</span>'; }
+    fetch(apiBase()+'/v1/listing-actual?sku='+encodeURIComponent(sku),{headers:{'Authorization':'Bearer '+cred}})
+      .then(function(r){return r.json();})
+      .then(function(d){ LISTING_ACTUAL=(d&&(d.title||(d.bullets&&d.bullets.length)||d.description||d.imagen))?d:null; pintarFichaActual(LISTING_ACTUAL); if(msg&&LISTING_ACTUAL){ msg.textContent='✔ Ficha actual cargada. La IA la mejorará (no parte de cero).'; } else if(msg){ msg.textContent='✔ Título cargado. (No encontré bullets/descripción publicados para este SKU.)'; } })
+      .catch(function(){ if(box) box.style.display='none'; if(msg) msg.textContent='✔ Título cargado (no pude traer la ficha completa ahora).'; });
+  } else if(box){ box.style.display='none'; }
+}
+function pintarFichaActual(d){
+  var box=document.getElementById('g-ficha-actual'); if(!box) return;
+  if(!d){ box.style.display='none'; box.innerHTML=''; return; }
+  var bl=(d.bullets||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
+  box.style.display='block';
+  box.innerHTML=
+    '<div style="border:1px solid var(--bd2);border-radius:10px;padding:12px;background:#0e0e0e">'+
+      '<div style="font-size:11px;color:var(--or2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📋 Tu ficha actual en Amazon — la IA la mejorará</div>'+
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">'+
+        (d.imagen?'<img src="'+esc(d.imagen)+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">':'')+
+        '<div style="flex:1;min-width:220px">'+
+          '<div style="font-size:12px;color:var(--mu)">Título</div><div style="font-size:13px;margin-bottom:6px">'+esc(d.title||'(sin título)')+'</div>'+
+          (bl?('<div style="font-size:12px;color:var(--mu)">Bullets</div><ul style="margin:2px 0 6px 16px;font-size:12.5px;color:var(--mu2)">'+bl+'</ul>'):'')+
+          (d.description?('<div style="font-size:12px;color:var(--mu)">Descripción</div><div style="font-size:12px;color:var(--mu2)">'+esc(d.description.slice(0,300))+(d.description.length>300?'…':'')+'</div>'):'')+
+        '</div>'+
+      '</div>'+
+    '</div>';
 }
 
 // --- Parser CSV sencillo (soporta comillas) ---
@@ -241,7 +272,8 @@ function generar(){
   var body={ producto:producto, tipo:val('g-tipo'), marca:val('g-marca'), categoria:val('g-categoria'),
     idioma:val('g-idioma'), precio:val('g-precio'), caracteristicas:val('g-carac'), usos:val('g-usos'),
     usos_alt:val('g-usosalt'), audiencia:val('g-audiencia'), ocasiones:val('g-ocasiones'),
-    certificaciones:val('g-cert'), caja:val('g-caja'), resenas:val('g-resenas'), keywords:KEYWORDS };
+    certificaciones:val('g-cert'), caja:val('g-caja'), resenas:val('g-resenas'), keywords:KEYWORDS,
+    listing_actual:LISTING_ACTUAL };   // ficha actual → la IA la mejora en vez de partir de cero
   fetch(apiBase()+'/v1/generar-listing',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+cred},body:JSON.stringify(body)})
     .then(function(r){return r.json();})
     .then(function(d){

@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v121-gasto-asin-campana'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v122-ficha-actual-generador'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -198,7 +198,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/cobertura' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/asin-gasto' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/cobertura' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/asin-gasto' || url.pathname === '/v1/listing-actual' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -988,6 +988,49 @@ export default {
         let data = null; try { data = JSON.parse(extraerJSON(r.texto)); } catch (_) {}
         if (!data) return json({ ok: false, error: 'respuesta_no_json', crudo: (r.texto || '').slice(0, 2000) }, cors);
         return json({ ok: true, data, uso: r.uso || null }, cors);
+      }
+
+      // --- FICHA ACTUAL del listing (título + bullets + descripción + imagen) desde
+      //     Amazon, para que el Generador parta de tu ficha real y solo la mejore.
+      //     ?sku=XXX (busca el ASIN en el catálogo si no se pasa). ---
+      if (url.pathname === '/v1/listing-actual') {
+        const sellerId = env.SPAPI_SELLER_ID || '';
+        if (!sellerId) return json({ error: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors);
+        const sku0 = (url.searchParams.get('sku') || '').trim();
+        if (!sku0) return json({ error: 'falta_sku' }, cors, 400);
+        let asin = (url.searchParams.get('asin') || '').trim();
+        if (!asin) { try { const c = await selSafe(env, 'productos_catalogo?sku=eq.' + encodeURIComponent(sku0) + '&select=asin&limit=1', []); asin = (c[0] && c[0].asin) || ''; } catch (_) {} }
+        const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
+        let title = '', bullets = [], description = '', imagen = '';
+        const firstVal = (a) => (Array.isArray(a) && a[0] && a[0].value != null) ? String(a[0].value) : '';
+        const token = await lwaToken(env, 'spapi', ctx);
+        for (const mkt of mkts) {
+          try {
+            const path = '/listings/2021-08-01/items/' + encodeURIComponent(sellerId) + '/' + encodeURIComponent(sku0) +
+              '?marketplaceIds=' + encodeURIComponent(mkt) + '&includedData=summaries,attributes';
+            const r = await fetch(SPAPI_HOST + path, { headers: { 'x-amz-access-token': token, 'Content-Type': 'application/json' } });
+            if (!r.ok) continue;
+            const j = await r.json();
+            const sum = (j.summaries && j.summaries[0]) || {};
+            if (!asin && sum.asin) asin = sum.asin;
+            const at = j.attributes || {};
+            if (!title) title = sum.itemName || firstVal(at.item_name);
+            if (!bullets.length && Array.isArray(at.bullet_point)) bullets = at.bullet_point.map(x => x && x.value).filter(Boolean).slice(0, 5);
+            if (!description) description = firstVal(at.product_description);
+            if (title && bullets.length) break;
+          } catch (_) {}
+        }
+        // Imagen (y título de respaldo) del catálogo por ASIN.
+        if (asin) {
+          try {
+            const item = await getCatalogoItem(env, asin, MARKETPLACES.ES);
+            const imgs = (item && item.images && item.images[0] && item.images[0].images) || [];
+            const main = imgs.find(x => x.variant === 'MAIN') || imgs[0];
+            if (main && main.link) imagen = main.link;
+            if (!title && item && item.summaries && item.summaries[0]) title = item.summaries[0].itemName || '';
+          } catch (_) {}
+        }
+        return json({ sku: sku0, asin, title, bullets, description, imagen }, cors);
       }
 
       // --- Pedir reseña de UN pedido concreto (admin). ?pedido=...&mkt=... ---
@@ -2498,6 +2541,13 @@ function buildPromptListing(b) {
   const kwTxt = kws.length ? kws.slice(0, 40).map(k => '- ' + (k.frase || k.keyword || '') +
     ' (volumen: ' + (k.volumen != null ? k.volumen : '?') + ', competencia: ' + (k.competencia != null ? k.competencia : '?') +
     (k.densidad != null ? ', title density: ' + k.densidad : '') + ')').join('\n') : '(no aportadas)';
+  // Ficha ACTUAL del vendedor en Amazon (si se aportó): la IA la MEJORA, no parte de cero.
+  const la = b.listing_actual || null;
+  const laTxt = (la && (la.title || (la.bullets && la.bullets.length) || la.description)) ?
+    ('\nFICHA ACTUAL EN AMAZON (MEJÓRALA — conserva lo que funcione, corrige lo flojo y potencia con las keywords; no empieces de cero):\n' +
+      'Título actual: ' + (la.title || '(sin título)') + '\n' +
+      'Bullets actuales:\n' + ((la.bullets || []).map(x => '- ' + x).join('\n') || '(ninguno)') + '\n' +
+      'Descripción actual: ' + ((la.description || '(ninguna)').slice(0, 1500))) : '';
   return [
     'PRODUCTO: ' + (b.producto || ''),
     'TIPO DE PRODUCTO: ' + (b.tipo || ''),
@@ -2513,6 +2563,7 @@ function buildPromptListing(b) {
     'CERTIFICACIONES: ' + (b.certificaciones || ''),
     'CONTENIDO DE LA CAJA / GARANTÍA: ' + (b.caja || ''),
     'DOLORES Y OBJECIONES REALES (de reseñas de competidores):\n' + (b.resenas || '(no aportadas)'),
+    laTxt,
     '',
     'KEYWORDS DE HELIUM 10 (prioriza MAYOR volumen y MENOR competencia; colócalas por peso: título → bullets → descripción → backend; NUNCA hagas keyword stuffing):',
     kwTxt,
