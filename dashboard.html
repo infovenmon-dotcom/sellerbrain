@@ -470,7 +470,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator{ opacity:1; }
       </div>
 
       <div class="card">
-        <div class="ch"><h2><span class="ci">🧭</span> Rentabilidad por campaña <span style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
+        <div class="ch"><h2><span class="ci">🧭</span> Rentabilidad por campaña <span id="rentab-camp-per" style="font-weight:400;color:var(--mu)">· 30 días</span></h2></div>
         <div class="inf" style="font-size:12px;color:var(--mu);margin:2px 0 10px;line-height:1.6">Por cada campaña: su <b>ACoS real</b> frente a tu <b>ACoS objetivo</b>, si es <b>rentable</b>, y si el <b>presupuesto se agota antes de acabar el día</b> (con la hora). Si se agota pronto, estás perdiendo las horas buenas: baja pujas para que dure más.</div>
         <div id="ppc-rentab-camp"><div style="color:var(--mu);font-size:13px">Cargando…</div></div>
       </div>
@@ -1443,6 +1443,21 @@ function setRangoKeywords(dias){
   if(hi) hi.value=hasta.toISOString().slice(0,10);
   aplicarRangoKeywords();
 }
+// El período maestro de arriba gobierna también las Keywords: si cambia, sincroniza
+// las fechas del panel y recarga. Solo recarga cuando el período CAMBIA (con caché).
+var _kwMasterKey='';
+function _kwSyncMaster(){
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')) return;
+  var desde, hasta;
+  if(typeof PPC_RANGO!=='undefined' && PPC_RANGO && PPC_RANGO.desde){ desde=PPC_RANGO.desde; hasta=PPC_RANGO.hasta; }
+  else { var def=_kwFechasDefault(); desde=def.desde; hasta=def.hasta; }
+  var key=desde+'|'+hasta;
+  if(key===_kwMasterKey) return;   // mismo período → no recargar
+  _kwMasterKey=key;
+  var di=document.getElementById('kw-desde'), hi=document.getElementById('kw-hasta');
+  if(di) di.value=desde; if(hi) hi.value=hasta;
+  aplicarRangoKeywords();
+}
 function cargarKeywords(){
   var el=document.getElementById('ppc-keywords'); if(!el) return;
   if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')){ el.innerHTML='<div style="font-size:12px;color:var(--mu)">Disponible con tus datos reales.</div>'; return; }
@@ -1522,10 +1537,10 @@ function cargarRentabCamp(){
 }
 function renderRentabCamp(){
   var el=document.getElementById('ppc-rentab-camp'); if(!el) return;
-  var camps=(PPC_DATA&&PPC_DATA.campanas)||[];
-  if(typeof PPC_PAIS!=='undefined' && PPC_PAIS!=='all') camps=camps.filter(function(c){return (c.pais||'')===PPC_PAIS;});
-  if(typeof PPC_CAMP!=='undefined' && PPC_CAMP!=='all') camps=camps.filter(function(c){return (c.nombre||'')===PPC_CAMP;});   // filtro maestro de campaña
-  if(!camps.length){ el.innerHTML='<div style="color:var(--mu);font-size:13px">Sin campañas con datos.</div>'; return; }
+  // campanasRango() ya viene filtrado por PERÍODO + país + campaña (los 3 filtros maestros).
+  var camps=(typeof campanasRango==='function')?campanasRango():((PPC_DATA&&PPC_DATA.campanas)||[]);
+  var perEl=document.getElementById('rentab-camp-per'); if(perEl && typeof ppcRangoTxt==='function') perEl.textContent='· '+ppcRangoTxt();
+  if(!camps.length){ el.innerHTML='<div style="color:var(--mu);font-size:13px">Sin campañas con datos en este período.</div>'; return; }
   var obj=acosObj();
   var lim={}; (PPC_LIMIT||[]).forEach(function(l){ lim[(l.pais||'')+'|'+(l.campania_id||'')]=l; });
   var rows=camps.map(function(c){
@@ -4387,7 +4402,7 @@ function renderAsinGasto(){
   box.innerHTML=h; box.style.display='block';
 }
 // ---- Controles del filtro maestro de fechas ----
-function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} try{ if(PLAN_PUJAS&&PLAN_PUJAS.length) renderPlanPujas(); }catch(e){} try{ if(typeof SQP_DATA!=='undefined'&&SQP_DATA) renderSQP(); }catch(e){} try{ _ppcCampNota(); }catch(e){} try{ cargarAsinGasto(); }catch(e){} }
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ _kwSyncMaster(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} try{ if(PLAN_PUJAS&&PLAN_PUJAS.length) renderPlanPujas(); }catch(e){} try{ if(typeof SQP_DATA!=='undefined'&&SQP_DATA) renderSQP(); }catch(e){} try{ _ppcCampNota(); }catch(e){} try{ cargarAsinGasto(); }catch(e){} }
 function ppcPreset(p){
   var hoy=new Date();
   if(p==='30d'){ PPC_RANGO=null; }
