@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v120-beneficio-real-articulo'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v121-gasto-asin-campana'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -198,7 +198,7 @@ export default {
         // Endpoints de LECTURA que un miembro puede consultar con su token de
         // login (JWT). Los de admin (ingest, ads, terminos…) siguen exigiendo
         // la SB_API_KEY maestra — la clave maestra nunca sale al navegador.
-        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/cobertura' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
+        const MIEMBRO_OK = url.pathname.startsWith('/v1/ppc') || url.pathname === '/v1/dashboard' || url.pathname === '/v1/plan' || url.pathname === '/v1/keywords' || url.pathname === '/v1/nichos' || url.pathname === '/v1/costes' || url.pathname === '/v1/comparativa' || url.pathname === '/v1/productos' || url.pathname === '/v1/ventas-pais' || url.pathname === '/v1/producto-detalle' || url.pathname === '/v1/satisfaccion' || url.pathname === '/v1/serie' || url.pathname === '/v1/mensual' || url.pathname === '/v1/pnl' || url.pathname === '/v1/pnl/desglose' || url.pathname === '/v1/cobertura' || url.pathname === '/v1/devoluciones' || url.pathname === '/v1/reembolsos-cliente' || url.pathname === '/v1/fugas' || url.pathname === '/v1/stock' || url.pathname === '/v1/stock-pais' || url.pathname === '/v1/ingest-ventas' || url.pathname === '/v1/reembolsos' || url.pathname === '/v1/alertas-prefs' || url.pathname === '/v1/buybox' || url.pathname === '/v1/ads/placement' || url.pathname === '/v1/ads/asin-gasto' || url.pathname === '/v1/ads/keywords' || url.pathname === '/v1/ads/keywords-perf' || url.pathname === '/v1/ads/keywords-perf-probe' || url.pathname === '/v1/sqp' || url.pathname === '/v1/fichas' || url.pathname === '/v1/resenas' || url.pathname === '/v1/listings';
         if (!ok) {
           // ¿JWT de login válido? Si el email es de un ADMIN (dueño), acceso TOTAL
           // (incluye ejecución de Ads, ingestas…) sin pegar la clave maestra. Si es
@@ -538,6 +538,39 @@ export default {
         const filtro = pais ? 'pais=eq.' + pais + '&' : '';
         const filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=hasta.desc,gasto.desc&limit=8000');
         return json({ datos: filas }, cors);
+      }
+
+      // --- GASTO de PPC por ASIN × CAMPAÑA en un periodo. Agrupa por ASIN y, dentro,
+      //     por campaña, con su estado (activa/parada) y presupuesto. Fuente:
+      //     ppc_asin_campana (gasto) + ppc_presupuestos (estado/presupuesto). ---
+      if (url.pathname === '/v1/ads/asin-gasto') {
+        const hoyISO = new Date().toISOString().slice(0, 10);
+        const hace30d = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+        const desde = url.searchParams.get('desde') || hace30d;
+        const hasta = url.searchParams.get('hasta') || hoyISO;
+        const paisQ = (url.searchParams.get('pais') || '').toUpperCase();
+        const filas = await selSafe(env, 'ppc_asin_campana?fecha=gte.' + desde + '&fecha=lte.' + hasta + (paisQ ? ('&pais=eq.' + paisQ) : '') + '&limit=40000', []);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        const camp = {}; try { for (const c of (await selSafe(env, 'ppc_presupuestos?select=pais,campania,campania_id,estado,presupuesto', []))) camp[(c.pais || '') + '|' + (c.campania || '')] = { id: c.campania_id, estado: c.estado, presupuesto: c.presupuesto }; } catch (_) {}
+        const byAsin = {};
+        for (const r of (filas || [])) {
+          const sku = r.sku || ''; const c = cat[sku] || {};
+          const asin = r.asin || c.asin || '';
+          const clave = asin || sku;
+          if (!byAsin[clave]) byAsin[clave] = { asin, sku, nombre: c.nombre || sku, imagen: c.imagen || null, gasto: 0, clics: 0, ventas_ppc: 0, pedidos_ppc: 0, campanas: {} };
+          const a = byAsin[clave];
+          a.gasto += +r.gasto || 0; a.clics += +r.clics || 0; a.ventas_ppc += +r.ventas_ppc || 0; a.pedidos_ppc += +r.pedidos_ppc || 0;
+          const cn = r.campania || '(sin campaña)';
+          if (!a.campanas[cn]) { const m = camp[(r.pais || '') + '|' + cn] || {}; a.campanas[cn] = { campania: cn, pais: r.pais || '', gasto: 0, clics: 0, ventas_ppc: 0, pedidos_ppc: 0, estado: m.estado || '', presupuesto: (m.presupuesto != null ? +m.presupuesto : null), campania_id: m.id || '' }; }
+          const cc = a.campanas[cn]; cc.gasto += +r.gasto || 0; cc.clics += +r.clics || 0; cc.ventas_ppc += +r.ventas_ppc || 0; cc.pedidos_ppc += +r.pedidos_ppc || 0;
+        }
+        const datos = Object.values(byAsin).map(a => ({
+          asin: a.asin, sku: a.sku, nombre: a.nombre, imagen: a.imagen,
+          gasto: +a.gasto.toFixed(2), clics: a.clics, ventas_ppc: +a.ventas_ppc.toFixed(2), pedidos_ppc: a.pedidos_ppc,
+          acos: a.ventas_ppc > 0 ? +(a.gasto / a.ventas_ppc * 100).toFixed(1) : null,
+          campanas: Object.values(a.campanas).map(cc => ({ ...cc, gasto: +cc.gasto.toFixed(2), ventas_ppc: +cc.ventas_ppc.toFixed(2), acos: cc.ventas_ppc > 0 ? +(cc.gasto / cc.ventas_ppc * 100).toFixed(1) : null })).sort((x, y) => y.gasto - x.gasto)
+        })).sort((x, y) => y.gasto - x.gasto);
+        return json({ datos, desde, hasta }, cors);
       }
 
       // --- Recoger informes de PPC pendientes que ya estén listos en Amazon ---
@@ -3247,6 +3280,22 @@ async function guardarPPCproducto(env, filas, pais, desde, hasta) {
     ...x, gasto: +x.gasto.toFixed(2), ventas_ppc: +x.ventas_ppc.toFixed(2), actualizado: new Date().toISOString()
   }));
   await upsertSupabase(env, 'ppc_producto', rows);
+  // Además: gasto partido por CAMPAÑA × SKU/ASIN (el informe ya trae campaignName).
+  // En tabla aparte para no tocar ppc_producto. Si la tabla no existe aún, no rompe.
+  try {
+    const byCamp = {};
+    for (const t of (filas || [])) {
+      const sku = t.advertisedSku || t.advertisedAsin || ''; if (!sku) continue;
+      const fecha = t.date || hasta;
+      const camp = t.campaignName || '';
+      const k = camp + '|' + sku + '|' + fecha;
+      if (!byCamp[k]) byCamp[k] = { pais, campania: camp, sku, asin: t.advertisedAsin || '', fecha, gasto: 0, clics: 0, impresiones: 0, ventas_ppc: 0, pedidos_ppc: 0 };
+      byCamp[k].gasto += (t.cost || 0); byCamp[k].clics += (t.clicks || 0); byCamp[k].impresiones += (t.impressions || 0);
+      byCamp[k].ventas_ppc += (t.sales14d || 0); byCamp[k].pedidos_ppc += (t.purchases14d || 0);
+    }
+    const rows2 = Object.values(byCamp).map(x => ({ ...x, gasto: +x.gasto.toFixed(2), ventas_ppc: +x.ventas_ppc.toFixed(2), actualizado: new Date().toISOString() }));
+    if (rows2.length) await upsertSupabase(env, 'ppc_asin_campana', rows2);
+  } catch (_) { /* tabla ppc_asin_campana aún no creada → se ignora */ }
   return rows.length;
 }
 

@@ -414,6 +414,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:2px 0 10px">
           <div id="ppc-pais-filtro" style="display:none;gap:6px;flex-wrap:wrap"></div>
           <select id="ppc-camp-filtro" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px;padding:6px 10px;max-width:300px" onchange="filtrarPPCCamp(this.value)"></select>
+          <select id="ppc-asin-filtro" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px;padding:6px 10px;max-width:320px" onchange="filtrarPPCAsin(this.value)" title="Gasto de publicidad de un producto: en qué campañas y cuánto en el periodo"></select>
         </div>
         <div id="ppc-rango-bar" style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:12px">
           <span style="color:var(--mu)">📅 Periodo:</span>
@@ -430,6 +431,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Satoshi',sans-serif;font-
         </div>
         <div id="ppc-chart"></div>
         <div style="font-size:10.5px;color:var(--mu);margin-top:4px">💡 Pincha un punto del gráfico para filtrar ese día (o ese mes) en toda la pantalla. Doble clic para volver a los 30 días.</div>
+        <div id="ppc-asin-desglose" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)"></div>
         <div class="chart-legend">
           <span><i style="background:#B983D6"></i> Gasto PPC</span>
           <span><i style="background:var(--gn)"></i> Ventas atribuidas</span>
@@ -4292,8 +4294,67 @@ function _ppcCampNota(){
   ['ppc-sqp-campnota','ppc-rentab-campnota'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display = on?'inline':'none'; });
 }
 function filtrarPPCCamp(nombre){ PPC_CAMP=nombre||'all'; _ppcRerender(); }   // filtro maestro: campaña aplica a toda la pantalla de PPC
+
+// ---- Gasto de publicidad por ASIN × campaña (David: sale directo del ASIN) ----
+var ASIN_GASTO=null, PPC_ASIN='', _asinKey='';
+function _asinPeriodo(){
+  var hoy=new Date(), desde, hasta;
+  if(PPC_RANGO && PPC_RANGO.desde){ desde=PPC_RANGO.desde; hasta=PPC_RANGO.hasta; }
+  else { desde=ymdUTC(new Date(Date.now()-30*86400000)); hasta=ymdUTC(hoy); }
+  return { desde:desde, hasta:hasta, pais:(PPC_PAIS!=='all'?PPC_PAIS:'') };
+}
+function cargarAsinGasto(force){
+  if(!(SB_CONFIG.apiKey||SB_CONFIG.mode==='api')) return;
+  var p=_asinPeriodo(), key=p.desde+'|'+p.hasta+'|'+p.pais;
+  if(!force && key===_asinKey && ASIN_GASTO){ renderAsinGasto(); return; }   // mismo periodo → usa caché
+  _asinKey=key;
+  fetch(SB_CONFIG.apiBase+'/v1/ads/asin-gasto?desde='+p.desde+'&hasta='+p.hasta+(p.pais?('&pais='+p.pais):''),{headers:authHdr()})
+    .then(function(r){return r.json();}).then(function(d){ ASIN_GASTO=(d&&d.datos)||[]; renderAsinGasto(); })
+    .catch(function(){ ASIN_GASTO=[]; renderAsinGasto(); });
+}
+function filtrarPPCAsin(v){ PPC_ASIN=v||''; renderAsinGasto(); }
+function _asinEstBadge(e){ e=(e||'').toUpperCase();
+  if(e==='ENABLED') return '<span style="color:var(--gn)">● activa</span>';
+  if(e==='PAUSED')  return '<span style="color:var(--am)">⏸ parada</span>';
+  if(e==='ARCHIVED')return '<span style="color:var(--mu)">archivada</span>';
+  return '<span style="color:var(--mu)" title="Estado de campaña aún no sincronizado (pulsa «Cargar presupuestos» en PPC)">—</span>'; }
+function _asinAcosCol(a){ return a==null?'var(--mu)':a<=25?'var(--gn)':a<=40?'var(--am)':'var(--rd)'; }
+function renderAsinGasto(){
+  var sel=document.getElementById('ppc-asin-filtro'), box=document.getElementById('ppc-asin-desglose');
+  if(!sel||!box) return;
+  var datos=ASIN_GASTO||[];
+  sel.innerHTML='<option value="">📦 Gasto por ASIN — elige un producto…</option>'+datos.map(function(a){
+    var lab=(a.nombre||a.sku||a.asin||''); if(lab.length>44) lab=lab.slice(0,44)+'…';
+    var val=(a.asin||a.sku||'');
+    return '<option value="'+val.replace(/"/g,'&quot;')+'"'+(val===PPC_ASIN?' selected':'')+'>'+esc(lab)+' — '+f(a.gasto,0)+'€</option>';
+  }).join('');
+  sel.style.display=datos.length?'inline-block':'none';
+  if(!PPC_ASIN){ box.style.display='none'; box.innerHTML=''; return; }
+  var a=datos.filter(function(x){return (x.asin||x.sku)===PPC_ASIN;})[0];
+  if(!a){ box.style.display='none'; box.innerHTML=''; return; }
+  var h='<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
+    (a.imagen?'<img src="'+a.imagen+'" style="width:42px;height:42px;object-fit:cover;border-radius:8px" onerror="this.style.display=\'none\'">':'')+
+    '<div><div style="font-weight:700">'+esc(a.nombre||a.sku)+'</div><div style="font-size:11px;color:var(--mu)">'+esc(a.asin||'')+(a.sku?(' · '+esc(a.sku)):'')+'</div></div>'+
+    '<span style="flex:1"></span>'+
+    '<div style="text-align:right"><div style="font-size:11px;color:var(--mu)">Gasto publi en el periodo</div><div style="font-size:20px;font-weight:800;color:#B983D6">'+f(a.gasto,2)+'€</div></div>'+
+    '<div style="text-align:right"><div style="font-size:11px;color:var(--mu)">ACoS</div><div style="font-size:16px;font-weight:700;color:'+_asinAcosCol(a.acos)+'">'+(a.acos!=null?f(a.acos,1)+'%':'—')+'</div></div>'+
+    '</div>';
+  h+='<div style="font-size:11.5px;color:var(--mu);margin-bottom:6px">Ha gastado en <b style="color:var(--tx)">'+(a.campanas||[]).length+'</b> campaña(s):</div>';
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="text-align:left;color:var(--mu);font-size:11px"><th style="padding:6px 8px">Campaña</th><th style="padding:6px 8px">Estado</th><th style="padding:6px 8px">Gasto</th><th style="padding:6px 8px">Clics</th><th style="padding:6px 8px">Ventas</th><th style="padding:6px 8px">ACoS</th><th style="padding:6px 8px">Presup.</th></tr></thead><tbody>';
+  (a.campanas||[]).forEach(function(c){
+    h+='<tr style="border-top:1px solid rgba(255,255,255,.06)"><td style="padding:7px 8px;max-width:250px;overflow:hidden;text-overflow:ellipsis" title="'+esc(c.campania)+'">'+esc(c.campania)+' <span style="color:var(--mu);font-size:10px">'+esc(c.pais||'')+'</span></td>'+
+      '<td style="padding:7px 8px">'+_asinEstBadge(c.estado)+'</td>'+
+      '<td style="padding:7px 8px;color:#B983D6">'+f(c.gasto,2)+'€</td>'+
+      '<td style="padding:7px 8px">'+c.clics+'</td>'+
+      '<td style="padding:7px 8px;color:var(--gn)">'+f(c.ventas_ppc,2)+'€</td>'+
+      '<td style="padding:7px 8px;color:'+_asinAcosCol(c.acos)+'">'+(c.acos!=null?f(c.acos,1)+'%':'—')+'</td>'+
+      '<td style="padding:7px 8px;color:var(--mu2)">'+(c.presupuesto!=null?f(c.presupuesto,2)+'€/día':'—')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  box.innerHTML=h; box.style.display='block';
+}
 // ---- Controles del filtro maestro de fechas ----
-function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} try{ if(PLAN_PUJAS&&PLAN_PUJAS.length) renderPlanPujas(); }catch(e){} try{ if(typeof SQP_DATA!=='undefined'&&SQP_DATA) renderSQP(); }catch(e){} try{ _ppcCampNota(); }catch(e){} }
+function _ppcRerender(){ if(PPC_DATA) renderPPC(document.getElementById('ppc-fuente').textContent||''); if(typeof SB_CONFIG!=='undefined'&&SB_CONFIG.mode==='api'){ try{renderPPCRentab();}catch(e){} } try{ if(PLAC_DATA) renderPlacement(); }catch(e){} try{ if(KW_DATA) renderKeywords(); }catch(e){} try{ if(PPC_DATA) renderRentabCamp(); }catch(e){} try{ if(PLAN_PUJAS&&PLAN_PUJAS.length) renderPlanPujas(); }catch(e){} try{ if(typeof SQP_DATA!=='undefined'&&SQP_DATA) renderSQP(); }catch(e){} try{ _ppcCampNota(); }catch(e){} try{ cargarAsinGasto(); }catch(e){} }
 function ppcPreset(p){
   var hoy=new Date();
   if(p==='30d'){ PPC_RANGO=null; }
@@ -4472,7 +4533,7 @@ function cambiarVista(v){
   var nav=document.getElementById('nav-'+v); if(nav) nav.classList.add('on');
   if(v==='ppc' && !PPC_DATA) cargarPPC();
   if(v==='ppc' && SB_CONFIG.mode==='api') renderPPCRentab();
-  if(v==='ppc'){ try{ cargarRentabCamp(); }catch(e){} try{ cargarPlanPujas(); }catch(e){} try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} }
+  if(v==='ppc'){ try{ cargarRentabCamp(); }catch(e){} try{ cargarPlanPujas(); }catch(e){} try{ cargarPlacement(); }catch(e){} try{ cargarKeywords(); }catch(e){} try{ cargarSQP(); }catch(e){} try{ cargarAsinGasto(); }catch(e){} }
   if(v==='sobre'){ cargarFugas(); cargarStockPais(); }
   if(v==='dash'){ try{ renderImpactoFiscal(); }catch(e){} try{ mostrarBienvenida(); }catch(e){} }   // refresca la capa fiscal y el banner de bienvenida
   if(TOOL_SRC[v]){
