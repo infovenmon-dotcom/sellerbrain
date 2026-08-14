@@ -4323,12 +4323,16 @@ function renderAsinGasto(){
   var sel=document.getElementById('ppc-asin-filtro'), box=document.getElementById('ppc-asin-desglose');
   if(!sel||!box) return;
   var datos=ASIN_GASTO||[];
+  sel.style.display='inline-block';   // siempre visible, aunque aún no haya datos
+  if(!datos.length){
+    sel.innerHTML='<option value="">📦 Gasto por ASIN — aún sin datos (falta desplegar v121 + ingesta PPC)</option>';
+    box.style.display='none'; box.innerHTML=''; return;
+  }
   sel.innerHTML='<option value="">📦 Gasto por ASIN — elige un producto…</option>'+datos.map(function(a){
     var lab=(a.nombre||a.sku||a.asin||''); if(lab.length>44) lab=lab.slice(0,44)+'…';
     var val=(a.asin||a.sku||'');
     return '<option value="'+val.replace(/"/g,'&quot;')+'"'+(val===PPC_ASIN?' selected':'')+'>'+esc(lab)+' — '+f(a.gasto,0)+'€</option>';
   }).join('');
-  sel.style.display=datos.length?'inline-block':'none';
   if(!PPC_ASIN){ box.style.display='none'; box.innerHTML=''; return; }
   var a=datos.filter(function(x){return (x.asin||x.sku)===PPC_ASIN;})[0];
   if(!a){ box.style.display='none'; box.innerHTML=''; return; }
