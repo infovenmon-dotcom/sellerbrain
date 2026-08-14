@@ -3967,6 +3967,14 @@ function kwProcesar(rows) {
   document.getElementById('kw-filtros').style.display = 'block';
   document.getElementById('kw-resultados').style.display = 'block';
   kwFiltrar();
+  // Encadenado: guarda las keywords "para listing" (score alto, por volumen) para que
+  // el Generador de listing las use sin volver a subir el CSV.
+  try{
+    var listKw = kwData.filter(function(r){ return r.listingScore>=35 && r.kw; })
+                       .sort(function(a,b){ return b.vol-a.vol; })
+                       .slice(0,40).map(function(r){ return r.kw; });
+    if(listKw.length) localStorage.setItem('sb_kw_listing', JSON.stringify({kws:listKw, ts:new Date().toISOString().slice(0,10)}));
+  }catch(e){}
 }
 
 function kwFiltrar() {

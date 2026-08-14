@@ -91,6 +91,10 @@ input.n:focus,select.n:focus,textarea.n:focus{border-color:var(--or);outline:non
 <div class="card">
   <div class="ct"><span class="ci">2️⃣</span> Keywords de Helium 10</div>
   <div class="inf">Pega el <b>CSV exportado de Helium 10</b> (Cerebro/Magnet) tal cual — detecto solas las columnas <b>Keyword Phrase, Search Volume, Competing Products y Title Density</b> y priorizo las de más volumen y menos competencia. O escribe keywords a mano (una por línea).</div>
+  <div id="g-usekw-box" style="display:none;margin:0 0 10px">
+    <button class="btn-sec" id="g-usekw" onclick="usarKwAnalizadas()">✨ Usar mis keywords analizadas (<span id="g-usekw-n">0</span>)</button>
+    <span style="font-size:11px;color:var(--mu);margin-left:6px">— de «Keywords y auditoría», sin resubir el CSV</span>
+  </div>
   <textarea class="n" id="g-h10" rows="5" placeholder="Pega aquí el CSV de Helium 10 (con cabeceras) o una keyword por línea…" oninput="procesarH10()"></textarea>
   <div id="g-kwprev" style="margin-top:10px;font-size:12px;color:var(--mu)"></div>
 </div>
@@ -122,6 +126,22 @@ function apiBase(){ return (localStorage.getItem('sb_api_base')||'https://seller
 function apiCred(){ try{ return localStorage.getItem('sb_api_key')||sessionStorage.getItem('fba_token')||''; }catch(e){ return ''; } }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 var KEYWORDS=[];
+
+// --- Encadenado: keywords analizadas en «Keywords y auditoría» (guardadas en el navegador).
+//     Si existen, se ofrece un botón para volcarlas aquí sin resubir el CSV. ---
+function _kwAnalizadas(){ try{ var o=JSON.parse(localStorage.getItem('sb_kw_listing')||'null'); return (o&&o.kws&&o.kws.length)?o:null; }catch(e){ return null; } }
+function _initKwAnalizadas(){
+  var o=_kwAnalizadas(); var box=document.getElementById('g-usekw-box'); if(!box) return;
+  if(o){ document.getElementById('g-usekw-n').textContent=o.kws.length; box.style.display='block'; }
+  else box.style.display='none';
+}
+function usarKwAnalizadas(){
+  var o=_kwAnalizadas(); if(!o) return;
+  var ta=document.getElementById('g-h10');
+  ta.value=o.kws.join('\n');   // una keyword por línea → procesarH10 las prioriza
+  procesarH10();
+  var box=document.getElementById('g-usekw-box'); if(box){ var b=document.getElementById('g-usekw'); if(b){ b.textContent='✅ '+o.kws.length+' keywords cargadas'; b.disabled=true; } }
+}
 
 // --- Reglas de título de Amazon (mismas que "Títulos SEO"): 75 car., sin símbolos
 //     prohibidos ni lenguaje promocional. Desde el 27 jul 2026 son obligatorias. ---
@@ -299,6 +319,8 @@ function render(d, uso){
   box.innerHTML=h;
   box.scrollIntoView({behavior:'smooth'});
 }
+// Al abrir el Generador, mira si hay keywords analizadas para ofrecerlas.
+try{ _initKwAnalizadas(); }catch(e){}
 </script>
 </body>
 </html>
