@@ -420,6 +420,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator{ opacity:1; }
           <div id="ppc-pais-filtro" style="display:none;gap:6px;flex-wrap:wrap"></div>
           <select id="ppc-camp-filtro" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px;padding:6px 10px;max-width:300px" onchange="filtrarPPCCamp(this.value)"></select>
           <select id="ppc-asin-filtro" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--tx);font-size:12px;padding:6px 10px;max-width:320px" onchange="filtrarPPCAsin(this.value)" title="Gasto de publicidad de un producto: en qué campañas y cuánto en el periodo"></select>
+          <button id="ppc-asin-refresh" style="display:none;background:#0a120f;border:1px solid var(--bd2);border-radius:9px;color:var(--mu);font-size:11.5px;padding:6px 10px;cursor:pointer" onclick="actualizarVentasAsin()" title="Vuelve a pedir a Amazon el informe de producto (gasto+ventas por campaña). Tarda unos minutos.">🔄 Actualizar ventas</button>
         </div>
         <div id="ppc-rango-bar" style="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:0 0 8px;font-size:12px">
           <span style="color:var(--mu)">📅 Periodo:</span>
@@ -4357,6 +4358,37 @@ function cargarAsinGasto(force){
     .catch(function(){ ASIN_GASTO=[]; renderAsinGasto(); });
 }
 function filtrarPPCAsin(v){ PPC_ASIN=v||''; renderAsinGasto(); }
+// Fuerza a Amazon a regenerar el informe de PRODUCTO (gasto+ventas por campaña) y lo
+// recoge cuando esté listo. Amazon tarda unos minutos → avisa y va reintentando solo.
+function actualizarVentasAsin(){
+  var btn=document.getElementById('ppc-asin-refresh'); if(!btn) return;
+  if(btn._trabajando) return; btn._trabajando=true;
+  var txt0=btn.textContent; btn.textContent='⏳ Pidiendo a Amazon…'; btn.style.color='var(--am)';
+  var pais=(PPC_PAIS!=='all'?PPC_PAIS:'');
+  fetch(SB_CONFIG.apiBase+'/v1/ingest-ppc?solo=producto'+(pais?('&pais='+pais):''),{method:'POST',headers:authHdr()})
+    .then(function(r){return r.json();}).catch(function(){return null;})
+    .then(function(){
+      btn.textContent='⏳ Amazon está generando el informe…';
+      var intentos=0;
+      (function recoge(){
+        intentos++;
+        fetch(SB_CONFIG.apiBase+'/v1/ppc/recoger',{method:'POST',headers:authHdr()})
+          .then(function(r){return r.json();}).catch(function(){return null;})
+          .then(function(d){
+            var pend=(d&&d.pendientes!=null)?d.pendientes:0, rec=(d&&d.recogidos)||0;
+            if(rec>0){ cargarAsinGasto(true); }
+            if(pend>0 && intentos<8){ btn.textContent='⏳ Aún generándose ('+intentos+'/8)…'; setTimeout(recoge,45000); }
+            else{
+              btn._trabajando=false; btn.style.color='var(--mu)';
+              btn.textContent=(rec>0?'✅ Actualizado':'🔄 Actualizar ventas');
+              cargarAsinGasto(true);
+              if(rec===0 && pend>0){ btn.textContent='⏳ Se recogerá solo en unos min'; }
+              setTimeout(function(){ btn.textContent='🔄 Actualizar ventas'; },8000);
+            }
+          });
+      })();
+    });
+}
 function _asinEstBadge(e){ e=(e||'').toUpperCase();
   if(e==='ENABLED') return '<span style="color:var(--gn)">● activa</span>';
   if(e==='PAUSED')  return '<span style="color:var(--am)">⏸ parada</span>';
@@ -4368,6 +4400,7 @@ function renderAsinGasto(){
   if(!sel||!box) return;
   var datos=ASIN_GASTO||[];
   sel.style.display='inline-block';   // siempre visible, aunque aún no haya datos
+  var btnRef=document.getElementById('ppc-asin-refresh'); if(btnRef) btnRef.style.display=datos.length?'inline-block':'none';
   if(!datos.length){
     sel.innerHTML='<option value="">📦 Gasto por ASIN — aún sin datos (falta desplegar v121 + ingesta PPC)</option>';
     box.style.display='none'; box.innerHTML=''; return;
