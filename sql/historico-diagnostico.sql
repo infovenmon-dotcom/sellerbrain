@@ -11,7 +11,7 @@ select
   min(fecha)                                   as primera_venta,
   max(fecha)                                   as ultima_venta,
   count(distinct to_char(fecha,'YYYY-MM'))     as meses_con_datos,
-  round(extract(epoch from (max(fecha)-min(fecha)))/86400/30.44, 1) as meses_de_recorrido,
+  round((max(fecha) - min(fecha))::numeric / 30.44, 1) as meses_de_recorrido,
   count(distinct sku)                          as skus_distintos,
   count(*)                                     as filas_totales
 from ventas_sku_pais_dia;
