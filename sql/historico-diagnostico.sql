@@ -19,9 +19,9 @@ select
   sum(uds) filter (where t = 'pais')                as uds_ventas_sku_pais_dia,
   sum(uds) filter (where t = 'ped')                 as uds_pedidos_dia
 from (
-  select fecha, uds, 'pais'::text as t from ventas_sku_pais_dia
+  select fecha, uds,             'pais'::text as t from ventas_sku_pais_dia
   union all
-  select fecha, uds, 'ped'::text  as t from pedidos_dia
+  select fecha, unidades as uds, 'ped'::text  as t from pedidos_dia   -- pedidos_dia usa 'unidades', no 'uds'
 ) x
 group by 1
 order by 1;
