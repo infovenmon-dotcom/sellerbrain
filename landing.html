@@ -347,5 +347,27 @@ footer{border-top:1px solid var(--bd);padding:36px 0;margin-top:20px}
   </div>
 </footer>
 
+<!-- ====== CIERRE DE VENTAS (pre-lanzamiento oficial) ======================
+     Mientras VENTA_ABIERTA sea false, los botones de pago de Stripe NO cobran:
+     se convierten en "lista de espera" (mailto). Así nadie puede pagar y entrar
+     hasta que la app sea oficial. El día del lanzamiento, cambia false → true
+     (UNA sola línea) y vuelve a desplegar; los botones vuelven a cobrar solos. -->
+<script>
+(function(){
+  var VENTA_ABIERTA = false;   // ← ponlo en true el día del lanzamiento oficial
+  if (VENTA_ABIERTA) return;
+  var WAIT = 'mailto:hola@sellersbrain.io'
+    + '?subject=' + encodeURIComponent('Lista de espera SellerBrain')
+    + '&body='    + encodeURIComponent('Hola, quiero que me aviséis en cuanto SellerBrain esté disponible. Gracias.');
+  var botones = document.querySelectorAll('a[href^="https://buy.stripe.com"]');
+  botones.forEach(function(a){
+    a.dataset.stripe = a.getAttribute('href');   // guarda el enlace real por si hay que restaurarlo a mano
+    a.setAttribute('href', WAIT);
+    a.textContent = '📩 Avísame en el lanzamiento';
+    a.setAttribute('title', 'Aún no está abierto al público. Déjanos tu email y te avisamos del lanzamiento.');
+  });
+})();
+</script>
+
 </body>
 </html>
