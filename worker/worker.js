@@ -194,6 +194,9 @@ export default {
       }
 
       // ============ SEGURIDAD ============
+      // Cliente que está viendo (para FILTRAR los datos por su seller). Se resuelve
+      // abajo, en cuanto la autorización pasa. Por defecto 'venmon' (dueño).
+      let sellerActual = 'venmon';
       // Todos los endpoints /v1/* requieren la clave privada (secreto SB_API_KEY).
       // Se acepta como cabecera "Authorization: Bearer LACLAVE" o como ?key=LACLAVE.
       // Excepciones públicas: /auth/ads/* (OAuth de clientes) y /v1/login (el
@@ -225,6 +228,8 @@ export default {
           }
         }
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
+        // Autorizado → resolvemos QUIÉN es para filtrar sus datos (aislamiento multicuenta).
+        sellerActual = await sellerDeLogin(env, auth, key);
       }
 
       // --- LISTA DE ESPERA · alta pública desde la landing (pre-lanzamiento).
@@ -5511,20 +5516,26 @@ async function borrarDatosSeller(env, seller) {
   return hechas;
 }
 
-// IDENTIDAD (fase 3, aún SIN activar en la lectura): resuelve QUÉ vendedor está
-// viendo, para poder filtrar los datos por su seller.
-//  · admin con SB_API_KEY  → 'venmon' (ve los datos propios).
-//  · miembro con su JWT     → su miembros.seller (por defecto 'venmon' si no consta).
-// El default 'venmon' hace que el equipo de VENMON no se quede sin datos.
-async function sellerDeLogin(env, auth) {
-  if (auth && env.SB_API_KEY && auth === env.SB_API_KEY) return 'venmon';
-  const payload = await verificarJWT(env, auth);
-  if (!payload || !payload.email) return 'venmon';
+// IDENTIDAD: resuelve QUÉ vendedor está viendo, para FILTRAR los datos por su seller.
+// La credencial puede venir por la cabecera (auth) o por ?key= (key).
+//  · admin con SB_API_KEY           → 'venmon' (dueño, ve sus datos).
+//  · JWT de un email ADMIN          → 'venmon' (el equipo de VENMON ve los datos propios).
+//  · JWT de un miembro/cliente       → su miembros.seller (y si no consta, su propio email,
+//                                       que es como se etiquetan sus datos al conectarse).
+// IMPORTANTE (aislamiento multicuenta): un cliente externo NUNCA cae por defecto a 'venmon';
+// si no se puede identificar, devuelve un valor imposible ('__nadie__') para que no vea NADA.
+async function sellerDeLogin(env, auth, key) {
+  if (env.SB_API_KEY && (auth === env.SB_API_KEY || key === env.SB_API_KEY)) return 'venmon';
+  const payload = (await verificarJWT(env, auth)) || (key ? await verificarJWT(env, key) : null);
+  if (!payload || !payload.email) return '__nadie__';
+  const email = String(payload.email).toLowerCase();
+  const admins = String(env.ADMIN_EMAILS || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
+  if (admins.includes(email)) return 'venmon';
   try {
     const filas = await selectSupabase(env,
-      'miembros?email=eq.' + encodeURIComponent(payload.email) + '&select=seller&limit=1');
-    return (filas && filas[0] && filas[0].seller) || 'venmon';
-  } catch (_) { return 'venmon'; }
+      'miembros?email=eq.' + encodeURIComponent(email) + '&select=seller&limit=1');
+    return (filas && filas[0] && filas[0].seller) || email;
+  } catch (_) { return email; }
 }
 
 /* ===== utils ===== */
