@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v133-cors-multiorigen'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v134-aislamiento-tablas'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
