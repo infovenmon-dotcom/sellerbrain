@@ -347,24 +347,70 @@ footer{border-top:1px solid var(--bd);padding:36px 0;margin-top:20px}
   </div>
 </footer>
 
+<!-- ====== LISTA DE ESPERA (ventana emergente) ====== -->
+<dialog id="wl-dlg" style="border:none;border-radius:16px;padding:0;max-width:420px;width:92%;background:#0d1512;color:#EAF7F1;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+  <form id="wl-form" style="padding:26px 24px">
+    <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:21px;margin-bottom:6px">Entra en la lista de espera</div>
+    <p style="margin:0 0 16px;color:#9db3aa;font-size:14px;line-height:1.5">SellerBrain aún no está abierto al público. Déjanos tu email y te avisamos el día del lanzamiento. Sin spam.</p>
+    <input id="wl-email" type="email" required placeholder="tu@email.com" autocomplete="email"
+      style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #24352e;background:#081310;color:#EAF7F1;font-size:15px;box-sizing:border-box">
+    <div id="wl-msg" style="min-height:18px;margin:10px 2px 0;font-size:13px;color:#9db3aa"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button type="button" id="wl-cancel"
+        style="flex:0 0 auto;padding:11px 16px;border-radius:10px;border:1px solid #24352e;background:transparent;color:#9db3aa;font-size:14px;cursor:pointer">Cancelar</button>
+      <button type="submit" id="wl-send"
+        style="flex:1;padding:11px 16px;border-radius:10px;border:none;background:#2EE6A0;color:#052018;font-weight:700;font-size:14px;cursor:pointer">Apuntarme</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- ====== CIERRE DE VENTAS (pre-lanzamiento oficial) ======================
      Mientras VENTA_ABIERTA sea false, los botones de pago de Stripe NO cobran:
-     se convierten en "lista de espera" (mailto). Así nadie puede pagar y entrar
-     hasta que la app sea oficial. El día del lanzamiento, cambia false → true
-     (UNA sola línea) y vuelve a desplegar; los botones vuelven a cobrar solos. -->
+     abren la lista de espera (guarda el email en Supabase vía el Worker). El día
+     del lanzamiento, cambia false → true (UNA sola línea) y vuelve a desplegar;
+     los botones vuelven a cobrar por Stripe automáticamente. -->
 <script>
 (function(){
   var VENTA_ABIERTA = false;   // ← ponlo en true el día del lanzamiento oficial
   if (VENTA_ABIERTA) return;
-  var WAIT = 'mailto:hola@sellersbrain.io'
-    + '?subject=' + encodeURIComponent('Lista de espera SellerBrain')
-    + '&body='    + encodeURIComponent('Hola, quiero que me aviséis en cuanto SellerBrain esté disponible. Gracias.');
+  var API = 'https://sellerbrain-api.info-venmon.workers.dev';
+  var dlg = document.getElementById('wl-dlg');
+  var soporteDialog = dlg && typeof dlg.showModal === 'function';
+  var MAILTO = 'mailto:hola@sellersbrain.io?subject=' + encodeURIComponent('Lista de espera SellerBrain');
   var botones = document.querySelectorAll('a[href^="https://buy.stripe.com"]');
   botones.forEach(function(a){
     a.dataset.stripe = a.getAttribute('href');   // guarda el enlace real por si hay que restaurarlo a mano
-    a.setAttribute('href', WAIT);
     a.textContent = '📩 Avísame en el lanzamiento';
     a.setAttribute('title', 'Aún no está abierto al público. Déjanos tu email y te avisamos del lanzamiento.');
+    if (soporteDialog) {
+      a.setAttribute('href', '#lista-espera');
+      a.addEventListener('click', function(e){ e.preventDefault(); dlg.showModal(); });
+    } else {
+      a.setAttribute('href', MAILTO);   // fallback si el navegador no soporta <dialog>
+    }
+  });
+  if (!soporteDialog) return;
+  var form = document.getElementById('wl-form');
+  var msg  = document.getElementById('wl-msg');
+  document.getElementById('wl-cancel').addEventListener('click', function(){ dlg.close(); });
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var email = (document.getElementById('wl-email').value || '').trim();
+    if (!email) return;
+    msg.style.color = '#9db3aa'; msg.textContent = 'Guardando…';
+    fetch(API + '/v1/lista-espera', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, origen: 'landing' })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (d && d.ok) {
+        msg.style.color = '#2EE6A0';
+        msg.textContent = '✅ ¡Listo! Te avisaremos en el lanzamiento.';
+        setTimeout(function(){ dlg.close(); msg.textContent=''; form.reset(); }, 1800);
+      } else {
+        msg.style.color = '#ffb4b4';
+        msg.textContent = '⚠️ ' + (d && d.error === 'email_invalido' ? 'Revisa el email.' : 'No se pudo guardar, prueba otra vez.');
+      }
+    }).catch(function(){ msg.style.color = '#ffb4b4'; msg.textContent = '⚠️ Error de conexión. Inténtalo otra vez.'; });
   });
 })();
 </script>

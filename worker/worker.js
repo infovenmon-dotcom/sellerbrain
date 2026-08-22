@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v131-titulos-75car'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v132-lista-espera'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -190,8 +190,10 @@ export default {
       // Excepciones públicas: /auth/ads/* (OAuth de clientes) y /v1/login (el
       // login del portal lo llama el navegador, que NO puede tener SB_API_KEY).
       // POST /v1/feedback es público (lo envía el navegador del cliente desde el formulario).
+      // POST /v1/lista-espera es público (alta en la lista de espera desde la landing).
       const feedbackPublico = url.pathname === '/v1/feedback' && request.method === 'POST';
-      if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/login' && !feedbackPublico) {
+      const listaEsperaPublica = url.pathname === '/v1/lista-espera' && request.method === 'POST';
+      if (url.pathname.startsWith('/v1/') && url.pathname !== '/v1/login' && !feedbackPublico && !listaEsperaPublica) {
         const auth = (request.headers.get('Authorization') || '').replace('Bearer ', '');
         const key = auth || url.searchParams.get('key') || '';
         let ok = env.SB_API_KEY && key === env.SB_API_KEY;
@@ -214,6 +216,24 @@ export default {
           }
         }
         if (!ok) return json({ error: 'no_autorizado' }, cors, 401);
+      }
+
+      // --- LISTA DE ESPERA · alta pública desde la landing (pre-lanzamiento).
+      //     POST {email, origen?}. Guarda en la tabla `lista_espera` (email = PK,
+      //     así no se duplica). No expone datos: solo confirma ok. ---
+      if (url.pathname === '/v1/lista-espera' && request.method === 'POST') {
+        let b; try { b = await request.json(); } catch (_) { b = {}; }
+        const email = String(b.email || '').trim().toLowerCase();
+        const origen = String(b.origen || 'landing').slice(0, 40);
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ ok: false, error: 'email_invalido' }, cors, 400);
+        try { await upsertSupabase(env, 'lista_espera', [{ email, origen }]); }
+        catch (e) { return json({ ok: false, error: 'no_guardado' }, cors, 500); }
+        return json({ ok: true }, cors);
+      }
+      // --- LISTA DE ESPERA · lectura (solo admin: exige SB_API_KEY, ya filtrada arriba). ---
+      if (url.pathname === '/v1/lista-espera' && request.method === 'GET') {
+        const filas = await selSafe(env, 'lista_espera?select=email,origen,creado&order=creado.desc&limit=5000', []);
+        return json({ total: (filas || []).length, lista: filas || [] }, cors);
       }
 
       // --- Login propio del portal (público): valida email+código en el
