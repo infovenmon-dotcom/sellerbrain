@@ -475,7 +475,7 @@ export default {
           await upsertSupabase(env, 'costes_producto', [{ sku, coste: +b.coste || 0, actualizado: new Date().toISOString() }]);
           return json({ ok: true, sku, coste: +b.coste || 0 }, cors);
         }
-        const filas = await selSafe(env, 'costes_producto', []);
+        const filas = await selSeller(env, 'costes_producto', sellerActual, []);
         const mapa = {}; for (const f of filas) mapa[f.sku] = +f.coste || 0;
         return json({ costes: mapa }, cors);
       }
@@ -490,7 +490,7 @@ export default {
       if (url.pathname === '/v1/producto-detalle') {
         const sku = url.searchParams.get('sku');
         if (!sku) return json({ error: 'falta_sku' }, cors, 400);
-        const q = 'settlement_lineas?sku=eq.' + encodeURIComponent(sku) + '&order=fecha.desc&limit=150&select=fecha,tipo,concepto,importe,cantidad,pedido';
+        const q = 'settlement_lineas?sku=eq.' + encodeURIComponent(sku) + '&seller=eq.' + encodeURIComponent(sellerActual) + '&order=fecha.desc&limit=150&select=fecha,tipo,concepto,importe,cantidad,pedido';
         const lineas = await selSafe(env, q, []);
         const fee = await selSafe(env, 'v_fee_sku?sku=eq.' + encodeURIComponent(sku) + '&select=sku,uds_liq,fba,com', []);
         const porConcepto = {};
@@ -521,7 +521,7 @@ export default {
         const hasta = url.searchParams.get('hasta');
         const pais = url.searchParams.get('pais') || null;   // ES/FR/IT o vacío = todos
         if (!desde || !hasta) return json({ error: 'faltan_fechas' }, cors, 400);
-        return json({ desde, hasta, pais, productos: await productosPeriodo(env, desde, hasta, pais) }, cors);
+        return json({ desde, hasta, pais, productos: await productosPeriodo(env, desde, hasta, pais, sellerActual) }, cors);
       }
 
       // --- Ventas por país (total + desglose) para un rango ---
@@ -530,7 +530,7 @@ export default {
         const desde = url.searchParams.get('desde');
         const hasta = url.searchParams.get('hasta');
         if (!desde || !hasta) return json({ error: 'faltan_fechas' }, cors, 400);
-        const rows = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,uds,ventas,pedidos', []);
+        const rows = await selSeller(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,uds,ventas,pedidos', sellerActual, []);
         const byP = {}; const tot = { uds: 0, ventas: 0, pedidos: 0 };
         for (const r of (rows || [])) {
           const p = r.pais || 'OTROS';
@@ -554,7 +554,7 @@ export default {
       if (url.pathname === '/v1/ppc') {
         const dias = Math.min(+url.searchParams.get('days') || 30, 90);
         const desde = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
-        const filas = await selSafe(env, 'ppc_dia?fecha=gte.' + desde + '&order=fecha.asc', []);
+        const filas = await selSeller(env, 'ppc_dia?fecha=gte.' + desde + '&order=fecha.asc', sellerActual, []);
         return json({ dias, datos: filas }, cors);
       }
 
@@ -562,7 +562,7 @@ export default {
       if (url.pathname === '/v1/ppc/campanas') {
         const dias = Math.min(+url.searchParams.get('days') || 30, 90);
         const desde = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
-        const filas = await selectSupabase(env, 'ppc_campanas?fecha=gte.' + desde + '&order=fecha.desc,gasto.desc');
+        const filas = await selectSupabase(env, 'ppc_campanas?fecha=gte.' + desde + '&order=fecha.desc,gasto.desc&seller=eq.' + encodeURIComponent(sellerActual));
         return json({ dias, datos: filas }, cors);
       }
 
@@ -570,7 +570,7 @@ export default {
       if (url.pathname === '/v1/ppc/terminos') {
         const pais = (url.searchParams.get('pais') || '').toUpperCase();
         const filtro = pais ? 'pais=eq.' + pais + '&' : '';
-        let filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=hasta.desc,gasto.desc&limit=20000');
+        let filas = await selectSupabase(env, 'ppc_terminos?' + filtro + 'order=hasta.desc,gasto.desc&limit=20000&seller=eq.' + encodeURIComponent(sellerActual));
         // SOLO filas diarias reales (desde = hasta = un día). Excluye los "resúmenes"
         // antiguos (una fila con el total de varios días) que inflaban los rangos cortos.
         // Si NO hay ninguna fila diaria todavía, devolvemos lo que haya (no dejar el panel vacío).
@@ -588,9 +588,9 @@ export default {
         const desde = url.searchParams.get('desde') || hace30d;
         const hasta = url.searchParams.get('hasta') || hoyISO;
         const paisQ = (url.searchParams.get('pais') || '').toUpperCase();
-        const filas = await selSafe(env, 'ppc_asin_campana?fecha=gte.' + desde + '&fecha=lte.' + hasta + (paisQ ? ('&pais=eq.' + paisQ) : '') + '&limit=40000', []);
-        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
-        const camp = {}; try { for (const c of (await selSafe(env, 'ppc_presupuestos?select=pais,campania,campania_id,estado,presupuesto', []))) camp[(c.pais || '') + '|' + (c.campania || '')] = { id: c.campania_id, estado: c.estado, presupuesto: c.presupuesto }; } catch (_) {}
+        const filas = await selSeller(env, 'ppc_asin_campana?fecha=gte.' + desde + '&fecha=lte.' + hasta + (paisQ ? ('&pais=eq.' + paisQ) : '') + '&limit=40000', sellerActual, []);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c; } catch (_) {}
+        const camp = {}; try { for (const c of (await selSeller(env, 'ppc_presupuestos?select=pais,campania,campania_id,estado,presupuesto', sellerActual, []))) camp[(c.pais || '') + '|' + (c.campania || '')] = { id: c.campania_id, estado: c.estado, presupuesto: c.presupuesto }; } catch (_) {}
         const byAsin = {};
         for (const r of (filas || [])) {
           const sku = r.sku || ''; const c = cat[sku] || {};
@@ -644,13 +644,13 @@ export default {
       //     presupuesto. Solo sugiere BAJAR (nunca subir): mejora margen y hace que el
       //     presupuesto dure más horas. Solo lectura; el usuario aplica cada cambio. ---
       if (url.pathname === '/v1/ppc/plan-pujas') {
-        const kws = await selSafe(env, 'ppc_keywords?select=keyword_id,campania_id,keyword,pais,puja,clics,gasto,ventas,estado', []);
+        const kws = await selSeller(env, 'ppc_keywords?select=keyword_id,campania_id,keyword,pais,puja,clics,gasto,ventas,estado', sellerActual, []);
         // mapa campaña → SKUs anunciados (activos)
         const pa = {};
-        try { for (const r of (await selSafe(env, 'ppc_product_ads?select=campania_id,sku,estado', []))) { if ((r.estado || '').toUpperCase() !== 'ENABLED') continue; (pa[r.campania_id] = pa[r.campania_id] || new Set()).add(r.sku); } } catch (_) {}
+        try { for (const r of (await selSeller(env, 'ppc_product_ads?select=campania_id,sku,estado', sellerActual, []))) { if ((r.estado || '').toUpperCase() !== 'ENABLED') continue; (pa[r.campania_id] = pa[r.campania_id] || new Set()).add(r.sku); } } catch (_) {}
         // ACoS objetivo REAL por SKU (break-even dejando ~10% de margen) — de productosPeriodo
         const hoy = new Date().toISOString().slice(0, 10), hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-        let prods = []; try { prods = await productosPeriodo(env, hace30, hoy); } catch (_) {}
+        let prods = []; try { prods = await productosPeriodo(env, hace30, hoy, null, sellerActual); } catch (_) {}
         const acosObjSku = {}; for (const p of (prods || [])) if (p.acos_obj != null) acosObjSku[p.sku] = +p.acos_obj;
         // campañas limitadas por presupuesto (hora de tope)
         const lim = {}; try { for (const l of (await selSafe(env, 'v_ppc_limitadas?select=pais,campania_id,hora_tope', []))) lim[(l.pais || '') + '|' + l.campania_id] = (l.hora_tope != null ? +l.hora_tope : true); } catch (_) {}
@@ -728,16 +728,17 @@ export default {
       //     fuente (ventas, PPC diario, liquidaciones de Amazon). Transparencia:
       //     lo posterior a esas fechas aún no está recogido / liquidado. ---
       if (url.pathname === '/v1/cobertura') {
-        const rango = async (tabla, campo) => {
+        const rango = async (tabla, campo, filtSeller) => {
           campo = campo || 'fecha';
+          const sf = filtSeller ? '&seller=eq.' + encodeURIComponent(sellerActual) : '';   // solo tablas con columna seller
           try {
-            const mn = await selSafe(env, tabla + '?select=' + campo + '&order=' + campo + '.asc&limit=1', []);
-            const mx = await selSafe(env, tabla + '?select=' + campo + '&order=' + campo + '.desc&limit=1', []);
+            const mn = await selSafe(env, tabla + '?select=' + campo + sf + '&order=' + campo + '.asc&limit=1', []);
+            const mx = await selSafe(env, tabla + '?select=' + campo + sf + '&order=' + campo + '.desc&limit=1', []);
             return { desde: (mn[0] || {})[campo] || null, hasta: (mx[0] || {})[campo] || null };
           } catch (_) { return { desde: null, hasta: null }; }
         };
         const [ventas, ppc, settlement] = await Promise.all([
-          rango('v_ventas_dia'), rango('ppc_dia'), rango('settlement_lineas')
+          rango('v_ventas_dia', 'fecha', false), rango('ppc_dia', 'fecha', true), rango('settlement_lineas', 'fecha', true)
         ]);
         return json({ ventas, ppc, settlement }, cors);
       }
@@ -763,7 +764,7 @@ export default {
             return json({ linea, desde, hasta, filas, nota }, cors);
           }
           if (linea === 'ppc') {
-            const rows = await selSafe(env, 'ppc_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,gasto', []);
+            const rows = await selSeller(env, 'ppc_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=pais,gasto', sellerActual, []);
             const by = {}; for (const x of rows) by[x.pais || '?'] = (by[x.pais || '?'] || 0) + (+x.gasto || 0);
             const filas = Object.entries(by).map(([k, v]) => ({ etiqueta: 'PPC ' + k, importe: +v.toFixed(2) })).sort((a, b) => b.importe - a.importe);
             return json({ linea, desde, hasta, filas, nota: 'Gasto de publicidad por país (Ads API).' }, cors);
@@ -777,7 +778,7 @@ export default {
               filas = Object.entries(by).map(([s, o]) => ({ etiqueta: s, importe: +o.ventas.toFixed(2), lineas: o.uds })).sort((a, b) => b.importe - a.importe).slice(0, 40);
               return json({ linea, desde, hasta, filas, nota: 'Ventas brutas (con IVA) por producto · «uds» = unidades.' }, cors);
             }
-            const cp = await selSafe(env, 'costes_producto?select=sku,coste', []);
+            const cp = await selSeller(env, 'costes_producto?select=sku,coste', sellerActual, []);
             const cm = {}; for (const c of cp) cm[c.sku] = +c.coste || 0;
             filas = Object.entries(by).map(([s, o]) => ({ etiqueta: s, importe: +(o.uds * (cm[s] || 0)).toFixed(2), lineas: o.uds, aviso: cm[s] ? '' : 'sin coste' })).filter(f => f.importe > 0 || f.aviso).sort((a, b) => b.importe - a.importe).slice(0, 40);
             const sinCoste = filas.filter(f => f.aviso).length;
@@ -827,7 +828,7 @@ export default {
       //     estimada por producto + alertas de motivos de calidad/defecto. ---
       if (url.pathname === '/v1/satisfaccion') {
         const filas = await selSafe(env, 'v_satisfaccion_producto?order=devoluciones.desc', []);
-        const cat = await selSafe(env, 'productos_catalogo?select=sku,nombre,asin,imagen', []);
+        const cat = await selSeller(env, 'productos_catalogo?select=sku,nombre,asin,imagen', sellerActual, []);
         const nombres = {};
         for (const c of (cat || [])) nombres[c.sku] = c;
         const datos = (filas || []).map(f => ({
@@ -846,11 +847,11 @@ export default {
         const hasta = url.searchParams.get('hasta');
         if (!desde || !hasta) return json({ error: 'faltan desde/hasta' }, cors, 400);
         // Uds vendidas por SKU en el rango (fuente limpia: ventas_sku_pais_dia)
-        const ventas = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,uds', []);
+        const ventas = await selSeller(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,uds', sellerActual, []);
         const udsBySku = {};
         for (const r of (ventas || [])) { const s = r.sku || ''; if (!s) continue; udsBySku[s] = (udsBySku[s] || 0) + (+r.uds || 0); }
         // Devoluciones por SKU en el rango (+ motivos)
-        const devs = await selSafe(env, 'devoluciones?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cantidad,motivo', []);
+        const devs = await selSeller(env, 'devoluciones?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cantidad,motivo', sellerActual, []);
         const devBySku = {};
         for (const r of (devs || [])) {
           const s = r.sku || ''; if (!s || /^amzn\.gr\./i.test(s)) continue;
@@ -859,7 +860,7 @@ export default {
           devBySku[s].dev += c;
           const m = (r.motivo || '').toUpperCase(); if (m) devBySku[s].motivos[m] = (devBySku[s].motivos[m] || 0) + c;
         }
-        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c; } catch (_) {}
         const skus = new Set([...Object.keys(udsBySku), ...Object.keys(devBySku)]);
         const datos = [...skus].filter(s => !/^amzn\.gr\./i.test(s)).map(s => {
           const uds = udsBySku[s] || 0; const d = devBySku[s] || { dev: 0, motivos: {} };
@@ -879,9 +880,9 @@ export default {
       if (url.pathname === '/v1/reembolsos-cliente') {
         const desde = url.searchParams.get('desde'), hasta = url.searchParams.get('hasta');
         if (!desde || !hasta) return json({ error: 'faltan desde/hasta' }, cors, 400);
-        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c; } catch (_) {}
         const hastaFin = hasta + 'T23:59:59Z';
-        const fin = await selSafe(env, 'reembolsos_cliente?fecha=gte.' + desde + '&fecha=lte.' + hastaFin + '&select=pedido,sku,asin,fecha,importe_cliente,moneda,uds,motivo', []);
+        const fin = await selSeller(env, 'reembolsos_cliente?fecha=gte.' + desde + '&fecha=lte.' + hastaFin + '&select=pedido,sku,asin,fecha,importe_cliente,moneda,uds,motivo', sellerActual, []);
         const set = await selSafe(env, 'v_reembolsos_cliente?fecha=gte.' + desde + '&fecha=lte.' + hastaFin + '&select=pedido,sku,pais,fecha,importe_cliente,impacto_neto', []);
         const byKey = {};
         for (const r of (set || [])) {                 // primero settlement
@@ -920,7 +921,7 @@ export default {
 
       // --- RESEÑAS: registro de solicitudes + resumen (lectura: miembro o admin). ---
       if (url.pathname === '/v1/resenas') {
-        const filas = await selSafe(env, 'resenas_pedidas?order=fecha_solicitud.desc&limit=200', []);
+        const filas = await selSeller(env, 'resenas_pedidas?order=fecha_solicitud.desc&limit=200', sellerActual, []);
         const resumen = { enviadas: 0, ya_enviadas: 0, pendientes: 0, errores: 0 };
         for (const f of (filas || [])) {
           if (f.estado === 'enviada') resumen.enviadas++;
@@ -941,8 +942,8 @@ export default {
 
       // --- LISTINGS POR PAÍS: estado + motivo por producto y marketplace (lectura). ---
       if (url.pathname === '/v1/listings') {
-        const filas = await selSafe(env, 'listings_pais?order=sku.asc', []);
-        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen'))) cat[c.sku] = c; } catch (_) {}
+        const filas = await selSeller(env, 'listings_pais?order=sku.asc', sellerActual, []);
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin,imagen&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c; } catch (_) {}
         let actualizado = null;
         const resumen = {};   // pais -> {activo, inactivo, no_publicado}
         for (const f of (filas || [])) {
@@ -961,7 +962,7 @@ export default {
         if (!(env.SPAPI_SELLER_ID)) return json({ ok: false, falta_sellerid: true,
           nota: 'Falta el Merchant Token. Ponlo en Cloudflare como SPAPI_SELLER_ID (Seller Central → Ajustes → Información de la cuenta → Merchant Token).' }, cors);
         // 1) ¿Hay catálogo?
-        let cat = []; try { cat = await selSafe(env, 'productos_catalogo?select=sku,asin&limit=1', []); } catch (_) {}
+        let cat = []; try { cat = await selSeller(env, 'productos_catalogo?select=sku,asin&limit=1', sellerActual, []); } catch (_) {}
         const sku0 = (cat[0] && cat[0].sku) || '';
         if (!sku0) return json({ ok: false, sin_catalogo: true, nota: 'No hay productos en el catálogo todavía. Lanza primero la ingesta de ventas/inventario (🚀 Lanzar ingesta) para tener SKUs.' }, cors);
         // 2) Prueba en directo contra Amazon (1 SKU en ES) para ver si hay permiso.
@@ -1053,7 +1054,7 @@ export default {
         // 0) CACHÉ DE SERVIDOR: si ya la tenemos y no se fuerza, la devolvemos SIN tocar Amazon.
         let cachedFicha = null;
         try {
-          const rows = await selSafe(env, 'fichas_actuales?sku=eq.' + encodeURIComponent(sku0) + '&limit=1', []);
+          const rows = await selSeller(env, 'fichas_actuales?sku=eq.' + encodeURIComponent(sku0) + '&limit=1', sellerActual, []);
           const c = rows && rows[0];
           if (c) cachedFicha = {
             sku: sku0, asin: c.asin || '', title: c.title || '',
@@ -1067,7 +1068,7 @@ export default {
         if (!sellerId) return json(cachedFicha || { error: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors);
 
         let asin = (url.searchParams.get('asin') || '').trim() || (cachedFicha && cachedFicha.asin) || '';
-        if (!asin) { try { const c = await selSafe(env, 'productos_catalogo?sku=eq.' + encodeURIComponent(sku0) + '&select=asin&limit=1', []); asin = (c[0] && c[0].asin) || ''; } catch (_) {} }
+        if (!asin) { try { const c = await selSeller(env, 'productos_catalogo?sku=eq.' + encodeURIComponent(sku0) + '&select=asin&limit=1', sellerActual, []); asin = (c[0] && c[0].asin) || ''; } catch (_) {} }
 
         // Menos llamadas: solo ES/FR/IT y se PARA en cuanto encuentra el producto (los bullets,
         // si vendes sobre un ASIN existente, vienen del catálogo, no de tu Listings).
@@ -1143,12 +1144,12 @@ export default {
       //     pedido según el método de envío (barco/tren/aire) + recepción Amazon. ---
       if (url.pathname === '/v1/stock') {
         const inv = {}; let snapMax = null;
-        try { for (const r of (await selectSupabase(env, 'inventario?select=sku,disponible,entrante,reservado,snapshot'))) { inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0, res: +r.reservado || 0 }; if (r.snapshot && (!snapMax || r.snapshot > snapMax)) snapMax = r.snapshot; } } catch (_) {}
+        try { for (const r of (await selectSupabase(env, 'inventario?select=sku,disponible,entrante,reservado,snapshot&seller=eq.' + encodeURIComponent(sellerActual)))) { inv[r.sku] = { disp: +r.disponible || 0, ent: +r.entrante || 0, res: +r.reservado || 0 }; if (r.snapshot && (!snapMax || r.snapshot > snapMax)) snapMax = r.snapshot; } } catch (_) {}
         const hace30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
         const vel = {}, rev = {};                                // uds y ventas (€) por SKU en los últimos 30 días
-        try { for (const r of (await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds,ventas', []))) { const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0); rev[s] = (rev[s] || 0) + (+r.ventas || 0); } } catch (_) {}
+        try { for (const r of (await selSeller(env, 'ventas_sku_pais_dia?fecha=gte.' + hace30 + '&select=sku,uds,ventas', sellerActual, []))) { const s = r.sku || ''; if (!s) continue; vel[s] = (vel[s] || 0) + (+r.uds || 0); rev[s] = (rev[s] || 0) + (+r.ventas || 0); } } catch (_) {}
         const cat = {};
-        try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre'))) cat[c.sku] = c.nombre; } catch (_) {}
+        try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c.nombre; } catch (_) {}
         const skus = new Set([...Object.keys(inv), ...Object.keys(vel)]);
         const datos = [...skus].filter(s => !/^amzn\.gr\./i.test(s)).map(s => {
           const disp = (inv[s] && inv[s].disp) || 0, ent = (inv[s] && inv[s].ent) || 0, res = (inv[s] && inv[s].res) || 0;
@@ -1164,7 +1165,7 @@ export default {
       //     para generar el mensaje de reclamación. Lee la vista v_fuga_tarifa. ---
       if (url.pathname === '/v1/fugas') {
         const filas = await selSafe(env, 'v_fuga_tarifa?order=sobrecoste_mes.desc', []);
-        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin'))) cat[c.sku] = c; } catch (_) {}
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c; } catch (_) {}
         // Dónde tiene stock cada SKU (Libro Mayor por país) → sustituye el "?" de país.
         const invp = {}; try { for (const r of (await selectSupabase(env, 'v_inventario_pais?select=sku,por_pais'))) invp[r.sku] = r.por_pais; } catch (_) {}
         const datos = (filas || []).map(f => {
@@ -1220,7 +1221,7 @@ export default {
       //     valorado a tu coste, con fecha límite de la ventana de 60 días. ---
       if (url.pathname === '/v1/reembolsos') {
         const filas = await selSafe(env, 'v_reembolsos_pendientes', []);
-        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin'))) cat[c.sku] = c; } catch (_) {}
+        const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,asin&seller=eq.' + encodeURIComponent(sellerActual)))) cat[c.sku] = c; } catch (_) {}
         const hoy = new Date();
         const datos = (filas || []).map(f => {
           const lim = f.limite_reclamacion ? new Date(f.limite_reclamacion + 'T00:00:00Z') : null;
@@ -1234,7 +1235,7 @@ export default {
 
       // --- BUY BOX / competencia por ASIN (lectura). Muestra primero lo problemático. ---
       if (url.pathname === '/v1/buybox') {
-        const filas = await selSafe(env, 'buybox?order=tengo_buybox.asc.nullslast,fecha.desc', []);
+        const filas = await selSeller(env, 'buybox?order=tengo_buybox.asc.nullslast,fecha.desc', sellerActual, []);
         // snapshot: fecha más reciente
         let actualizado = null;
         for (const f of (filas || [])) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
@@ -1251,8 +1252,8 @@ export default {
 
       // --- VIGILANCIA DE FICHA (hijacking): título por ASIN + cambios + Buy Box. Lectura. ---
       if (url.pathname === '/v1/fichas') {
-        const fichas = await selSafe(env, 'fichas?order=cambio_fecha.desc.nullslast', []);
-        const bb = {}; try { for (const r of (await selSafe(env, 'buybox?select=asin,nombre,tengo_buybox,n_ofertas', []))) bb[r.asin] = r; } catch (_) {}
+        const fichas = await selSeller(env, 'fichas?order=cambio_fecha.desc.nullslast', sellerActual, []);
+        const bb = {}; try { for (const r of (await selSeller(env, 'buybox?select=asin,nombre,tengo_buybox,n_ofertas', sellerActual, []))) bb[r.asin] = r; } catch (_) {}
         const datos = (fichas || []).map(f => ({ ...f, nombre: (bb[f.asin] && bb[f.asin].nombre) || f.titulo || f.sku || f.asin, tengo_buybox: bb[f.asin] ? bb[f.asin].tengo_buybox : null, n_ofertas: bb[f.asin] ? bb[f.asin].n_ofertas : null }));
         let actualizado = null; for (const f of datos) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
         const cambios = datos.filter(f => f.cambio_fecha).length;
@@ -1352,7 +1353,7 @@ export default {
 
       // --- SEARCH QUERY PERFORMANCE (SQP): tu cuota del embudo por búsqueda. Lectura. ---
       if (url.pathname === '/v1/sqp') {
-        const filas = await selSafe(env, 'busquedas_sqp?order=volumen.desc.nullslast&limit=500', []);
+        const filas = await selSeller(env, 'busquedas_sqp?order=volumen.desc.nullslast&limit=500', sellerActual, []);
         let actualizado = null, semana = null;
         for (const f of (filas || [])) { if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha; if (f.semana && (!semana || f.semana > semana)) semana = f.semana; }
         return json({ datos: filas || [], actualizado, semana }, cors);
@@ -1366,11 +1367,11 @@ export default {
 
       // --- KEYWORDS: lista de palabras clave con su puja actual (para ajustar puja). Lectura. ---
       if (url.pathname === '/v1/ads/keywords') {
-        const filas = await selSafe(env, 'ppc_keywords?order=fecha.desc&limit=8000', []);
+        const filas = await selSeller(env, 'ppc_keywords?order=fecha.desc&limit=8000', sellerActual, []);
         // Estado de la CAMPAÑA (de ppc_presupuestos) y nombre, para poder filtrar las
         // keywords de campañas apagadas y mostrar a qué campaña pertenece cada una.
         const camp = {};
-        try { for (const c of (await selSafe(env, 'ppc_presupuestos?select=campania_id,campania,estado', []))) camp[c.campania_id] = c; } catch (_) {}
+        try { for (const c of (await selSeller(env, 'ppc_presupuestos?select=campania_id,campania,estado', sellerActual, []))) camp[c.campania_id] = c; } catch (_) {}
         let actualizado = null;
         const datos = (filas || []).map(f => {
           if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
@@ -1393,7 +1394,7 @@ export default {
         // (0 → la fuente está vacía; el problema no es la RPC sino que no se ha
         // recogido ningún término todavía.)
         let terminos_filas = 0;
-        try { terminos_filas = (await selSafe(env, 'ppc_terminos?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=keyword&limit=30000', [])).length; } catch (_) {}
+        try { terminos_filas = (await selSeller(env, 'ppc_terminos?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=keyword&limit=30000', sellerActual, [])).length; } catch (_) {}
         let datos = [], rpc_ok = false, rpc_error = null;
         try {
           const r = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/kw_perf_rango?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta),
@@ -1438,7 +1439,7 @@ export default {
         const desde = ini.toISOString().slice(0, 10), hasta = fin.toISOString().slice(0, 10);
         // Fuente REAL del panel: los términos de búsqueda ya recogidos (ppc_terminos).
         let terminos_filas = 0;
-        try { terminos_filas = (await selSafe(env, 'ppc_terminos?pais=eq.' + encodeURIComponent(pais) + '&fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=keyword&limit=20000', [])).length; } catch (_) {}
+        try { terminos_filas = (await selSeller(env, 'ppc_terminos?pais=eq.' + encodeURIComponent(pais) + '&fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=keyword&limit=20000', sellerActual, [])).length; } catch (_) {}
         try {
           const rep = await adsInformeKeywordPerf(env, profileId, desde, hasta);
           const map = (rep && rep.map) || {}, dias = (rep && rep.dias) || [];
@@ -1476,7 +1477,7 @@ export default {
         if (!sellerId) return json({ error: 'Falta SPAPI_SELLER_ID (Merchant Token) en Cloudflare.' }, cors);
         ctx.waitUntil((async () => {
           let cat = [];
-          try { cat = await selSafe(env, 'productos_catalogo?select=sku,nombre,asin&limit=3000', []); } catch (_) {}
+          try { cat = await selSeller(env, 'productos_catalogo?select=sku,nombre,asin&limit=3000', sellerActual, []); } catch (_) {}
           const faltan = (cat || []).filter(c => { const n = (c.nombre || '').trim(); const s = (c.sku || '').trim(); return s && (!n || n === s); }).slice(0, 40);
           const mkts = [MARKETPLACES.ES, MARKETPLACES.FR, MARKETPLACES.IT, MARKETPLACES.DE, MARKETPLACES.NL, MARKETPLACES.BE];
           for (const c of faltan) {
@@ -1546,7 +1547,7 @@ export default {
 
       // --- PLACEMENT: ACoS por ubicación del anuncio (Top of Search vs resto). Lectura. ---
       if (url.pathname === '/v1/ads/placement') {
-        const filas = await selSafe(env, 'ppc_placement?order=gasto.desc', []);
+        const filas = await selSeller(env, 'ppc_placement?order=gasto.desc', sellerActual, []);
         let actualizado = null;
         for (const f of (filas || [])) if (f.fecha && (!actualizado || f.fecha > actualizado)) actualizado = f.fecha;
         return json({ datos: filas || [], actualizado }, cors);
@@ -1868,7 +1869,7 @@ export default {
       // --- Stock por país (LECTURA ligera del Libro Mayor ya guardado) + fecha de
       //     actualización. Para el aviso de "stock en país sin IVA". ---
       if (url.pathname === '/v1/stock-pais') {
-        const rows = await selSafe(env, 'inventario_pais?select=pais,unidades,actualizado', []);
+        const rows = await selSeller(env, 'inventario_pais?select=pais,unidades,actualizado', sellerActual, []);
         const byP = {}; let act = null;
         for (const r of (rows || [])) {
           const p = (r.pais || '').toUpperCase(); if (!p) continue;
@@ -4026,17 +4027,26 @@ async function selSafe(env, vista, def) {
   catch (_) { return def === undefined ? [] : def; }
 }
 
+// Igual que selSafe pero AÑADE el filtro por cliente (aislamiento multicuenta).
+// Úsalo SOLO en tablas que tienen columna `seller`. Detecta si la query ya lleva
+// '?' para usar '&' o '?'. Un seller vacío → '__nadie__' (no devuelve nada, seguro).
+async function selSeller(env, vista, seller, def) {
+  const sep = vista.indexOf('?') > -1 ? '&' : '?';
+  return selSafe(env, vista + sep + 'seller=eq.' + encodeURIComponent(seller || '__nadie__'), def);
+}
+
 // Tabla "Beneficio por producto" para un rango cualquiera (mismo criterio que
 // v_productos_mes: reparte tarifas con el ratio de cuenta del periodo; estima
 // 15%+15% si no hay settlements; resta el coste si está puesto).
-async function productosPeriodo(env, desde, hasta, pais) {
+async function productosPeriodo(env, desde, hasta, pais, seller) {
   // Lee de la tabla granular por país (permite filtrar por país). Si aún no
   // está poblada (histórico sin re-backfill), cae a pedidos_dia (sin país).
   const filtroPais = pais ? '&pais=eq.' + encodeURIComponent(pais) : '';
-  let ped = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + filtroPais + '&select=sku,fecha,pais,uds,ventas', []);
+  const sf = '&seller=eq.' + encodeURIComponent(seller || '__nadie__');   // aislamiento por cliente
+  let ped = await selSafe(env, 'ventas_sku_pais_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + filtroPais + sf + '&select=sku,fecha,pais,uds,ventas', []);
   let hayPais = !!(ped && ped.length);
   if (!hayPais) {
-    ped = await selSafe(env, 'pedidos_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,fecha,uds,ventas', []);
+    ped = await selSafe(env, 'pedidos_dia?fecha=gte.' + desde + '&fecha=lte.' + hasta + sf + '&select=sku,fecha,uds,ventas', []);
   }
   const bySku = {};
   let tv = 0;
@@ -4079,12 +4089,12 @@ async function productosPeriodo(env, desde, hasta, pais) {
       if (u > 0) feeUnit[r.sku] = { fbaU: (+r.fba || 0) / u, comU: (+r.com || 0) / u };
     }
   } catch (_) { /* sin v_fee_sku → se estima con % abajo */ }
-  const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste'))) costes[c.sku] = +c.coste || 0; } catch (_) {}
-  const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,imagen'))) cat[c.sku] = c; } catch (_) {}
+  const costes = {}; try { for (const c of (await selectSupabase(env, 'costes_producto?select=sku,coste' + sf))) costes[c.sku] = +c.coste || 0; } catch (_) {}
+  const cat = {}; try { for (const c of (await selectSupabase(env, 'productos_catalogo?select=sku,nombre,imagen' + sf))) cat[c.sku] = c; } catch (_) {}
   // PPC real por SKU (informe Advertised Product, ventana más reciente) → ACoS real.
   const ppcProd = {};
   try {
-    const rows = await selectSupabase(env, 'ppc_producto?order=hasta.desc&limit=8000');
+    const rows = await selectSupabase(env, 'ppc_producto?order=hasta.desc&limit=8000' + sf);
     const tieneFecha = (rows || []).some(r => r.fecha);   // el backend ya guarda por día
     const maxHasta = (rows && rows[0]) ? rows[0].hasta : null;
     for (const r of (rows || [])) {
@@ -4100,7 +4110,7 @@ async function productosPeriodo(env, desde, hasta, pais) {
   } catch (_) { /* aún sin ppc_producto */ }
   // Devoluciones por SKU en el rango → % de devolución del producto (dev ÷ uds).
   const devSku = {};
-  try { for (const r of (await selSafe(env, 'devoluciones?fecha=gte.' + desde + '&fecha=lte.' + hasta + '&select=sku,cantidad', []))) { const s = r.sku || ''; if (!s) continue; devSku[s] = (devSku[s] || 0) + (+r.cantidad || 1); } } catch (_) {}
+  try { for (const r of (await selSafe(env, 'devoluciones?fecha=gte.' + desde + '&fecha=lte.' + hasta + sf + '&select=sku,cantidad', []))) { const s = r.sku || ''; if (!s) continue; devSku[s] = (devSku[s] || 0) + (+r.cantidad || 1); } } catch (_) {}
   const fin = new Date(hasta + 'T00:00:00Z');
   const dias10 = [];
   for (let i = 9; i >= 0; i--) dias10.push(new Date(fin.getTime() - i * 86400000).toISOString().slice(0, 10));
