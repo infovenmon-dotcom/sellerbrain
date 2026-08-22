@@ -57,7 +57,7 @@
  * =====================================================================
  */
 
-const SB_VERSION = 'v132-lista-espera'; // súbelo al cambiar el Worker (para verificar despliegue)
+const SB_VERSION = 'v133-cors-multiorigen'; // súbelo al cambiar el Worker (para verificar despliegue)
 const SPAPI_HOST = 'https://sellingpartnerapi-eu.amazon.com'; // EU
 const LWA_TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
 const ADS_HOST = 'https://advertising-api-eu.amazon.com';
@@ -142,9 +142,18 @@ export default {
   // ============ HTTP ============
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // CORS con lista de orígenes permitidos: refleja el Origin de la petición si está
+    // en la lista (así valen sellersbrain.io, www y la URL de Netlify a la vez). Se
+    // pueden añadir más por la variable CORS_ORIGIN (separados por comas).
+    const origen = request.headers.get('Origin') || '';
+    const permitidos = ['https://sellersbrain.io', 'https://www.sellersbrain.io', 'https://sellerbrain.netlify.app'];
+    if (env.CORS_ORIGIN) for (const o of env.CORS_ORIGIN.split(',')) { const t = o.trim(); if (t && !permitidos.includes(t)) permitidos.push(t); }
+    const allowOrigin = permitidos.includes(origen) ? origen : permitidos[0];
     const cors = {
-      'Access-Control-Allow-Origin': env.CORS_ORIGIN || 'https://www.sellersbrain.io',
+      'Access-Control-Allow-Origin': allowOrigin,
+      'Vary': 'Origin',
       'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Content-Type': 'application/json'
     };
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
